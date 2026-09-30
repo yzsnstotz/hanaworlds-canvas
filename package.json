@@ -1,0 +1,37 @@
+{
+  "name": "hanaworlds-canvas",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "description": "HanaWorlds Stage 1 Canvas engine-neutral object and history owner",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yzsnstotz/hanaworlds-canvas.git"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "exports": {
+    ".": "./src/index.mjs"
+  },
+  "files": [
+    "src",
+    "cordis.patch.yml",
+    "GADGET.md",
+    "NOTICE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "node --check src/index.mjs && node --check src/store.mjs && node --check src/strict-json.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "canonicalize": "5.1.0",
+    "icu": "2.3.1"
+  }
+}
