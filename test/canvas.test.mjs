@@ -289,3 +289,101 @@ test('malformed revision and digest fail at P0 before authorization or adapter e
   assert.equal(verifications, 0);
   assert.equal(f.calls.length, 0);
 });
+
+function frozenMutationRequests() {
+  const digest64 = 'a'.repeat(64);
+  const operations = { contractVersion: 'operations/v2', buildDigest: digest64,
+    compilerRevision: '1', compilationConfigDigest: digest64, worldRef: 'world',
+    frameDigest: digest64, catalogueDigest: digest64, targetFactsDigest: digest64,
+    effects: [{ position: [0, 0, 0], nodeName: 'default:stone', param2: 0 }] };
+  const authorizationBinding = { contractVersion: 'world-adapter/v2',
+    authorizerRef: 'owner', actorRef: 'actor', grantEpoch: '1', bindingRef: 'binding',
+    worldRef: 'world', sessionRef: 'session', turnRevision: '1', intentDigest: digest64,
+    surfaceActionDigest: digest64, allowedAction: 'APPLY_RECOVERABLE',
+    transactionId: 'tx', operationDigest: digest64, worldRevision: 'world-rev-1',
+    selectionRevision: '0', analysisDigest: digest64, decisionRevision: '1' };
+  const preparedTransaction = { payload: { contractVersion: 'canvas/v2',
+    transactionId: 'tx', operationDigest: digest64, authorizationBindingDigest: digest64,
+    expectedWorldRevision: 'world-rev-1', expectedObjectRevisions: { A: '1' },
+    beforeImageDigest: digest64 }, transactionPayloadDigest: digest64,
+    beforeImageDigest: digest64, guarantee: 'RECOVERABLE_VERIFIED',
+    stateProfile: { profileVersion: 'state-profile/v2',
+      nodeFields: ['nodeName', 'param1', 'param2'], metadataMode: 'exact',
+      inventoryMode: 'exact', timerMode: 'exact', derivedLightMode: 'recompute-with-readback' },
+    protectedPositions: [[0, 0, 0]], adapterExecutionRevision: '1' };
+  return {
+    ApplyRecoverableCommit: request({ requestId: 'blocked-apply', transactionId: 'tx',
+      operations, operationDigest: digest64, authorizationBinding,
+      authorizationBindingDigest: digest64, analysisDigest: digest64,
+      decisionRevision: '1', expectedWorldRevision: 'world-rev-1',
+      expectedObjectRevisions: { A: '1' }, guarantee: 'RECOVERABLE_VERIFIED',
+      preparedTransaction }),
+    Readback: request({ requestId: 'blocked-readback', transactionId: 'tx',
+      commitRevision: '1', expectedOperations: operations,
+      transactionPayloadDigest: digest64 }),
+    Undo: request({ requestId: 'blocked-undo', objectRef: 'A',
+      transactionId: 'new-tx', historyTransactionId: 'old-tx',
+      expectedHistoryRevision: '1', expectedWorldRevision: 'world-rev-1',
+      expectedObjectRevisions: { A: '1' }, intentDigest: digest64,
+      surfaceActionDigest: digest64 }),
+    Redo: request({ requestId: 'blocked-redo', objectRef: 'A',
+      transactionId: 'new-tx', historyTransactionId: 'old-tx',
+      expectedHistoryRevision: '1', expectedWorldRevision: 'world-rev-1',
+      expectedObjectRevisions: { A: '1' }, intentDigest: digest64,
+      surfaceActionDigest: digest64 }),
+  };
+}
+
+test('frozen mutation operation names keep typed fail-closed envelopes and have zero effect', async t => {
+  const f = await fixture(t);
+  const before = JSON.stringify(f.store.snapshot);
+  for (const [operation, body] of Object.entries(frozenMutationRequests())) {
+    contracts?.validateRequest('canvas/v2', operation, body);
+    const response = await f.canvas.call(operation, body);
+    contracts?.validateResponse('canvas/v2', operation, response);
+    assert.equal(response.requestId, body.requestId);
+    assert.equal(response.result, null);
+    assert.equal(response.error.code, 'CAPABILITY_UNAVAILABLE');
+    assert.equal(response.error.phase, 'validate');
+    assert.equal(response.error.mutationState, 'NONE');
+    assert.equal(response.error.transactionRef, null);
+    assert.equal(JSON.stringify(f.store.snapshot), before);
+  }
+  assert.deepEqual(f.calls, []);
+});
+
+test('frozen mutation operations decode and revoke before capability refusal', async t => {
+  const f = await fixture(t);
+  const requests = frozenMutationRequests();
+  let authorizations = 0;
+  f.canvas.authority.verify = async (body, operation) => {
+    authorizations++;
+    return { current: false, actorRef: body.actorRef, sessionRef: body.sessionRef,
+      authorizationRef: body.authorizationRef, allowedActions: [operation] };
+  };
+  for (const [operation, body] of Object.entries(requests)) {
+    const revoked = await f.canvas.call(operation, body);
+    assert.equal(revoked.requestId, body.requestId);
+    assert.equal(revoked.error.code, 'AUTHORIZATION_REVOKED');
+    const missing = { ...body };
+    delete missing.transactionId;
+    const malformed = await f.canvas.call(operation, missing);
+    assert.equal(malformed.requestId, body.requestId);
+    assert.equal(malformed.error.code, 'SCHEMA_INVALID');
+    const extra = await f.canvas.call(operation, { ...body, invented: true });
+    assert.equal(extra.requestId, body.requestId);
+    assert.equal(extra.error.code, 'UNKNOWN_REQUIRED_FIELD');
+    const nested = structuredClone(body);
+    if (operation === 'ApplyRecoverableCommit')
+      nested.preparedTransaction.stateProfile.nodeFields = ['nodeName', 'param2', 'param1'];
+    if (operation === 'Readback') nested.expectedOperations.effects[0].param2 = 256;
+    if (operation === 'Undo') nested.expectedObjectRevisions.A = 7;
+    if (operation === 'Redo') nested.intentDigest = 'not-a-digest';
+    if (contracts) assert.throws(() => contracts.validateRequest('canvas/v2', operation, nested));
+    const invalidNested = await f.canvas.call(operation, nested);
+    assert.equal(invalidNested.requestId, body.requestId);
+    assert.equal(invalidNested.error.code, 'SCHEMA_INVALID');
+  }
+  assert.equal(authorizations, 4);
+  assert.deepEqual(f.calls, []);
+});

@@ -26,8 +26,10 @@ RenameObject, InspectObject, AnalyzeAffectedObjects,
 DecideAffectedObjectNotification and HistoryQuery. CreateObject accepts only a
 Canvas-reserved ref linked to a durable VERIFIED transaction; no such production
 entry exists under the current frozen v2 contract, so arbitrary client refs are
-rejected. Unsupported `ApplyRecoverableCommit`, `Readback`, `Undo`, `Redo`
-currently fail closed and are **not** component checks passed.
+rejected. `ApplyRecoverableCommit`, `Readback`, `Undo` and `Redo` admit their
+frozen request shapes, check current authorization before replay and return a
+typed `CAPABILITY_UNAVAILABLE` response with zero world or history effect.
+Their positive paths remain **not** component checks passed.
 
 Raw UTF-8 admission rejects malformed bytes, duplicate decoded keys and unsafe
 JavaScript values before authority lookup. Current authority/revocation precedes

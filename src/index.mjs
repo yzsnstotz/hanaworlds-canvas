@@ -22,18 +22,118 @@ const fields = {
   InspectObject: [...generic, 'objectRef', 'expectedRevision', 'sampledBounds'],
   HistoryQuery: [...generic, 'objectRef', 'expectedHistoryRevision'],
   CreateObject: [...generic, 'objectRef', 'transactionId', 'verifiedReceiptDigest', 'expectedRevision'],
+  ApplyRecoverableCommit: [...generic, 'transactionId', 'operations', 'operationDigest',
+    'authorizationBinding', 'authorizationBindingDigest', 'analysisDigest',
+    'decisionRevision', 'expectedWorldRevision', 'expectedObjectRevisions',
+    'guarantee', 'preparedTransaction'],
+  Readback: [...generic, 'transactionId', 'commitRevision', 'expectedOperations',
+    'transactionPayloadDigest'],
+  Undo: [...generic, 'objectRef', 'transactionId', 'historyTransactionId',
+    'expectedHistoryRevision', 'expectedWorldRevision', 'expectedObjectRevisions',
+    'intentDigest', 'surfaceActionDigest'],
+  Redo: [...generic, 'objectRef', 'transactionId', 'historyTransactionId',
+    'expectedHistoryRevision', 'expectedWorldRevision', 'expectedObjectRevisions',
+    'intentDigest', 'surfaceActionDigest'],
 };
 const allowed = new Set(Object.keys(fields));
+const mutationUnavailable = new Set(['ApplyRecoverableCommit', 'Readback', 'Undo', 'Redo']);
 const refFields = new Set(['connectionRef', 'fromWorldRef', 'toConnectionRef', 'toWorldRef',
-  'objectRef', 'transactionId']);
+  'objectRef', 'transactionId', 'historyTransactionId']);
 const revisionFields = new Set(['expectedCapabilityRevision', 'expectedRevision',
   'expectedRegistryRevision', 'expectedSelectionRevision', 'analysisRevision',
-  'expectedHistoryRevision']);
-const digestFields = new Set(['operationDigest', 'analysisDigest', 'verifiedReceiptDigest']);
+  'expectedHistoryRevision', 'expectedWorldRevision', 'commitRevision']);
+const digestFields = new Set(['operationDigest', 'analysisDigest', 'verifiedReceiptDigest',
+  'authorizationBindingDigest', 'transactionPayloadDigest', 'intentDigest',
+  'surfaceActionDigest']);
+const ref = value => typeof value === 'string' && value.length > 0;
+const digest = value => typeof value === 'string' && /^[0-9a-f]{64}$/.test(value);
+function exact(value, keys) {
+  return value && typeof value === 'object' && !Array.isArray(value) &&
+    Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key));
+}
+function validPosition(value) {
+  return Array.isArray(value) && value.length === 3 && value.every(Number.isSafeInteger);
+}
+function validPositions(value, nonempty = false) {
+  return Array.isArray(value) && (!nonempty || value.length > 0) &&
+    value.every((position, index) => validPosition(position) &&
+      (index === 0 || comparePosition(value[index - 1], position) < 0));
+}
+function validObjectRevisions(value) {
+  return value && typeof value === 'object' && !Array.isArray(value) &&
+    Object.entries(value).every(([key, revision]) => ref(key) && ref(revision));
+}
+function validOperations(value) {
+  const keys = ['contractVersion', 'buildDigest', 'compilerRevision',
+    'compilationConfigDigest', 'worldRef', 'frameDigest', 'catalogueDigest',
+    'targetFactsDigest', 'effects'];
+  return exact(value, keys) && value.contractVersion === 'operations/v2' &&
+    digest(value.buildDigest) && ref(value.compilerRevision) &&
+    digest(value.compilationConfigDigest) && ref(value.worldRef) &&
+    digest(value.frameDigest) && digest(value.catalogueDigest) &&
+    digest(value.targetFactsDigest) && Array.isArray(value.effects) &&
+    value.effects.length > 0 && value.effects.every((effect, index) =>
+      exact(effect, ['position', 'nodeName', 'param2']) &&
+      validPosition(effect.position) && ref(effect.nodeName) &&
+      Number.isInteger(effect.param2) && effect.param2 >= 0 && effect.param2 <= 255 &&
+      (index === 0 || comparePosition(value.effects[index - 1].position, effect.position) < 0));
+}
+function validAuthorizationBinding(value) {
+  const keys = ['contractVersion', 'authorizerRef', 'actorRef', 'grantEpoch',
+    'bindingRef', 'worldRef', 'sessionRef', 'turnRevision', 'intentDigest',
+    'surfaceActionDigest', 'allowedAction', 'transactionId', 'operationDigest',
+    'worldRevision', 'selectionRevision', 'analysisDigest', 'decisionRevision'];
+  return exact(value, keys) && value.contractVersion === 'world-adapter/v2' &&
+    ['authorizerRef', 'actorRef', 'grantEpoch', 'bindingRef', 'worldRef', 'sessionRef',
+      'turnRevision', 'transactionId', 'worldRevision', 'selectionRevision']
+      .every(key => ref(value[key])) &&
+    ['intentDigest', 'surfaceActionDigest', 'operationDigest']
+      .every(key => digest(value[key])) &&
+    (value.analysisDigest === null || digest(value.analysisDigest)) &&
+    (value.decisionRevision === null || ref(value.decisionRevision)) &&
+    ['READ', 'SELECT', 'NAME', 'RENAME', 'INSPECT', 'ANALYZE', 'DECIDE',
+      'APPLY_RECOVERABLE', 'READBACK', 'UNDO', 'REDO', 'HISTORY']
+      .includes(value.allowedAction);
+}
+function validPrepared(value) {
+  if (!exact(value, ['payload', 'transactionPayloadDigest', 'beforeImageDigest',
+    'guarantee', 'stateProfile', 'protectedPositions', 'adapterExecutionRevision'])) return false;
+  const payload = value.payload;
+  const state = value.stateProfile;
+  return exact(payload, ['contractVersion', 'transactionId', 'operationDigest',
+    'authorizationBindingDigest', 'expectedWorldRevision', 'expectedObjectRevisions',
+    'beforeImageDigest']) && payload.contractVersion === 'canvas/v2' &&
+    ref(payload.transactionId) && digest(payload.operationDigest) &&
+    digest(payload.authorizationBindingDigest) && ref(payload.expectedWorldRevision) &&
+    validObjectRevisions(payload.expectedObjectRevisions) && digest(payload.beforeImageDigest) &&
+    digest(value.transactionPayloadDigest) && digest(value.beforeImageDigest) &&
+    value.guarantee === 'RECOVERABLE_VERIFIED' &&
+    exact(state, ['profileVersion', 'nodeFields', 'metadataMode', 'inventoryMode',
+      'timerMode', 'derivedLightMode']) && state.profileVersion === 'state-profile/v2' &&
+    Array.isArray(state.nodeFields) &&
+    canonicalize(state.nodeFields) === canonicalize(['nodeName', 'param1', 'param2']) &&
+    state.metadataMode === 'exact' && state.inventoryMode === 'exact' &&
+    state.timerMode === 'exact' && state.derivedLightMode === 'recompute-with-readback' &&
+    validPositions(value.protectedPositions) && ref(value.adapterExecutionRevision);
+}
+function validMutationShape(operation, body) {
+  if (!mutationUnavailable.has(operation)) return true;
+  if (!ref(body.transactionId)) return false;
+  if (operation === 'ApplyRecoverableCommit') return validOperations(body.operations) &&
+    digest(body.operationDigest) && validAuthorizationBinding(body.authorizationBinding) &&
+    digest(body.authorizationBindingDigest) && digest(body.analysisDigest) &&
+    (body.decisionRevision === null || ref(body.decisionRevision)) &&
+    ref(body.expectedWorldRevision) && validObjectRevisions(body.expectedObjectRevisions) &&
+    body.guarantee === 'RECOVERABLE_VERIFIED' && validPrepared(body.preparedTransaction);
+  if (operation === 'Readback') return ref(body.commitRevision) &&
+    validOperations(body.expectedOperations) && digest(body.transactionPayloadDigest);
+  return ref(body.objectRef) && ref(body.historyTransactionId) &&
+    ref(body.expectedHistoryRevision) && ref(body.expectedWorldRevision) &&
+    validObjectRevisions(body.expectedObjectRevisions) && digest(body.intentDigest) &&
+    digest(body.surfaceActionDigest);
+}
 function validRequest(operation, body) {
   if (!allowed.has(operation)) throw issue('UNKNOWN_ACTION', 'decode', 'INVALID_SHAPE');
-  try { body = readJSON(body); }
-  catch (error) { throw issue(error.code, 'decode', error.reason); }
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw issue('SCHEMA_INVALID', 'decode', 'INVALID_SHAPE');
   if (body.contractVersion !== VERSION) throw issue('UNSUPPORTED_VERSION', 'decode', 'VERSION_UNSUPPORTED');
   if (Object.keys(body).some(key => !fields[operation].includes(key))) throw issue('UNKNOWN_REQUIRED_FIELD', 'decode', 'UNKNOWN_FIELD');
@@ -63,6 +163,8 @@ function validRequest(operation, body) {
        body.sampledBounds.min.length !== 3 || body.sampledBounds.max.length !== 3 ||
        [...body.sampledBounds.min, ...body.sampledBounds.max].some(x => !Number.isSafeInteger(x))))
     throw issue('SCHEMA_INVALID', 'decode', 'INVALID_SHAPE');
+  if (!validMutationShape(operation, body))
+    throw issue('SCHEMA_INVALID', 'decode', 'INVALID_SHAPE');
   return body;
 }
 function issue(code, phase, reason, transactionRef = null) {
@@ -73,7 +175,8 @@ function issue(code, phase, reason, transactionRef = null) {
   return error;
 }
 function envelope(body, result, error = null) {
-  return { contractVersion: VERSION, requestId: body?.requestId ?? null, result, error };
+  return { contractVersion: VERSION, requestId: ref(body?.requestId) ? body.requestId : null,
+    result, error };
 }
 function revision(value) { return String(Number(value ?? '0') + 1); }
 function identity(body) { return createHash('sha256').update(canonicalize(body)).digest('hex'); }
@@ -195,7 +298,9 @@ export class CanvasV2 {
   async call(operation, raw) {
     let body;
     try {
-      body = validRequest(operation, raw);
+      try { body = readJSON(raw); }
+      catch (error) { throw issue(error.code, 'decode', error.reason); }
+      body = validRequest(operation, body);
       const proof = await this.authority?.verify?.(body, operation);
       if (!proof?.current || proof.actorRef !== body.actorRef ||
           proof.sessionRef !== body.sessionRef || proof.authorizationRef !== body.authorizationRef ||
@@ -210,6 +315,8 @@ export class CanvasV2 {
         if (prior.digest !== digest) throw issue('REPLAY_MISMATCH', 'replay', 'PAYLOAD_CHANGED');
         return structuredClone(prior.response);
       }
+      if (mutationUnavailable.has(operation))
+        throw issue('CAPABILITY_UNAVAILABLE', 'validate', 'POLICY_UNAVAILABLE');
       let result;
       if (operation === 'ListWorldConnections') {
         result = await this.#inventory(body);
