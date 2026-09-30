@@ -18,7 +18,12 @@ function fresh() {
 
 /** Canvas-owned state. A same-profile host must provide one writer instance. */
 export class CanvasStore {
-  constructor(directory, snapshot) { this.directory = directory; this.snapshot = snapshot; this.busy = Promise.resolve(); }
+  constructor(directory, snapshot) {
+    this.directory = directory;
+    this.snapshot = snapshot;
+    this.busy = Promise.resolve();
+    this.unavailable = false;
+  }
   static async open(directory) {
     if (typeof directory !== 'string' || !directory) throw new Error('CANVAS_STORAGE_UNAVAILABLE');
     await mkdir(directory, { recursive: true, mode: 0o700 });
@@ -30,19 +35,26 @@ export class CanvasStore {
   }
   async commit(change) {
     const operation = this.busy.then(async () => {
+      if (this.unavailable) throw new Error('CANVAS_STORAGE_UNAVAILABLE');
       const next = nullRecords(structuredClone(this.snapshot));
       const result = await change(next);
       const path = join(this.directory, 'canvas-v2.json');
       const temporary = join(this.directory, `.canvas-v2-${randomUUID()}.tmp`);
+      let renamed = false;
       try {
         const file = await open(temporary, 'wx', 0o600);
         try { await file.writeFile(JSON.stringify(next)); await file.sync(); }
         finally { await file.close(); }
         await rename(temporary, path);
+        renamed = true;
         const directory = await open(this.directory, 'r');
         try { await directory.sync(); } finally { await directory.close(); }
         this.snapshot = nullRecords(next);
-      } catch (error) { await rm(temporary, { force: true }); throw error; }
+      } catch (error) {
+        if (renamed) this.unavailable = true;
+        await rm(temporary, { force: true });
+        throw error;
+      }
       return result;
     });
     this.busy = operation.catch(() => {});

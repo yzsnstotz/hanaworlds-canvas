@@ -37,15 +37,20 @@ persisted replay; revision checks precede state changes. Object names use
 `icu@2.3.1` ICU4X WASM NFC and White_Space data, pinned in the npm lock, so the
 host Node 22 Unicode data version is not used for persistent comparison keys.
 The source tests cover representative names and all Unicode scalar White_Space
-membership against the frozen list. Full Unicode17 normalization conformance
-against the published contracts package is not claimed.
+membership against the frozen list. An isolated conformance probe also compared
+both NameObject and RenameObject against all 100,170 cases in Unicode 17.0.0's
+NormalizationTest.txt and the local contracts@0.1.1 normalizeName oracle. This
+does not establish conformance for every possible string or against a published
+contracts package; see the S1-02 Canvas batch evidence.
 
 ## Durable state and lifecycle
 
 Canvas stores `canvas-v2.json` under the host-provided profile directory. Each
 commit writes a mode-0600 temporary file, fsyncs it, renames it over the prior
 snapshot and fsyncs the directory. A single writer instance per profile is
-required. Restart opens the same versioned state; unknown schema versions fail
+required. If directory synchronization fails after rename, that writer rejects
+further requests until the store is reopened, because its durable outcome is
+uncertain. Restart opens the same versioned state; unknown schema versions fail
 closed. The file retains object registry, selections, replay records and later
 history until an explicit supported migration or deletion. Uninstall must keep
 this state and Adapter recovery journal.

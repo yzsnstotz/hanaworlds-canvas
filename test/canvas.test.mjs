@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CanvasStore, CanvasV2, apply } from '../src/index.mjs';
@@ -35,7 +35,8 @@ async function fixture(t) {
       worldRef: body.worldRef, payloadVersion: '0.1.0', payloadDigest: 'a'.repeat(64),
       binding: { authorizerRef: 'owner', actorRef: 'actor', bindingRef: 'binding',
         worldRef: body.worldRef, grantEpoch: 'epoch', allowedActions: ['READ'] },
-      capabilities: { providerRef: 'adapter', capabilityRevision: 'cap', worldRef: body.worldRef,
+      capabilities: { providerRef: 'adapter', capabilityRevision: body.expectedCapabilityRevision,
+        worldRef: body.worldRef,
         engineBounds: null, limits: [], recoveryGuarantee: 'RECOVERABLE_VERIFIED',
         stateProfile: null, regionProtectionWriters: [], sessionDeleteSupported: false,
         imageMediaTypes: [], model: null } }, error: null };
@@ -48,6 +49,14 @@ async function fixture(t) {
       portals: [], usableVolume: null }, error: null };
     return { result: null, error: { code: 'ADAPTER_UNAVAILABLE' } };
   } };
+  const adapterCall = adapter.call.bind(adapter);
+  adapter.call = async (operation, body) => {
+    const answer = { contractVersion: 'world-adapter/v2', requestId: body.requestId,
+      ...await adapterCall(operation, body) };
+    if (contracts && answer.error === null)
+      contracts.validateResponse('world-adapter/v2', operation, answer);
+    return answer;
+  };
   const authority = { async verify(body, operation) {
     return { current: true, actorRef: body.actorRef, sessionRef: body.sessionRef,
       authorizationRef: body.authorizationRef, allowedActions: [operation],
@@ -150,6 +159,10 @@ test('affected analysis covers exact cells and requires explicit confirmed conti
     decision: 'BLOCK_AND_NOTIFY', expectedDecisionRevision: null }));
   assert.equal(blocked.error, null);
   assert.equal(blocked.result.decisionKind, 'BLOCK_AND_NOTIFY');
+  const staleDecision = await f.canvas.call('DecideAffectedObjectNotification', request({
+    transactionId: 'tx', analysis: analyzed.result, analysisDigest, analysisRevision: '1',
+    decision: 'CANCEL', expectedDecisionRevision: null }));
+  assert.equal(staleDecision.error.code, 'STALE_REVISION');
   const noProof = await f.canvas.call('DecideAffectedObjectNotification', request({ transactionId: 'tx',
     analysis: analyzed.result, analysisDigest, analysisRevision: '1',
     decision: 'CONTINUE', expectedDecisionRevision: '1' }));
@@ -386,4 +399,121 @@ test('frozen mutation operations decode and revoke before capability refusal', a
   }
   assert.equal(authorizations, 4);
   assert.deepEqual(f.calls, []);
+});
+
+test('malformed and mismatched public Adapter responses cannot become durable selection', async t => {
+  const cases = [
+    { label: 'missing descriptor field', operation: 'DiscoverConnections', contractInvalid: true,
+      call: 'ListWorldConnections', code: 'ADAPTER_UNAVAILABLE',
+      corrupt: answer => { delete answer.result.connections[0].connectionRef; } },
+    { label: 'duplicate connection/world pair', operation: 'DiscoverConnections', contractInvalid: true,
+      call: 'ListWorldConnections', code: 'ADAPTER_UNAVAILABLE',
+      corrupt: answer => { answer.result.connections.push(structuredClone(answer.result.connections[0])); } },
+    { label: 'wrong listed adapter identity', operation: 'ListWorlds',
+      call: 'SelectWorldConnection', code: 'CONNECTION_UNAUTHORIZED',
+      corrupt: answer => { answer.result.connections[0].adapterId = 'rogue'; } },
+    { label: 'mismatched response request ID', operation: 'ListWorlds',
+      call: 'SelectWorldConnection', code: 'CONNECTION_UNAUTHORIZED',
+      corrupt: answer => { answer.requestId = 'different'; } },
+    { label: 'missing authenticated authorizer', operation: 'AuthorizeBinding', contractInvalid: true,
+      call: 'SelectWorldConnection', code: 'CONNECTION_UNAUTHORIZED',
+      corrupt: answer => { answer.result.binding.authorizerRef = ''; } },
+    { label: 'mismatched capability provider identity', operation: 'AuthorizeBinding',
+      call: 'SelectWorldConnection', code: 'CONNECTION_UNAUTHORIZED',
+      corrupt: answer => { answer.result.capabilities.providerRef = 'rogue'; } },
+    { label: 'malformed payload digest', operation: 'AuthorizeBinding', contractInvalid: true,
+      call: 'SelectWorldConnection', code: 'CONNECTION_UNAUTHORIZED',
+      corrupt: answer => { answer.result.payloadDigest = 'not-a-digest'; } },
+  ];
+  for (const scenario of cases) await t.test(scenario.label, async sub => {
+    const f = await fixture(sub);
+    const original = f.adapter.call.bind(f.adapter);
+    f.adapter.call = async (operation, body) => {
+      const answer = await original(operation, body);
+      if (operation === scenario.operation) {
+        scenario.corrupt(answer);
+        if (contracts && scenario.contractInvalid)
+          assert.throws(() => contracts.validateResponse('world-adapter/v2', operation, answer));
+      }
+      return answer;
+    };
+    const before = JSON.stringify(f.store.snapshot);
+    const body = scenario.call === 'ListWorldConnections' ?
+      request({ expectedCapabilityRevision: 'inventory-1' }) :
+      request({ connectionRef: 'connection', expectedRevision: '0' });
+    const response = await f.canvas.call(scenario.call, body);
+    assert.equal(response.error?.code, scenario.code);
+    assert.equal(response.requestId, body.requestId);
+    assert.equal(JSON.stringify(f.store.snapshot), before);
+  });
+});
+
+test('post-rename storage uncertainty locks the same writer until reopen', async t => {
+  const f = await fixture(t);
+  const directory = f.store.directory;
+  let reads = 0;
+  Object.defineProperty(f.store, 'directory', { configurable: true,
+    get() { return ++reads <= 2 ? directory : `${directory}/missing`; } });
+  const body = request({ connectionRef: 'connection', expectedRevision: '0' });
+  const first = await f.canvas.call('SelectWorldConnection', body);
+  assert.equal(first.error.code, 'CAPABILITY_UNAVAILABLE');
+  assert.equal(f.canvas.status().storage, 'UNAVAILABLE');
+  Object.defineProperty(f.store, 'directory', { configurable: true, value: directory });
+  const reopened = await CanvasStore.open(directory);
+  assert.equal(reopened.snapshot.sessions.session.activeWorldRef, 'world');
+  const second = await f.canvas.call('SelectWorldConnection', body);
+  assert.equal(second.error.code, 'CAPABILITY_UNAVAILABLE');
+  assert.equal(f.store.unavailable, true);
+});
+
+test('single-writer selection and name CAS have one durable winner with replay after reopen', async t => {
+  const f = await fixture(t);
+  await f.canvas.call('SelectWorldConnection', request({ connectionRef: 'connection', expectedRevision: '0' }));
+  await f.store.commit(state => { state.objects.world = {
+    A: { worldRef: 'world', objectRef: 'A', objectRevision: '1', displayName: 'Old A',
+      nameRevision: '1', creationSequence: 1, status: 'READY' },
+    B: { worldRef: 'world', objectRef: 'B', objectRevision: '1', displayName: 'Old B',
+      nameRevision: '1', creationSequence: 2, status: 'READY' } };
+  state.names.world = { A: 'Old A', B: 'Old B' }; });
+  const selections = await Promise.all([['A'], ['B']].map(objectRefs =>
+    f.canvas.call('SetObjectSelection', request({ objectRefs, expectedSelectionRevision: '0' }))));
+  assert.equal(selections.filter(x => x.error === null).length, 1);
+  assert.equal(selections.filter(x => x.error?.code === 'STALE_REVISION').length, 1);
+  const renameBodies = ['A', 'B'].map(objectRef => request({ objectRef,
+    name: 'Same Name', expectedRevision: '1', expectedRegistryRevision: '0' }));
+  const renames = await Promise.all(renameBodies.map(body => f.canvas.call('RenameObject', body)));
+  assert.equal(renames.filter(x => x.error === null).length, 1);
+  assert.equal(renames.filter(x => x.error?.code === 'STALE_REVISION' ||
+    x.error?.code === 'OBJECT_NAME_CONFLICT').length, 1);
+  const winner = renames.findIndex(x => x.error === null);
+  const reopened = await CanvasStore.open(f.store.directory);
+  assert.deepEqual(reopened.snapshot.sessions.session.orderedSelectedObjectRefs,
+    selections.find(x => x.error === null).result.selectedObjectRefs);
+  assert.equal(Object.values(reopened.snapshot.names.world).filter(x => x === 'same name').length, 1);
+  const reopenedCanvas = new CanvasV2({ store: reopened, adapters: f.canvas.adapters,
+    authority: f.authority });
+  assert.deepEqual(await reopenedCanvas.call('RenameObject', renameBodies[winner]), renames[winner]);
+});
+
+test('pre-rename storage fault and corrupt snapshot fail without false success', async t => {
+  const f = await fixture(t);
+  const body = request({ expectedCapabilityRevision: 'inventory-1' });
+  const directory = f.store.directory;
+  f.store.directory = `${directory}/missing`;
+  const failed = await f.canvas.call('ListWorldConnections', body);
+  assert.equal(failed.error.code, 'CAPABILITY_UNAVAILABLE');
+  assert.equal(f.store.unavailable, false);
+  f.store.directory = directory;
+  const reopened = await CanvasStore.open(directory);
+  assert.equal(Object.keys(reopened.snapshot.replay).length, 0);
+  const successful = await f.canvas.call('ListWorldConnections', body);
+  assert.equal(successful.error, null);
+  const bytes = await readFile(join(directory, 'canvas-v2.json'));
+  const corrupt = await mkdtemp(join(tmpdir(), 'hw-canvas-corrupt-'));
+  t.after(() => rm(corrupt, { recursive: true, force: true }));
+  await writeFile(join(corrupt, 'canvas-v2.json'), '{invalid');
+  await assert.rejects(() => CanvasStore.open(corrupt), SyntaxError);
+  await writeFile(join(corrupt, 'canvas-v2.json'), JSON.stringify({ schemaVersion: 999 }));
+  await assert.rejects(() => CanvasStore.open(corrupt), /CANVAS_STORAGE_VERSION_UNSUPPORTED/);
+  assert.ok(bytes.length > 0);
 });

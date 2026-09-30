@@ -184,6 +184,99 @@ function projectionDigest(kind, value) {
   return createHash('sha256').update(`HanaWorlds|contracts@0.1.0|${kind}\n${canonicalize(value)}`).digest('hex');
 }
 function compareUtf16(a, b) { return a < b ? -1 : a > b ? 1 : 0; }
+const adapterActions = new Set(['READ', 'SELECT', 'NAME', 'RENAME', 'INSPECT',
+  'ANALYZE', 'DECIDE', 'APPLY_RECOVERABLE', 'READBACK', 'UNDO', 'REDO', 'HISTORY']);
+const limitKinds = new Set(['BYTES', 'PIXELS', 'WIDTH', 'HEIGHT', 'BATCH_COUNT',
+  'COORDINATE', 'ENGINE_WRITE_CELLS', 'HOST_MEMORY_BYTES', 'REQUEST_BYTES']);
+const mediaTypes = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
+function sortedUnique(values, predicate) {
+  return Array.isArray(values) && values.every((value, index) => predicate(value) &&
+    (index === 0 || compareUtf16(values[index - 1], value) < 0));
+}
+function validAdapterAnswer(answer, request) {
+  return exact(answer, ['contractVersion', 'requestId', 'result', 'error']) &&
+    answer.contractVersion === 'world-adapter/v2' && answer.requestId === request.requestId &&
+    answer.error === null;
+}
+function missingConnection(answer, request) {
+  const error = answer?.error;
+  return exact(answer, ['contractVersion', 'requestId', 'result', 'error']) &&
+    answer.contractVersion === 'world-adapter/v2' && answer.requestId === request.requestId &&
+    answer.result === null && exact(error, ['code', 'phase', 'retryability', 'mutationState',
+      'transactionRef', 'causeCode', 'reason']) && error.code === 'CONNECTION_NOT_FOUND' &&
+    error.phase === 'validate' && error.retryability === 'AFTER_NEW_FACTS' &&
+    error.mutationState === 'NONE' && error.transactionRef === null &&
+    error.causeCode === null && error.reason === 'POLICY_UNAVAILABLE';
+}
+function validConnectionInventory(result) {
+  if (!exact(result, ['capabilityRevision', 'connections']) || !ref(result.capabilityRevision) ||
+      !Array.isArray(result.connections)) return false;
+  const pairs = new Set();
+  return result.connections.every((row, index) => {
+    if (!exact(row, ['adapterId', 'connectionRef', 'worldRef', 'displayName',
+      'capabilityRevision', 'payloadVersion', 'readiness']) ||
+        !['adapterId', 'connectionRef', 'worldRef', 'capabilityRevision', 'payloadVersion']
+          .every(key => ref(row[key])) || typeof row.displayName !== 'string' ||
+        !['READY', 'ADAPTER_UNAVAILABLE', 'CONNECTION_UNAUTHORIZED',
+          'PAYLOAD_VERSION_MISMATCH', 'CAPABILITY_UNAVAILABLE'].includes(row.readiness)) return false;
+    const pair = JSON.stringify([row.connectionRef, row.worldRef]);
+    if (pairs.has(pair)) return false;
+    pairs.add(pair);
+    if (index > 0) {
+      const previous = result.connections[index - 1];
+      const order = compareUtf16(previous.adapterId, row.adapterId) ||
+        compareUtf16(previous.connectionRef, row.connectionRef) ||
+        compareUtf16(previous.worldRef, row.worldRef);
+      if (order >= 0) return false;
+    }
+    return true;
+  });
+}
+function validBox(box) {
+  return exact(box, ['min', 'max']) && validPosition(box.min) && validPosition(box.max) &&
+    box.min.every((value, index) => value <= box.max[index]);
+}
+function validCapabilities(value) {
+  if (!exact(value, ['providerRef', 'capabilityRevision', 'worldRef', 'engineBounds',
+    'limits', 'recoveryGuarantee', 'stateProfile', 'regionProtectionWriters',
+    'sessionDeleteSupported', 'imageMediaTypes', 'model']) ||
+      !ref(value.providerRef) || !ref(value.capabilityRevision) ||
+      value.worldRef !== null && !ref(value.worldRef) ||
+      value.engineBounds !== null && !validBox(value.engineBounds) ||
+      !Array.isArray(value.limits) ||
+      value.recoveryGuarantee !== null && value.recoveryGuarantee !== 'RECOVERABLE_VERIFIED' ||
+      value.stateProfile !== null && !validStateProfile(value.stateProfile) ||
+      !sortedUnique(value.regionProtectionWriters, ref) ||
+      typeof value.sessionDeleteSupported !== 'boolean' ||
+      !sortedUnique(value.imageMediaTypes, item => mediaTypes.has(item)) ||
+      value.model !== null && !ref(value.model)) return false;
+  return value.limits.every((limit, index) => exact(limit,
+    ['limitKind', 'actual', 'limit', 'source', 'sourceRevision']) &&
+    limitKinds.has(limit.limitKind) && Number.isSafeInteger(limit.actual) && limit.actual >= 0 &&
+    Number.isSafeInteger(limit.limit) && limit.limit >= 0 && ref(limit.source) &&
+    ref(limit.sourceRevision) && (index === 0 ||
+      compareUtf16(value.limits[index - 1].limitKind, limit.limitKind) < 0 ||
+      value.limits[index - 1].limitKind === limit.limitKind &&
+        compareUtf16(value.limits[index - 1].source, limit.source) < 0));
+}
+function validStateProfile(value) {
+  return exact(value, ['profileVersion', 'nodeFields', 'metadataMode', 'inventoryMode',
+    'timerMode', 'derivedLightMode']) && value.profileVersion === 'state-profile/v2' &&
+    JSON.stringify(value.nodeFields) === '["nodeName","param1","param2"]' &&
+    value.metadataMode === 'exact' && value.inventoryMode === 'exact' &&
+    value.timerMode === 'exact' && value.derivedLightMode === 'recompute-with-readback';
+}
+function validBindingReceipt(value) {
+  const binding = value?.binding;
+  return exact(value, ['connectionRef', 'worldRef', 'payloadVersion', 'payloadDigest',
+    'binding', 'capabilities']) && ref(value.connectionRef) && ref(value.worldRef) &&
+    ref(value.payloadVersion) && digest(value.payloadDigest) &&
+    exact(binding, ['authorizerRef', 'actorRef', 'bindingRef', 'worldRef', 'grantEpoch',
+      'allowedActions']) && ['authorizerRef', 'actorRef', 'bindingRef', 'worldRef',
+        'grantEpoch'].every(key => ref(binding[key])) &&
+    sortedUnique(binding.allowedActions, action => adapterActions.has(action)) &&
+    validCapabilities(value.capabilities);
+}
 function comparePosition(a, b) {
   for (let index = 0; index < 3; index++) if (a[index] !== b[index]) return a[index] - b[index];
   return 0;
@@ -245,12 +338,13 @@ export class CanvasV2 {
     if (!this.adapters.length) throw issue('ADAPTER_UNAVAILABLE', 'validate', 'POLICY_UNAVAILABLE');
     const groups = [];
     for (const entry of this.adapters) {
-      const answer = await entry.port?.call?.('DiscoverConnections', {
+      const request = {
         contractVersion: 'world-adapter/v2', actorRef: body.actorRef,
         sessionRef: body.sessionRef, requestId: `${body.requestId}:discover:${entry.adapterId}`,
-        authorizationRef: body.authorizationRef, adapterId: entry.adapterId });
-      if (answer?.error || !Array.isArray(answer?.result?.connections))
-        throw issue(answer?.error?.code ?? 'ADAPTER_UNAVAILABLE', 'validate', 'POLICY_UNAVAILABLE');
+        authorizationRef: body.authorizationRef, adapterId: entry.adapterId };
+      const answer = await entry.port?.call?.('DiscoverConnections', request);
+      if (!validAdapterAnswer(answer, request) || !validConnectionInventory(answer.result))
+        throw issue('ADAPTER_UNAVAILABLE', 'validate', 'POLICY_UNAVAILABLE');
       if (answer.result.connections.some(row => row.adapterId !== entry.adapterId))
         throw issue('ADAPTER_UNAVAILABLE', 'validate', 'POLICY_UNAVAILABLE');
       groups.push(answer.result);
@@ -258,36 +352,48 @@ export class CanvasV2 {
     const connections = groups.flatMap(group => group.connections).sort((a, b) =>
       compareUtf16(a.adapterId, b.adapterId) || compareUtf16(a.connectionRef, b.connectionRef) ||
       compareUtf16(a.worldRef, b.worldRef));
+    if (new Set(connections.map(row => JSON.stringify([row.connectionRef, row.worldRef]))).size !==
+        connections.length) throw issue('ADAPTER_UNAVAILABLE', 'validate', 'POLICY_UNAVAILABLE');
     const capabilityRevision = groups.length === 1 ? groups[0].capabilityRevision :
       identity(groups.map(group => group.capabilityRevision));
     return { capabilityRevision, connections };
   }
   async #bind(body, connectionRef, worldRef) {
     for (const entry of this.adapters) {
-      const listed = await entry.port?.call?.('ListWorlds', {
+      const listRequest = {
         contractVersion: 'world-adapter/v2', actorRef: body.actorRef,
         sessionRef: body.sessionRef, requestId: `${body.requestId}:list:${entry.adapterId}`,
-        authorizationRef: body.authorizationRef, connectionRef });
-      if (listed?.error?.code === 'CONNECTION_NOT_FOUND') continue;
-      if (listed?.error || !Array.isArray(listed?.result?.connections))
-        throw issue(listed?.error?.code ?? 'ADAPTER_UNAVAILABLE', 'validate', 'POLICY_UNAVAILABLE');
+        authorizationRef: body.authorizationRef, connectionRef };
+      const listed = await entry.port?.call?.('ListWorlds', listRequest);
+      if (missingConnection(listed, listRequest)) continue;
+      if (!validAdapterAnswer(listed, listRequest) || !validConnectionInventory(listed.result))
+        throw issue('CONNECTION_UNAUTHORIZED', 'validate', 'POLICY_UNAVAILABLE');
+      if (listed.result.connections.some(row => row.adapterId !== entry.adapterId ||
+          row.connectionRef !== connectionRef))
+        throw issue('CONNECTION_UNAUTHORIZED', 'validate', 'POLICY_UNAVAILABLE');
       const descriptor = listed.result.connections.find(row =>
         row.connectionRef === connectionRef && row.worldRef === worldRef);
       if (!descriptor) continue;
       if (descriptor.payloadVersion !== '0.1.0')
         throw issue('PAYLOAD_VERSION_MISMATCH', 'validate', 'PAYLOAD_CHANGED');
-      const connected = await entry.port.call('AuthorizeBinding', {
+      const bindRequest = {
         contractVersion: 'world-adapter/v2', actorRef: body.actorRef,
         sessionRef: body.sessionRef, requestId: `${body.requestId}:bind`,
         authorizationRef: body.authorizationRef, worldRef, connectionRef,
         expectedCapabilityRevision: descriptor.capabilityRevision,
-      });
-      if (connected?.error || connected?.result?.worldRef !== worldRef ||
+      };
+      const connected = await entry.port.call('AuthorizeBinding', bindRequest);
+      if (!validAdapterAnswer(connected, bindRequest) ||
+          !validBindingReceipt(connected.result) ||
+          connected.result.worldRef !== worldRef ||
           connected?.result?.connectionRef !== connectionRef ||
           connected?.result?.payloadVersion !== '0.1.0' ||
           connected?.result?.binding?.actorRef !== body.actorRef ||
-          connected?.result?.binding?.worldRef !== worldRef)
-        throw issue(connected?.error?.code ?? 'CONNECTION_UNAUTHORIZED', 'validate', 'POLICY_UNAVAILABLE');
+          connected?.result?.binding?.worldRef !== worldRef ||
+          connected.result.capabilities.worldRef !== worldRef ||
+          connected.result.capabilities.providerRef !== entry.adapterId ||
+          connected.result.capabilities.capabilityRevision !== descriptor.capabilityRevision)
+        throw issue('CONNECTION_UNAUTHORIZED', 'validate', 'POLICY_UNAVAILABLE');
       return { adapterId: entry.adapterId, connectionRef, worldRef,
         payloadDigest: connected.result.payloadDigest,
         capabilityRevision: descriptor.capabilityRevision,
@@ -308,6 +414,10 @@ export class CanvasV2 {
         throw issue('AUTHORIZATION_REVOKED', 'authorize', 'GRANT_REVOKED');
       await this.ready;
       if (!this.store) throw issue('CAPABILITY_UNAVAILABLE', 'validate', 'POLICY_UNAVAILABLE');
+      if (this.store.unavailable) {
+        this.storageState = 'UNAVAILABLE';
+        throw issue('CAPABILITY_UNAVAILABLE', 'validate', 'POLICY_UNAVAILABLE');
+      }
       const replayKey = `${body.sessionRef}\u0000${operation}\u0000${body.requestId}`;
       const prior = this.store.snapshot.replay[replayKey];
       const digest = identity(body);
@@ -597,6 +707,7 @@ export class CanvasV2 {
       }
       return envelope(body, result);
     } catch (error) {
+      if (this.store?.unavailable) this.storageState = 'UNAVAILABLE';
       return envelope(body, null, error.publicError ?? issue('CAPABILITY_UNAVAILABLE', 'validate', 'POLICY_UNAVAILABLE').publicError);
     }
   }
