@@ -58,10 +58,13 @@ Rollback of code requires stopping the profile, backing up `canvas-v2.json`,
 installing an earlier verified package and confirming that package can read
 schema version 1 before restart. If it cannot, keep the state and stop the
 downgrade. Removing the package must not erase worlds, objects, histories or
-Adapter pending recovery evidence. The isolated DSH profile local-tarball
-install, unload/reinstall and loopback restart are lifecycle diagnostics only;
-public-origin install and downgrade readback remain `NOT_RUN` until separately
-evidenced.
+Adapter pending recovery evidence. A clean isolated DSH profile installed the
+pinned public Git revision, loaded it on loopback, restarted, uninstalled,
+retained an isolated Canvas state file, reinstalled and reopened that state.
+This proves package lifecycle and source identity; the isolated state file was
+created through `CanvasStore`, not an actual Shell/Adapter world flow. A
+downgrade readback remains `NOT_RUN` because no earlier Canvas plugin version
+exists in this Stage 1 beginning.
 
 ## Exact open gates
 
