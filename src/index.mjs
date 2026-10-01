@@ -163,6 +163,8 @@ function validRequest(operation, body) {
        body.sampledBounds.min.length !== 3 || body.sampledBounds.max.length !== 3 ||
        [...body.sampledBounds.min, ...body.sampledBounds.max].some(x => !Number.isSafeInteger(x))))
     throw issue('SCHEMA_INVALID', 'decode', 'INVALID_SHAPE');
+  if (operation === 'AnalyzeAffectedObjects' && !validOperations(body.operations))
+    throw issue('SCHEMA_INVALID', 'decode', 'INVALID_SHAPE');
   if (!validMutationShape(operation, body))
     throw issue('SCHEMA_INVALID', 'decode', 'INVALID_SHAPE');
   return body;
@@ -197,6 +199,29 @@ function validAdapterAnswer(answer, request) {
   return exact(answer, ['contractVersion', 'requestId', 'result', 'error']) &&
     answer.contractVersion === 'world-adapter/v2' && answer.requestId === request.requestId &&
     answer.error === null;
+}
+function inspectionError(answer, request) {
+  const error = answer?.error;
+  if (exact(answer, ['contractVersion', 'requestId', 'result', 'error']) &&
+      answer.contractVersion === 'world-adapter/v2' && answer.requestId === request.requestId &&
+      answer.result === null && exact(error, ['code', 'phase', 'retryability',
+        'mutationState', 'transactionRef', 'causeCode', 'reason']) &&
+      error.mutationState === 'NONE' && error.transactionRef === null &&
+      error.causeCode === null) {
+    if (error.code === 'AUTHORIZATION_REVOKED' && error.phase === 'authorize' &&
+        error.retryability === 'AFTER_NEW_AUTH' && error.reason === 'GRANT_REVOKED')
+      return issue('AUTHORIZATION_REVOKED', 'authorize', 'GRANT_REVOKED');
+    if (error.code === 'PERMISSION_DENIED' && error.phase === 'authorize' &&
+        error.retryability === 'AFTER_NEW_AUTH' && error.reason === 'SCOPE_DENIED')
+      return issue('PERMISSION_DENIED', 'authorize', 'SCOPE_DENIED');
+    if (error.code === 'REPLAY_MISMATCH' && error.phase === 'replay' &&
+        error.retryability === 'NEVER' && error.reason === 'PAYLOAD_CHANGED')
+      return issue('REPLAY_MISMATCH', 'replay', 'PAYLOAD_CHANGED');
+    if (error.code === 'INSPECTION_FAILED' && error.phase === 'validate' &&
+        error.retryability === 'AFTER_NEW_FACTS' && ref(error.reason))
+      return issue('INSPECTION_FAILED', 'validate', 'REQUIRED_FACT_UNKNOWN');
+  }
+  return issue('INSPECTION_FAILED', 'validate', 'REQUIRED_FACT_UNKNOWN');
 }
 function missingConnection(answer, request) {
   const error = answer?.error;
@@ -235,6 +260,44 @@ function validConnectionInventory(result) {
 function validBox(box) {
   return exact(box, ['min', 'max']) && validPosition(box.min) && validPosition(box.max) &&
     box.min.every((value, index) => value <= box.max[index]);
+}
+function validInspectionFacts(value) {
+  if (!exact(value, ['profileVersion', 'source', 'worldRef', 'objectRef',
+    'worldRevision', 'objectRevision', 'buildDigest', 'planRevision',
+    'catalogueDigest', 'frameDigest', 'sampledBounds', 'coverageDigest',
+    'occupiedCells', 'knownEmptyCells', 'unknownCells', 'portals', 'usableVolume']) ||
+      value.profileVersion !== 'target-facts/v2' || value.source !== 'INSPECTED' ||
+      !['worldRef', 'objectRef', 'worldRevision', 'objectRevision'].every(key => ref(value[key])) ||
+      value.buildDigest !== null || value.planRevision !== null ||
+      !['catalogueDigest', 'frameDigest', 'coverageDigest'].every(key => digest(value[key])) ||
+      !validBox(value.sampledBounds) || !Array.isArray(value.occupiedCells) ||
+      !validPositions(value.knownEmptyCells) || !Array.isArray(value.unknownCells) ||
+      !Array.isArray(value.portals)) return false;
+  const inBounds = position => position.every((coordinate, index) =>
+    coordinate >= value.sampledBounds.min[index] && coordinate <= value.sampledBounds.max[index]);
+  const sortedCells = (cells, keys, valid) => cells.every((cell, index) =>
+    exact(cell, keys) && validPosition(cell.position) && inBounds(cell.position) &&
+    valid(cell) && (index === 0 || comparePosition(cells[index - 1].position, cell.position) < 0));
+  if (!sortedCells(value.occupiedCells, ['position', 'nodeName', 'param2'], cell =>
+    ref(cell.nodeName) && cell.nodeName !== 'air' && Number.isInteger(cell.param2) &&
+    cell.param2 >= 0 && cell.param2 <= 255) ||
+      !value.knownEmptyCells.every(inBounds) ||
+      !sortedCells(value.unknownCells, ['position', 'reason'], cell =>
+        ['UNLOADED', 'IGNORE', 'READ_FAILED'].includes(cell.reason))) return false;
+  const positions = [...value.occupiedCells.map(cell => cell.position), ...value.knownEmptyCells,
+    ...value.unknownCells.map(cell => cell.position)];
+  if (new Set(positions.map(position => JSON.stringify(position))).size !== positions.length) return false;
+  if (!value.portals.every((portal, index) => exact(portal, ['portalRef', 'positions']) &&
+    ref(portal.portalRef) && validPositions(portal.positions, true) &&
+    portal.positions.every(inBounds) &&
+    (index === 0 || compareUtf16(value.portals[index - 1].portalRef, portal.portalRef) < 0))) return false;
+  const volume = value.usableVolume;
+  return volume === null || exact(volume,
+    ['emptyCellCount', 'physicalVolume', 'standingArea', 'unit']) &&
+    Number.isSafeInteger(volume.emptyCellCount) && volume.emptyCellCount >= 0 &&
+    ['physicalVolume', 'standingArea'].every(key => volume[key] === null ||
+      typeof volume[key] === 'number' && Number.isFinite(volume[key]) && volume[key] >= 0) &&
+    ref(volume.unit);
 }
 function validCapabilities(value) {
   if (!exact(value, ['providerRef', 'capabilityRevision', 'worldRef', 'engineBounds',
@@ -292,7 +355,7 @@ function operationPositions(operations, worldRef, expectedDigest) {
         index > 0 && comparePosition(operations.effects[index - 1].position, effect.position) >= 0))
     throw issue('SCHEMA_INVALID', 'decode', 'INVALID_SHAPE');
   if (projectionDigest('operations', operations) !== expectedDigest)
-    throw issue('NON_CANONICAL_AMBIGUITY', 'validate', 'PAYLOAD_CHANGED');
+    throw issue('TRANSACTION_CONFLICT', 'validate', 'PAYLOAD_CHANGED');
   return operations.effects.map(effect => effect.position);
 }
 
@@ -637,17 +700,21 @@ export class CanvasV2 {
         const bound = this.store.snapshot.bindings[body.sessionRef];
         const adapter = this.adapters.find(entry => entry.adapterId === bound?.adapterId)?.port;
         if (!adapter) throw issue('ADAPTER_UNAVAILABLE', 'validate', 'POLICY_UNAVAILABLE');
-        const answer = await adapter.call('InspectWorld', {
+        const adapterRequest = {
           contractVersion: 'world-adapter/v2', actorRef: body.actorRef,
           sessionRef: body.sessionRef, requestId: `${body.requestId}:inspect`,
           authorizationRef: body.authorizationRef, worldRef: body.worldRef,
-          expectedWorldRevision: proof.currentWorldRevision, sampledBounds: body.sampledBounds });
-        if (answer?.error || answer?.result?.source !== 'INSPECTED' ||
+          expectedWorldRevision: proof.currentWorldRevision, sampledBounds: body.sampledBounds };
+        const answer = await adapter.call('InspectWorld', adapterRequest);
+        if (answer?.error) throw inspectionError(answer, adapterRequest);
+        if (!validAdapterAnswer(answer, adapterRequest) ||
+            !validInspectionFacts(answer.result) ||
+            answer.result.worldRef !== body.worldRef ||
             answer?.result?.objectRef !== body.objectRef ||
             answer?.result?.objectRevision !== body.expectedRevision ||
             answer?.result?.worldRevision !== proof.currentWorldRevision ||
             canonicalize(answer?.result?.sampledBounds) !== canonicalize(body.sampledBounds))
-          throw issue(answer?.error?.code ?? 'INSPECTION_FAILED', 'validate', 'REQUIRED_FACT_UNKNOWN');
+          throw issue('INSPECTION_FAILED', 'validate', 'REQUIRED_FACT_UNKNOWN');
         result = answer.result;
         await this.store.commit(state => {
           if (state.sessions[body.sessionRef]?.activeWorldRef !== body.worldRef ||

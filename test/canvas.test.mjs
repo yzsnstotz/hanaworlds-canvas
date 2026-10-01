@@ -103,6 +103,74 @@ test('inspection binds Adapter facts to selected registered object; history quer
   assert.equal(reopened.snapshot.objects.world.A.displayName, 'House');
 });
 
+test('InspectObject rejects wrong-world and malformed Adapter facts before replay', async t => {
+  const scenarios = [
+    { label: 'wrong result world', corrupt: answer => { answer.result.worldRef = 'other-world'; } },
+    { label: 'wrong response request ID', corrupt: answer => { answer.requestId = 'other-request'; } },
+    { label: 'missing TargetFacts digest', contractInvalid: true,
+      corrupt: answer => { delete answer.result.coverageDigest; } },
+  ];
+  for (const scenario of scenarios) await t.test(scenario.label, async sub => {
+    const f = await fixture(sub);
+    await f.canvas.call('SelectWorldConnection', request({ connectionRef: 'connection', expectedRevision: '0' }));
+    await f.store.commit(state => { state.objects.world = { A: { worldRef: 'world',
+      objectRef: 'A', objectRevision: '1', displayName: 'House', nameRevision: '1',
+      creationSequence: 1, status: 'READY' } }; });
+    const original = f.adapter.call.bind(f.adapter);
+    f.adapter.call = async (operation, body) => {
+      const answer = await original(operation, body);
+      if (operation === 'InspectWorld') {
+        scenario.corrupt(answer);
+        if (contracts && scenario.contractInvalid)
+          assert.throws(() => contracts.validateResponse('world-adapter/v2', operation, answer));
+      }
+      return answer;
+    };
+    const before = JSON.stringify(f.store.snapshot);
+    const body = request({ objectRef: 'A', expectedRevision: '1',
+      sampledBounds: { min: [0, 0, 0], max: [0, 0, 0] } });
+    const response = await CanvasV2.prototype.call.call(f.canvas, 'InspectObject', body);
+    assert.equal(response.error?.code, 'INSPECTION_FAILED');
+    assert.equal(response.requestId, body.requestId);
+    if (contracts) contracts.validateResponse('canvas/v2', 'InspectObject', response);
+    assert.equal(JSON.stringify(f.store.snapshot), before);
+  });
+});
+
+test('InspectObject preserves admitted Adapter permission and inspection errors', async t => {
+  const scenarios = [
+    { code: 'AUTHORIZATION_REVOKED', phase: 'authorize', retryability: 'AFTER_NEW_AUTH',
+      reason: 'GRANT_REVOKED' },
+    { code: 'INSPECTION_FAILED', phase: 'validate', retryability: 'AFTER_NEW_FACTS',
+      reason: 'REQUIRED_FACT_UNKNOWN' },
+  ];
+  for (const scenario of scenarios) await t.test(scenario.code, async sub => {
+    const f = await fixture(sub);
+    await f.canvas.call('SelectWorldConnection', request({ connectionRef: 'connection', expectedRevision: '0' }));
+    await f.store.commit(state => { state.objects.world = { A: { worldRef: 'world',
+      objectRef: 'A', objectRevision: '1', displayName: 'House', nameRevision: '1',
+      creationSequence: 1, status: 'READY' } }; });
+    const original = f.adapter.call.bind(f.adapter);
+    f.adapter.call = async (operation, body) => {
+      if (operation !== 'InspectWorld') return original(operation, body);
+      const answer = { contractVersion: 'world-adapter/v2', requestId: body.requestId,
+        result: null, error: { code: scenario.code, phase: scenario.phase,
+          retryability: scenario.retryability, mutationState: 'NONE', transactionRef: null,
+          causeCode: null, reason: scenario.reason } };
+      if (contracts) contracts.validateResponse('world-adapter/v2', operation, answer);
+      return answer;
+    };
+    const before = JSON.stringify(f.store.snapshot);
+    const body = request({ objectRef: 'A', expectedRevision: '1',
+      sampledBounds: { min: [0, 0, 0], max: [0, 0, 0] } });
+    const response = await CanvasV2.prototype.call.call(f.canvas, 'InspectObject', body);
+    assert.equal(response.error?.code, scenario.code);
+    assert.equal(response.error?.phase, scenario.phase);
+    if (contracts) contracts.validateResponse('canvas/v2', 'InspectObject', response);
+    assert.equal(JSON.stringify(f.store.snapshot), before);
+  });
+});
+
 test('object registration rejects unverified transaction without engine mutation', async t => {
   const f = await fixture(t);
   await f.canvas.call('SelectWorldConnection', request({ connectionRef: 'connection', expectedRevision: '0' }));
@@ -301,6 +369,42 @@ test('malformed revision and digest fail at P0 before authorization or adapter e
   assert.equal(malformedDigest.error.phase, 'decode');
   assert.equal(verifications, 0);
   assert.equal(f.calls.length, 0);
+});
+
+test('AnalyzeAffectedObjects rejects invalid projection and digest with allowed envelopes', async t => {
+  const operations = frozenMutationRequests().ApplyRecoverableCommit.operations;
+  await t.test('invalid nested projection fails P0 without authority or persistence', async sub => {
+    const f = await fixture(sub);
+    let authorizations = 0;
+    f.canvas.authority.verify = async () => { authorizations++; return { current: true }; };
+    const malformed = { ...operations, buildDigest: 'invalid' };
+    const body = request({ transactionId: 'tx', operations: malformed,
+      operationDigest: digest('operations', malformed), expectedRevision: 'world-rev-1',
+      expectedRegistryRevision: '0', expectedSelectionRevision: '0' });
+    if (contracts) assert.throws(() => contracts.validateRequest('canvas/v2', 'AnalyzeAffectedObjects', body));
+    const before = JSON.stringify(f.store.snapshot);
+    const response = await CanvasV2.prototype.call.call(f.canvas, 'AnalyzeAffectedObjects', body);
+    assert.equal(response.error?.code, 'SCHEMA_INVALID');
+    assert.equal(response.error?.phase, 'decode');
+    assert.equal(response.requestId, body.requestId);
+    assert.equal(authorizations, 0);
+    assert.equal(JSON.stringify(f.store.snapshot), before);
+  });
+  await t.test('digest mismatch uses frozen failure code and leaves no analysis', async sub => {
+    const f = await fixture(sub);
+    await f.canvas.call('SelectWorldConnection', request({ connectionRef: 'connection', expectedRevision: '0' }));
+    const body = request({ transactionId: 'tx', operations,
+      operationDigest: 'f'.repeat(64), expectedRevision: 'world-rev-1',
+      expectedRegistryRevision: '0', expectedSelectionRevision: '0' });
+    if (contracts) contracts.validateRequest('canvas/v2', 'AnalyzeAffectedObjects', body);
+    const before = JSON.stringify(f.store.snapshot);
+    const response = await CanvasV2.prototype.call.call(f.canvas, 'AnalyzeAffectedObjects', body);
+    assert.equal(response.error?.code, 'TRANSACTION_CONFLICT');
+    assert.equal(response.error?.phase, 'validate');
+    assert.equal(response.requestId, body.requestId);
+    if (contracts) contracts.validateResponse('canvas/v2', 'AnalyzeAffectedObjects', response);
+    assert.equal(JSON.stringify(f.store.snapshot), before);
+  });
 });
 
 function frozenMutationRequests() {
