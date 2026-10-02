@@ -1,98 +1,102 @@
-# HanaWorlds Canvas 0.1.1 candidate
+# HanaWorlds Canvas 0.2.0 component
 
-Status: `PARTIAL / SOURCE+FIXTURE`. Stage 1 composition and human validation are
-`UNPROVEN`; this source is not a release, deployment, or user `ACCEPTED` receipt.
+Status: component candidate. `canvas/v4` is the public Canvas port;
+`world-adapter/v4` is the only world transport port consumed. Contracts 0.3.0
+is pinned to public revision `e82735780bdfd4ea8e662781455040a6e5306121`.
+No sibling source path or developer profile is a runtime dependency. Stage 1
+composition and human validation remain `UNPROVEN` and `ACCEPTED` unset.
 
-Canvas is the engine-neutral owner of world selection, the named object registry,
-affected-object analysis and decisions, atomic apply/readback orchestration, and
-author-scoped linked object history. Workshop owns Sessions and intent. Brush
-compiles BUILD/V2. The Luanti Adapter owns world transport, protected state,
-restoration, and its journal. Canvas calls its public `world-adapter/v3` port only.
+## Host boundary
 
-## Public host boundary
+The DSH plugin `apply(ctx)` provides `hanaworldsCanvasV4` and consumes:
 
-The package exports a DSH plugin `apply(ctx)` and `CanvasV3.call(operation, raw)`.
-The plugin provides `hanaworldsCanvasV3` and consumes:
+- `hanaworldsProfileStorage.canvasDirectory()` for one isolated, durable Canvas
+  directory with a single writer;
+- `hanaworldsAuthority.verify(request, operation)` for current actor, Session,
+  grant, trusted author, world revision, and authorized actions. For linked
+  Undo/Redo it must also return the current `authorizationBinding` facts needed
+  to form the Adapter's public binding; absent proof fails closed;
+- `hanaworldsAdminAuthority.verify(context, 'UpdatePlacementSettings', worldRef)`
+  for a current, world-bound Canvas admin proof before settings mutation;
+- `hanaworldsWorldAdapterV4`, identified by the composition's `adapterId`.
 
-- `hanaworldsAuthority.verify` for current actor, Session, authorization, action,
-  author identity, and world revision proof;
-- `hanaworldsProfileStorage.canvasDirectory()` for a writable isolated profile
-  directory; and
-- `hanaworldsWorldAdapterV3` with the composition-supplied `adapterId`.
+Canvas checks the public ContractHandshake before Adapter calls. Adapter
+requests use the Canvas service principal as `actorRef`; the grant and
+`authorizationBinding` identify the acting user. The Canvas service exposes
+`call(operation, request)`, `subscribeCanvasEvents(context, callback)`,
+`adminProjection(worldRef)`, and `setPlacementSettings(worldRef, dottedSettings,
+adminContext)`. A Shell management surface can render the returned descriptors,
+current values, defaults and non-switchable invariants. The host must restrict
+that administrative surface to current authorized administrators.
 
-The Canvas service also provides `subscribeCanvasEvents(context, callback)`.
-Subscriptions verify current `ListObjects` permission for the bound world and
-trusted author at registration and again before each delivery. The current
-source emits a typed `ObjectCreated` event only after verified durable
-registration to the creating author. It emits `ObjectInventoryChanged` with
-the current authorized inventory and registry revision after durable creation
-or name changes to subscriptions still authorized for `ListObjects`. Failed
-readback and revoked subscriptions receive no success event. The other frozen
-typed signals follow observed Adapter inventory changes, durable connection,
-world, name and selection changes, completed analysis and blocking decisions,
-pending and verified transaction phases, linked history inventory changes,
-and invalidation of a prior inspected snapshot by a newly observed world
-revision. Private receipts stay with the initiating actor, Session and grant;
-history receipts also require the trusted author. `HistoryPositionChanged`
-waits for the upstream history-prepare digest and successful linked Undo/Redo.
-The returned function unsubscribes. There is no initial snapshot or event
-replay. A caller retaining
-the latest name receipt or inventory event can use its registry revision after
-restart; one holding only an old revision cannot bootstrap a missed change
-through current `ListObjects`. This remains an open product consumer gate.
+The four Canvas-owned per-world settings are
+`placement.frontGapCells=2`, `placement.forwardSearchCells=16`,
+`placement.lateralSearchCells=8`, and `placement.verticalSearchCells=4` when a
+world is first bound. Stored values and their revision are durable. If any
+setting is later unset or invalid, `InspectPlacementRegion` fails with
+`CAPABILITY_UNAVAILABLE/validate/POLICY_UNAVAILABLE` and names the affected
+settings in `unavailableSettings`; it never substitutes a default.
 
-The implementation admits the strict `canvas/v3` request and response schemas
-from the pinned Contracts source. Malformed raw UTF-8, duplicate decoded keys,
-unknown nested fields, and unsafe JavaScript values fail before authority or
-Adapter entry. Authority and revocation are checked before persisted replay.
-Author-scoped replay is also bound to the current trusted author.
+## Region inspection and Apply
 
-The v3 source implements ListWorldConnections, SelectWorldConnection,
-SwitchWorldConnection, SetObjectSelection, ListObjects, NameObject, RenameObject,
-AnalyzeAffectedObjects, DecideAffectedObjectNotification, InspectObject,
-HistoryQuery, ApplyRecoverableCommit, Readback, and trusted CreateObject. Canvas
-generates a stable object ref after verified creation readback; an arbitrary
-caller-provided ref cannot register an object. Undo and Redo reject other-player
-origins and currently fail closed for an otherwise valid linked origin. The
-approved dependency repair must expose the distinct original before-state
-readback digest before those paths can be enabled. No world-global or
-other-player history policy is implemented.
+`InspectPlacementRegion` generates and durably reserves an inspection ID,
+relays the exact typed anchor, footprint and current settings to Adapter
+`InspectRegion`, validates the returned public outcome, rechecks authorization,
+and records the outcome durably before release. Only a currently world-authorized
+principal with `INSPECT` receives `candidatePlayerNames`; those names are
+returned only for `MULTIPLE_ONLINE_PLAYERS`, with typed `NAME_PLAYER` and
+`PICK_WORLD_POINT` choices. Other asks offer `PICK_WORLD_POINT` only. Workshop
+owns the Shell choice frame; the Adapter owns in-game point picking.
+
+When an Apply's target-facts digest matches a Canvas-issued region inspection,
+Canvas requires `regionInspectionBinding` and checks the record's world, Session,
+principal, build and frame digests, and protection/body witness evidence and
+position lists before calling Adapter. A stale record fails before mutation.
+Adapter Prepare is the final per-cell protection and body recheck. An unrecorded
+facts digest is not inferred to be a region inspection.
 
 ## Durable state and recovery
 
-Canvas stores `canvas-v2.json` under the host-provided profile directory. A
-single writer instance per profile is required. Each commit writes a mode-0600
-temporary snapshot, fsyncs it, atomically renames it, and fsyncs the directory.
-If directory synchronization fails after rename, that writer refuses further
-requests until reopened. Unknown schema versions fail closed.
+`CanvasStore` atomically writes `canvas-v2.json` with fsync and directory sync.
+The v3 schema-2 migration retains its exact schema-1 backup as
+`canvas-v2.pre-v3.json`; schema 2 remains the storage envelope for v4. The
+registry, per-author history, transaction state, settings and inspection records
+survive restart. `ListObjects(expectedRevision:null)` returns a newly authorized
+coherent current registry snapshot without a registry write or missed-event
+replay. A nonnull revision remains a strict precondition. Selection checks the
+returned stable ref against the current bound-world registry.
 
-Version 0.1.1 upgrades schema 1 to schema 2. Before conversion it durably saves
-the exact old bytes as `canvas-v2.pre-v3.json`. The old 0.1.0 package cannot open
-schema 2. Code rollback therefore requires stopping the profile and restoring
-the schema 1 backup together with the matching earlier package. Preserve both
-Canvas state and the Adapter journal when uninstalling; deleting one side can
-erase the evidence needed to recover a pending world transaction.
+Canvas reserves an Apply before Adapter Prepare; the Adapter's public v4 Prepare
+or QueryPrepared result includes the saved `beforeStateReadbackDigest`. Canvas
+persists it before Apply, projects the seven-field `PreparedTransaction` for
+Adapter Apply, and uses the separate digest for same-author linked history.
+Undo/Redo check every affected object's author head and current revisions,
+reserve the history transaction, then use public Adapter Prepare/Apply/Readback.
+Only matched readback followed by one durable linked head commit returns VERIFIED.
+Uncertain writes are queried on retry; another blind world write is prohibited.
+Other-player and world-global history are outside this component.
 
-Apply reserves the Canvas transaction before Adapter Prepare, persists the
-prepared payload before Apply, and never issues a second world write on an
-uncertain retry. It queries the public Adapter transaction status, then verifies
-readback and durably settles linked history. Related new edits settle verified
-pending history first. Unknown write or storage outcomes return
-`RECOVERY_PENDING/UNKNOWN` rather than claiming no mutation.
+Typed Canvas events are delivered only to current authorized subscriptions.
+`ObjectCreated` follows verified durable registration; inventory, history,
+selection and transaction events follow their actual durable changes. There is
+no subscription snapshot or event replay. A client may recover missed object
+changes through the authorized `ListObjects(expectedRevision:null)` query.
 
-## Build and install boundary
+## Package and rollback
 
-Run `npm ci` from the exact lock under an isolated HOME and npm cache, then
-`npm run build`, `npm test`, and `npm pack --ignore-scripts`. The package has
-`private: true` as a registry publication guard. The exact public source branch
-must be pushed and read back before a public-origin DSH install is claimed.
-An isolated DSH profile must supply its own HOME, cache, store, shim and
-`DSH_HOME`; the desktop-generated `~/.local/bin/dsh` shim points at the shared
-HanaMesh profile and is unsuitable for this proof. Real Shell, Luanti, restart,
-uninstall/reinstall, and rollback results belong in separate labeled evidence.
+Build and test under Node 24 with isolated HOME and npm cache, then pack from
+the exact public source revision. An isolated DSH profile must supply its own
+HOME, cache, store, shim and `DSH_HOME`; the desktop-generated local `dsh` shim
+points to a shared profile and is unsuitable. Preserve Canvas state and Adapter
+journal across uninstall/reinstall. Roll back Canvas with the compatible whole
+Contracts consumer set; stop writes and retain the schema-2 state before any
+older-code restore. Public-origin fresh-clone, installed-byte, restart,
+uninstall/reinstall and rollback results require separate evidence; a local
+source test does not prove these lifecycle steps.
 
 ## Licenses
 
-HanaWorlds-owned source is MIT; see `LICENSE` and `LICENSE_AUDIT.md`. Preserve
-the separate `canonicalize@5.1.0` Apache-2.0 and `icu@2.3.1` Unicode-3.0
-notices recorded in `NOTICE`. Neither dependency is relicensed as MIT.
+HanaWorlds-owned source is MIT. `canonicalize@5.1.0` (Apache-2.0) and
+`icu@2.3.1` (Unicode-3.0) remain separate packages with their own notices.
+WorldEdit's AGPL source and the Luanti Adapter are separate origins; neither is
+copied or relicensed here.

@@ -1,11 +1,13 @@
 # HanaWorlds Canvas
 
-Stage 1 `0.1.1` Canvas candidate on `codex/s1-02-canvas-v3`. Current evidence is
-`PARTIAL / SOURCE+FIXTURE`; the player-visible product path is `UNPROVEN`.
+Stage 1 Canvas `0.2.0` component candidate, exposing `canvas/v4` and consuming the
+public `world-adapter/v4` port. It owns world and object selection, a durable
+named-object registry, affected-object decisions, recoverable apply/readback,
+first-building region inspection relay, and same-author linked Undo/Redo.
 
-Canvas owns world and object selection, the named registry, affected-object
-decisions, recoverable apply/readback coordination, and author-scoped linked
-history through `canvas/v3` and the public `world-adapter/v3` port.
+Source and fixture checks are separate from an installed player-visible product
+path. Stage 1 product readiness remains `UNPROVEN`; user `ACCEPTED` is unset.
 
-See [GADGET.md](GADGET.md) for the host ports, implementation status, exact
-dependency gate, durable state, installation boundary, and rollback procedure.
+See [GADGET.md](GADGET.md) for host services, placement settings, recovery,
+installation, and rollback. [LICENSE_AUDIT.md](LICENSE_AUDIT.md) records the
+owner-source MIT transition and third-party provenance.

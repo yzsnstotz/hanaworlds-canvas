@@ -4,7 +4,7 @@ import { mkdtemp, rm, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
-import * as canvas from '../src/index.mjs';
+import * as canvas from '../src/v3-legacy.mjs';
 import oracle from 'hanaworlds-contracts/v3/fixtures/contract-v3-oracles' with { type: 'json' };
 import eventOracle from 'hanaworlds-contracts/v3/fixtures/canvas-events-v3' with { type: 'json' };
 import { canonicalJSON, digestValue, validateResponse,

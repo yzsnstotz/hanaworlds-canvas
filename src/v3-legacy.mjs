@@ -4,16 +4,10 @@ import { CodePointSetData, ComposingNormalizer } from 'icu';
 import { CanvasStore } from './store.mjs';
 import { readJSON } from './strict-json.mjs';
 import { admitRequest, validateRequest, validateBoundRequest,
-  validateResponse, validateCanvasEvent, digestValue, validateRegionInspection,
-  projectPreparedTransaction, placementSettingDescriptors,
-  placementInvariants, admitPlacementSettings, checkContractHandshake,
-  contractHandshake } from 'hanaworlds-contracts/v4';
+  validateResponse, validateCanvasEvent, digestValue } from 'hanaworlds-contracts/v3';
 export { CanvasStore };
 
-const VERSION = 'canvas/v4';
-const ADAPTER_VERSION = 'world-adapter/v4';
-const PLACEMENT_FIELDS = ['placement.forwardSearchCells', 'placement.frontGapCells',
-  'placement.lateralSearchCells', 'placement.verticalSearchCells'];
+const VERSION = 'canvas/v3';
 const authorScopedReplay = new Set(['ApplyRecoverableCommit', 'Readback',
   'HistoryQuery', 'CreateObject', 'Undo', 'Redo']);
 const ref = value => typeof value === 'string' && value.length > 0;
@@ -48,9 +42,6 @@ function envelope(body, result, error = null) {
   return { contractVersion: VERSION, requestId: ref(body?.requestId) ? body.requestId : null,
     result, error };
 }
-function placementEnvelope(body, result, error = null, unavailableSettings = null) {
-  return { ...envelope(body, result, error), unavailableSettings };
-}
 function revision() { return `rev-${randomUUID()}`; }
 function identity(body) { return createHash('sha256').update(canonicalize(body)).digest('hex'); }
 function projectionDigest(kind, value) {
@@ -68,13 +59,13 @@ function sortedUnique(values, predicate) {
 }
 function validAdapterAnswer(answer, request) {
   return exact(answer, ['contractVersion', 'requestId', 'result', 'error']) &&
-    answer.contractVersion === 'world-adapter/v4' && answer.requestId === request.requestId &&
+    answer.contractVersion === 'world-adapter/v3' && answer.requestId === request.requestId &&
     answer.error === null;
 }
 function inspectionError(answer, request) {
   const error = answer?.error;
   if (exact(answer, ['contractVersion', 'requestId', 'result', 'error']) &&
-      answer.contractVersion === 'world-adapter/v4' && answer.requestId === request.requestId &&
+      answer.contractVersion === 'world-adapter/v3' && answer.requestId === request.requestId &&
       answer.result === null && exact(error, ['code', 'phase', 'retryability',
         'mutationState', 'transactionRef', 'causeCode', 'reason']) &&
       error.mutationState === 'NONE' && error.transactionRef === null &&
@@ -97,7 +88,7 @@ function inspectionError(answer, request) {
 function missingConnection(answer, request) {
   const error = answer?.error;
   return exact(answer, ['contractVersion', 'requestId', 'result', 'error']) &&
-    answer.contractVersion === 'world-adapter/v4' && answer.requestId === request.requestId &&
+    answer.contractVersion === 'world-adapter/v3' && answer.requestId === request.requestId &&
     answer.result === null && exact(error, ['code', 'phase', 'retryability', 'mutationState',
       'transactionRef', 'causeCode', 'reason']) && error.code === 'CONNECTION_NOT_FOUND' &&
     error.phase === 'validate' && error.retryability === 'AFTER_NEW_FACTS' &&
@@ -255,45 +246,19 @@ function normalizedName(name) {
   return { displayName, comparisonKey };
 }
 
-export class CanvasV4 {
-  constructor({ store, adapter, adapters, authority, adminAuthority,
-    serviceActorRef = 'hanaworlds-canvas' }) {
+export class CanvasV3 {
+  constructor({ store, adapter, adapters, authority }) {
     this.store = store;
     this.storageState = store ? 'READY' : 'UNAVAILABLE';
     this.ready = Promise.resolve();
     this.adapters = adapters ?? (adapter ? [{ adapterId: null, port: adapter }] : []);
     this.authority = authority;
-    this.adminAuthority = adminAuthority;
-    this.serviceActorRef = serviceActorRef;
     this.subscriptions = new Set();
   }
   status() {
-    return { component: name, version: '0.2.0', canvasContract: VERSION,
-      adapterContract: 'world-adapter/v4', storage: this.storageState,
+    return { component: name, version: '0.1.1', canvasContract: VERSION,
+      adapterContract: 'world-adapter/v3', storage: this.storageState,
       productReadiness: 'UNPROVEN' };
-  }
-  get contractHandshake() { return structuredClone(contractHandshake); }
-  adminProjection(worldRef) {
-    const stored = this.store?.snapshot.placementSettings?.[worldRef];
-    return { worldRef, owner: name, settings: placementSettingDescriptors.map(row => ({
-      ...row, currentValue: stored?.stored?.[row.name] ?? null,
-      settingsRevision: stored?.settingsRevision ?? null })),
-      invariants: placementInvariants };
-  }
-  async setPlacementSettings(worldRef, settings, context) {
-    const proof = await this.adminAuthority?.verify?.(
-      context, 'UpdatePlacementSettings', worldRef);
-    if (!ref(worldRef) || !proof?.current || proof.worldRef !== worldRef ||
-        proof.domainOwner !== 'hanaworlds-canvas')
-      throw issue('PERMISSION_DENIED', 'authorize', 'SCOPE_DENIED');
-    const stored = Object.fromEntries(PLACEMENT_FIELDS.map(field => [field, settings?.[field]]));
-    admitPlacementSettings(stored, 'validated');
-    const next = { worldRef, stored, settingsRevision: revision() };
-    await this.store.commit(state => {
-      state.placementSettings ??= Object.create(null);
-      state.placementSettings[worldRef] = next;
-    });
-    return this.adminProjection(worldRef);
   }
   async #subscriptionProof(context) {
     await this.ready;
@@ -303,7 +268,7 @@ export class CanvasV4 {
     const request = { contractVersion: VERSION, actorRef: context.actorRef,
       sessionRef: context.sessionRef, requestId: `event-subscription:${randomUUID()}`,
       authorizationRef: context.authorizationRef, worldRef: context.worldRef,
-      expectedRevision: null };
+      expectedRevision: this.store.snapshot.registryRevisions[context.worldRef] ?? '0' };
     const proof = await this.authority?.verify?.(request, 'ListObjects');
     if (!proof?.current || proof.actorRef !== context.actorRef ||
         proof.sessionRef !== context.sessionRef ||
@@ -420,13 +385,7 @@ export class CanvasV4 {
       throw issue('WORLD_NOT_BOUND', 'validate', 'SCOPE_DENIED');
     const adapter = this.adapters.find(entry => entry.adapterId === binding.adapterId)?.port;
     if (!adapter) throw issue('ADAPTER_UNAVAILABLE', 'validate', 'POLICY_UNAVAILABLE');
-    this.#checkAdapterCompatibility(adapter);
     return adapter;
-  }
-  #checkAdapterCompatibility(adapter) {
-    try { checkContractHandshake(adapter?.contractHandshake, {
-      wires: [ADAPTER_VERSION], factProfiles: ['target-facts/v2', 'target-facts/v3'] }); }
-    catch { throw issue('UNSUPPORTED_VERSION', 'decode', 'VERSION_UNSUPPORTED'); }
   }
   async #adapterCall(adapter, operation, request, afterWriteBarrier = false) {
     let response;
@@ -435,7 +394,7 @@ export class CanvasV4 {
       if (afterWriteBarrier) throw uncertain(request.transactionId);
       throw issue('ADAPTER_UNAVAILABLE', 'validate', 'POLICY_UNAVAILABLE');
     }
-    try { response = validateResponse('world-adapter/v4', operation, response); }
+    try { response = validateResponse('world-adapter/v3', operation, response); }
     catch {
       if (afterWriteBarrier) throw uncertain(request.transactionId);
       throw issue('ADAPTER_UNAVAILABLE', 'validate', 'POLICY_UNAVAILABLE');
@@ -450,52 +409,13 @@ export class CanvasV4 {
     }
     return response.result;
   }
-  #checkRegionBinding(body, proof) {
-    const records = Object.values(this.store.snapshot.placementInspections ?? {})
-      .filter(row => row.status === 'RECORDED' &&
-        row.outcome?.outcome === 'REGION_INSPECTED' &&
-        row.outcome.inspection.targetFactsDigest === body.operations.targetFactsDigest);
-    const binding = body.regionInspectionBinding;
-    if (!records.length && binding === null) return;
-    const match = binding && records.find(row =>
-      row.inspectionId === binding.inspectionId &&
-      row.worldRef === body.worldRef && row.sessionRef === body.sessionRef &&
-      row.actorRef === body.actorRef && row.authorRef === proof.authorRef);
-    if (!match) throw issue('PERMISSION_DENIED', 'authorize', 'IDENTITY_UNVERIFIED');
-    const inspection = match.outcome.inspection;
-    const build = binding.build;
-    const same = (left, right) => canonicalize(left) === canonicalize(right);
-    if (digestValue('build', build).sha256 !== body.operations.buildDigest ||
-        build.targetFactsDigest !== inspection.targetFactsDigest ||
-        body.operations.targetFactsDigest !== inspection.targetFactsDigest ||
-        digestValue('frame', build.coordinateFrame).sha256 !== body.operations.frameDigest ||
-        digestValue('frame', build.coordinateFrame).sha256 !==
-          digestValue('frame', inspection.frame).sha256)
-      throw issue('PERMISSION_DENIED', 'authorize', 'IDENTITY_UNVERIFIED');
-    if (!build.witnesses.some(witness => witness.predicate === 'PROTECTION') ||
-        !build.witnesses.some(witness => witness.predicate === 'BODY_CLEARANCE'))
-      throw issue('PERMISSION_DENIED', 'authorize', 'IDENTITY_UNVERIFIED');
-    for (const witness of build.witnesses) {
-      if (witness.predicate !== 'PROTECTION' && witness.predicate !== 'BODY_CLEARANCE')
-        continue;
-      const facts = witness.facts;
-      const field = witness.predicate === 'PROTECTION' ?
-        'protectedPositions' : 'bodyOccupiedPositions';
-      const wanted = new Set(facts.positions.map(position => canonicalize(position)));
-      const restricted = inspection[field].filter(position => wanted.has(canonicalize(position)));
-      if (!same(facts.evidence, inspection.evidence) ||
-          !same(facts[field], restricted))
-        throw issue('PERMISSION_DENIED', 'authorize', 'IDENTITY_UNVERIFIED');
-    }
-    if (match.worldRevision !== proof.currentWorldRevision)
-      throw issue('STALE_REVISION', 'validate', 'REVISION_CHANGED');
-  }
   async #apply(body, proof, replayKey, digest) {
     const context = this.store.snapshot.sessions[body.sessionRef];
     if (!context || context.activeWorldRef !== body.worldRef)
       throw issue('WORLD_NOT_BOUND', 'validate', 'SCOPE_DENIED');
     const adapter = this.#boundAdapter(body.sessionRef, body.worldRef);
-    if (typeof proof.authorRef !== 'string' || !proof.authorRef)
+    if (typeof proof.authorRef !== 'string' || !proof.authorRef ||
+        proof.currentWorldRevision !== body.expectedWorldRevision)
       throw issue('AUTHORIZATION_REVOKED', 'authorize', 'GRANT_REVOKED');
     const ownPending = this.store.snapshot.pending[body.transactionId];
     if (ownPending?.status === 'VERIFIED_PENDING_HISTORY') {
@@ -509,7 +429,7 @@ export class CanvasV4 {
         throw issue('REPLAY_MISMATCH', 'replay', 'PAYLOAD_CHANGED');
       if (!ownPending.prepared?.transactionPayloadDigest)
         throw uncertain(body.transactionId);
-      const query = { contractVersion: ADAPTER_VERSION, actorRef: this.serviceActorRef,
+      const query = { contractVersion: 'world-adapter/v3', actorRef: body.actorRef,
         sessionRef: body.sessionRef, requestId: `${body.requestId}:query`,
         authorizationRef: body.authorizationRef, worldRef: body.worldRef,
         transactionId: body.transactionId,
@@ -548,9 +468,6 @@ export class CanvasV4 {
       return await this.#completeApplied(body, proof, digest, adapter, queried,
         ownPending.prepared, ownPending.positions);
     }
-    this.#checkRegionBinding(body, proof);
-    if (proof.currentWorldRevision !== body.expectedWorldRevision)
-      throw issue('STALE_REVISION', 'validate', 'REVISION_CHANGED');
     const positions = operationPositions(body.operations, body.worldRef, body.operationDigest);
     const positionKeys = new Set(positions.map(position => position.join(',')));
     for (const [transactionId, pending] of Object.entries(this.store.snapshot.pending)) {
@@ -600,8 +517,8 @@ export class CanvasV4 {
           prepareAttempted: true };
       });
     }
-    const prepareRequest = { contractVersion: ADAPTER_VERSION,
-      actorRef: this.serviceActorRef, sessionRef: body.sessionRef,
+    const prepareRequest = { contractVersion: 'world-adapter/v3',
+      actorRef: body.actorRef, sessionRef: body.sessionRef,
       requestId: `${body.requestId}:prepare`, authorizationRef: body.authorizationRef,
       worldRef: body.worldRef, transactionId: body.transactionId,
       operationDigest: body.operationDigest, operations: body.operations,
@@ -610,8 +527,8 @@ export class CanvasV4 {
       expectedObjectRevisions: body.expectedObjectRevisions, guarantee: body.guarantee };
     const queryPrepared = old && (old.status === 'PREPARED' ||
       old.status === 'RESERVED' && old.prepareAttempted);
-    const queryPreparedRequest = { contractVersion: ADAPTER_VERSION,
-      actorRef: this.serviceActorRef, sessionRef: body.sessionRef,
+    const queryPreparedRequest = { contractVersion: 'world-adapter/v3',
+      actorRef: body.actorRef, sessionRef: body.sessionRef,
       requestId: `${body.requestId}:query-prepared`,
       authorizationRef: body.authorizationRef, worldRef: body.worldRef,
       transactionId: body.transactionId, operationDigest: body.operationDigest,
@@ -630,8 +547,6 @@ export class CanvasV4 {
         digestValue('transaction-payload', prepared.payload).sha256 !==
           prepared.transactionPayloadDigest)
       throw issue('TRANSACTION_CONFLICT', 'validate', 'PAYLOAD_CHANGED');
-    if (old?.prepared && canonicalize(old.prepared) !== canonicalize(prepared))
-      throw issue('REPLAY_MISMATCH', 'replay', 'PAYLOAD_CHANGED');
     await this.store.commit(state => {
       const pending = state.pending[body.transactionId];
       if (pending.digest !== digest || !['RESERVED', 'PREPARED'].includes(pending.status))
@@ -639,12 +554,12 @@ export class CanvasV4 {
       pending.prepared = prepared;
       pending.status = 'PREPARED';
     });
-    const applyRequest = { contractVersion: ADAPTER_VERSION,
-      actorRef: this.serviceActorRef, sessionRef: body.sessionRef,
+    const applyRequest = { contractVersion: 'world-adapter/v3',
+      actorRef: body.actorRef, sessionRef: body.sessionRef,
       requestId: `${body.requestId}:apply`, authorizationRef: body.authorizationRef,
       worldRef: body.worldRef, transactionId: body.transactionId,
       expectedWorldRevision: body.expectedWorldRevision,
-      preparedTransaction: projectPreparedTransaction(prepared), operations: body.operations,
+      preparedTransaction: prepared, operations: body.operations,
       operationDigest: body.operationDigest,
       authorizationBinding: body.authorizationBinding, guarantee: body.guarantee };
     await this.store.commit(state => {
@@ -675,8 +590,8 @@ export class CanvasV4 {
         applied.operationDigest !== body.operationDigest ||
         applied.transactionPayloadDigest !== prepared.transactionPayloadDigest)
       throw uncertain(body.transactionId);
-    const readbackRequest = { contractVersion: ADAPTER_VERSION,
-      actorRef: this.serviceActorRef, sessionRef: body.sessionRef,
+    const readbackRequest = { contractVersion: 'world-adapter/v3',
+      actorRef: body.actorRef, sessionRef: body.sessionRef,
       requestId: `${body.requestId}:readback`, authorizationRef: body.authorizationRef,
       worldRef: body.worldRef, transactionId: body.transactionId,
       coveredPositions: prepared.protectedPositions, stateProfile: prepared.stateProfile };
@@ -742,7 +657,6 @@ export class CanvasV4 {
     const invalidations = this.#staleInspections(body.worldRef,
       verified.observedWorldRevision);
     const replayKey = `${body.sessionRef}\u0000ApplyRecoverableCommit\u0000${body.requestId}`;
-    const linkedHistoryRevision = revision();
     await this.store.commit(state => {
       const pending = state.pending[body.transactionId];
       if (pending?.status !== 'VERIFIED_PENDING_HISTORY' || pending.digest !== digest)
@@ -769,7 +683,7 @@ export class CanvasV4 {
           headTransactionId: null, entries: [], undoAvailable: false, redoAvailable: false };
         const headIndex = previous.headTransactionId === null ? -1 :
           previous.entries.findIndex(entry => entry.transactionId === previous.headTransactionId);
-        const historyRevision = linkedHistoryRevision;
+        const historyRevision = revision(previous.historyRevision);
         const entry = { transactionId: body.transactionId, originTransactionId: null,
           affectedObjectRefs: recordRefs,
           operationDigest: body.operationDigest, beforeImageDigest: prepared.beforeImageDigest,
@@ -793,7 +707,6 @@ export class CanvasV4 {
         authorRef: pending.authorRef, sessionRef: body.sessionRef,
         affectedObjectRefs: recordRefs, positions,
         operationDigest: body.operationDigest, beforeImageDigest: prepared.beforeImageDigest,
-        beforeStateReadbackDigest: prepared.beforeStateReadbackDigest,
         afterReadbackDigest: readback.readbackDigest, receiptDigest,
         reservedObjectRef: pending.reservedObjectRef ?? null,
         transactionPayloadDigest: prepared.transactionPayloadDigest,
@@ -864,94 +777,6 @@ export class CanvasV4 {
     });
     return envelope(body, result);
   }
-  #placementSettings(worldRef) {
-    const record = this.store.snapshot.placementSettings?.[worldRef];
-    const stored = record?.stored;
-    const missing = PLACEMENT_FIELDS.filter(name => {
-      return !Number.isSafeInteger(stored?.[name]) || stored[name] < 0;
-    });
-    if (!ref(record?.settingsRevision)) missing.push(...PLACEMENT_FIELDS);
-    if (missing.length) {
-      const failure = issue('CAPABILITY_UNAVAILABLE', 'validate', 'POLICY_UNAVAILABLE');
-      failure.unavailableSettings = missing.filter(name => PLACEMENT_FIELDS.includes(name))
-        .sort(compareUtf16);
-      throw failure;
-    }
-    return admitPlacementSettings(stored, record.settingsRevision);
-  }
-  async #inspectPlacementRegion(body, proof, replayKey, requestDigest) {
-    const session = this.store.snapshot.sessions[body.sessionRef];
-    if (session?.activeWorldRef !== body.worldRef)
-      throw issue('WORLD_NOT_BOUND', 'validate', 'SCOPE_DENIED');
-    const adapter = this.#boundAdapter(body.sessionRef, body.worldRef);
-    const settings = this.#placementSettings(body.worldRef);
-    if (!ref(proof.currentWorldRevision))
-      throw issue('CAPABILITY_UNAVAILABLE', 'validate', 'POLICY_UNAVAILABLE');
-    const earlier = this.store.snapshot.placementInspections?.[replayKey];
-    if (earlier && earlier.digest !== requestDigest)
-      throw issue('REPLAY_MISMATCH', 'replay', 'PAYLOAD_CHANGED');
-    if (earlier?.settingsRevision !== undefined &&
-        earlier.settingsRevision !== settings.settingsRevision)
-      throw issue('STALE_REVISION', 'validate', 'REVISION_CHANGED');
-    const inspectionId = earlier?.inspectionId ?? randomUUID();
-    if (!earlier) await this.store.commit(state => {
-      state.placementInspections ??= Object.create(null);
-      if (state.placementInspections[replayKey])
-        throw issue('TRANSACTION_CONFLICT', 'persist', 'POLICY_UNAVAILABLE');
-      state.placementInspections[replayKey] = { inspectionId, digest: requestDigest,
-        worldRef: body.worldRef, sessionRef: body.sessionRef, actorRef: body.actorRef,
-        authorizationRef: body.authorizationRef, authorRef: proof.authorRef,
-        settingsRevision: settings.settingsRevision, worldRevision: proof.currentWorldRevision,
-        status: 'RESERVED' };
-    });
-    const request = { contractVersion: ADAPTER_VERSION, actorRef: this.serviceActorRef,
-      sessionRef: body.sessionRef, requestId: `${body.requestId}:region`,
-      authorizationRef: body.authorizationRef, worldRef: body.worldRef,
-      expectedWorldRevision: proof.currentWorldRevision, inspectionId,
-      anchor: body.anchor, footprint: body.footprint, placementSettings: settings };
-    const outcome = await this.#adapterCall(adapter, 'InspectRegion', request);
-    if (outcome.outcome === 'REGION_INSPECTED') {
-      const inspection = validateRegionInspection(outcome.inspection);
-      if (inspection.inspectionId !== inspectionId ||
-          inspection.targetFacts.worldRef !== body.worldRef ||
-          inspection.targetFacts.worldRevision !== proof.currentWorldRevision ||
-          canonicalize(inspection.placementSettings) !== canonicalize(settings))
-        throw issue('INSPECTION_FAILED', 'validate', 'REQUIRED_FACT_UNKNOWN');
-    } else if (outcome.outcome === 'PLACEMENT_CHOICE_REQUIRED') {
-      const choice = outcome.choice;
-      const multiple = choice.reasons.includes('MULTIPLE_ONLINE_PLAYERS');
-      if (canonicalize(choice.placementSettings) !== canonicalize(settings) ||
-          choice.observedWorldRevision !== proof.currentWorldRevision ||
-          canonicalize(choice.options) !== canonicalize(multiple ?
-            ['NAME_PLAYER', 'PICK_WORLD_POINT'] : ['PICK_WORLD_POINT']) ||
-          multiple !== (choice.candidatePlayerNames !== null))
-        throw issue('INSPECTION_FAILED', 'validate', 'REQUIRED_FACT_UNKNOWN');
-    } else throw issue('INSPECTION_FAILED', 'validate', 'REQUIRED_FACT_UNKNOWN');
-    const released = await this.authority.verify(body, 'InspectPlacementRegion');
-    if (!released?.current || released.actorRef !== body.actorRef ||
-        released.sessionRef !== body.sessionRef ||
-        released.authorizationRef !== body.authorizationRef ||
-        !released.allowedActions?.includes('InspectPlacementRegion') ||
-        released.currentWorldRevision !== proof.currentWorldRevision)
-      throw issue('AUTHORIZATION_REVOKED', 'authorize', 'GRANT_REVOKED');
-    if (outcome.outcome === 'PLACEMENT_CHOICE_REQUIRED' &&
-        outcome.choice.candidatePlayerNames !== null &&
-        !released.allowedActions?.includes('INSPECT'))
-      throw issue('PERMISSION_DENIED', 'authorize', 'SCOPE_DENIED');
-    const response = placementEnvelope(body, outcome);
-    validateResponse(VERSION, 'InspectPlacementRegion', response);
-    await this.store.commit(state => {
-      const record = state.placementInspections?.[replayKey];
-      if (!record || record.inspectionId !== inspectionId || record.digest !== requestDigest ||
-          state.placementSettings?.[body.worldRef]?.settingsRevision !== settings.settingsRevision)
-        throw issue('STALE_REVISION', 'validate', 'REVISION_CHANGED');
-      record.status = 'RECORDED';
-      record.outcome = outcome;
-      state.replay[replayKey] = { digest: requestDigest, authorRef: proof.authorRef,
-        response };
-    });
-    return response;
-  }
   async #historyAction(operation, body, proof) {
     const session = this.store.snapshot.sessions[body.sessionRef];
     if (session?.activeWorldRef !== body.worldRef)
@@ -965,269 +790,24 @@ export class CanvasV4 {
         origin.authorRef !== proof.authorRef ||
         !origin.affectedObjectRefs?.includes(body.objectRef))
       throw issue('PERMISSION_DENIED', 'authorize', 'OWNERSHIP_VIOLATION');
-    const refs = origin.affectedObjectRefs;
-    if (!digest(origin.beforeStateReadbackDigest) || !digest(origin.afterReadbackDigest) ||
-        !digest(origin.beforeImageDigest) || !digest(origin.receiptDigest) ||
-        !validPositions(origin.positions, true))
-      throw issue('SAVED_RESOURCE_UNAVAILABLE', 'validate', 'RESOURCE_MISSING');
-    const covered = new Set(origin.positions.map(position => position.join(',')));
-    for (const [transactionId, row] of Object.entries(this.store.snapshot.pending)) {
-      if (transactionId === body.transactionId || row.worldRef !== body.worldRef ||
-          ['VERIFIED', 'ROLLED_BACK'].includes(row.status) ||
-          !row.positions?.some(position => covered.has(position.join(',')))) continue;
-      if (row.status === 'VERIFIED_PENDING_HISTORY')
-        await this.#finalizePending(transactionId);
-      else throw uncertain(transactionId);
-    }
-    const pending = this.store.snapshot.pending[body.transactionId];
-    if (proof.currentWorldRevision !== body.expectedWorldRevision &&
-        !['HISTORY_APPLYING', 'HISTORY_APPLIED_PENDING_READBACK',
-          'HISTORY_RECOVERY_PENDING'].includes(pending?.status))
+    const history = this.store.snapshot.authorHistory[body.worldRef]?.[body.objectRef]?.[proof.authorRef];
+    if (!history || history.historyRevision !== body.expectedHistoryRevision)
       throw issue('STALE_REVISION', 'validate', 'REVISION_CHANGED');
-    if (canonicalize(Object.keys(body.expectedObjectRevisions).sort(compareUtf16)) !==
-        canonicalize(refs))
+    if (operation === 'Undo' && history.headTransactionId !== body.historyTransactionId)
       throw issue('TRANSACTION_CONFLICT', 'validate', 'POLICY_UNAVAILABLE');
-    for (const objectRef of refs) {
-      const object = this.store.snapshot.objects[body.worldRef]?.[objectRef];
-      const history = this.store.snapshot.authorHistory[body.worldRef]?.[objectRef]?.[proof.authorRef];
-      if (!object || !history || history.historyRevision !== body.expectedHistoryRevision ||
-          object.objectRevision !== body.expectedObjectRevisions[objectRef])
-        throw issue('STALE_REVISION', 'validate', 'REVISION_CHANGED');
-      const index = history.entries.findIndex(entry =>
-        entry.transactionId === body.historyTransactionId);
-      if (index < 0) throw issue('TRANSACTION_CONFLICT', 'validate', 'POLICY_UNAVAILABLE');
-      if (operation === 'Undo' && history.headTransactionId !== body.historyTransactionId)
-        throw issue('UNDO_CONFLICT', 'validate', 'EXTERNAL_EDIT_CONFLICT');
-      if (operation === 'Redo' && (!history.redoAvailable ||
-          history.headTransactionId !== (history.entries[index - 1]?.transactionId ?? null)))
-        throw issue('REDO_UNAVAILABLE', 'validate', 'POLICY_UNAVAILABLE');
-    }
-    const direction = operation === 'Undo' ? 'UNDO' : 'REDO';
-    const expectedCurrentStateDigest = direction === 'UNDO' ?
-      origin.afterReadbackDigest : origin.beforeStateReadbackDigest;
-    const targetStateDigest = direction === 'UNDO' ?
-      origin.beforeStateReadbackDigest : origin.afterReadbackDigest;
-    const projection = { contractVersion: ADAPTER_VERSION, worldRef: body.worldRef,
-      originTransactionId: body.historyTransactionId, transactionId: body.transactionId,
-      direction, affectedObjectRefs: refs,
-      originVerifiedReceiptDigest: origin.receiptDigest,
-      originBeforeImageDigest: origin.beforeImageDigest,
-      originBeforeStateReadbackDigest: origin.beforeStateReadbackDigest,
-      originAfterReadbackDigest: origin.afterReadbackDigest,
-      expectedCurrentStateDigest, targetStateDigest,
-      expectedHistoryRevision: body.expectedHistoryRevision,
-      expectedWorldRevision: body.expectedWorldRevision,
-      expectedObjectRevisions: body.expectedObjectRevisions,
-      guarantee: 'RECOVERABLE_VERIFIED' };
-    const historyOperationDigest = digestValue('history-operation', projection).sha256;
-    const seed = proof.authorizationBinding;
-    if (!seed || seed.actorRef !== body.actorRef || seed.worldRef !== body.worldRef ||
-        seed.sessionRef !== body.sessionRef ||
-        !['authorizerRef', 'grantEpoch', 'bindingRef', 'turnRevision',
-          'selectionRevision'].every(field => ref(seed[field])))
-      throw issue('CAPABILITY_UNAVAILABLE', 'validate', 'POLICY_UNAVAILABLE');
-    const authorizationBinding = { contractVersion: 'world-adapter/v2',
-      authorizerRef: seed.authorizerRef, actorRef: body.actorRef,
-      grantEpoch: seed.grantEpoch, bindingRef: seed.bindingRef,
-      worldRef: body.worldRef, sessionRef: body.sessionRef,
-      turnRevision: seed.turnRevision, intentDigest: body.intentDigest,
-      surfaceActionDigest: body.surfaceActionDigest, allowedAction: direction,
-      transactionId: body.transactionId, operationDigest: historyOperationDigest,
-      worldRevision: body.expectedWorldRevision, selectionRevision: seed.selectionRevision,
-      analysisDigest: seed.analysisDigest ?? null,
-      decisionRevision: seed.decisionRevision ?? null };
-    const authorizationBindingDigest =
-      digestValue('authorization-binding', authorizationBinding).sha256;
-    const adapter = this.#boundAdapter(body.sessionRef, body.worldRef);
-    const requestDigest = identity(body);
-    if (pending && (pending.digest !== requestDigest ||
-        pending.authorRef !== proof.authorRef || pending.direction !== direction))
-      throw issue('REPLAY_MISMATCH', 'replay', 'PAYLOAD_CHANGED');
-    if (!pending) await this.store.commit(state => {
-      if (state.pending[body.transactionId] ||
-          state.transactions[body.worldRef]?.[body.transactionId])
-        throw issue('TRANSACTION_CONFLICT', 'validate', 'POLICY_UNAVAILABLE');
-      state.pending[body.transactionId] = { status: 'HISTORY_RESERVED',
-        direction, digest: requestDigest, request: body, authorRef: proof.authorRef,
-        worldRef: body.worldRef, affectedObjectRefs: refs, positions: origin.positions,
-        originTransactionId: body.historyTransactionId,
-        historyOperationDigest, authorizationBindingDigest,
-        preparedRequestId: `${body.requestId}:history-prepare`, prepareAttempted: true };
-    });
-    const common = { contractVersion: ADAPTER_VERSION, actorRef: this.serviceActorRef,
-      sessionRef: body.sessionRef, authorizationRef: body.authorizationRef,
-      worldRef: body.worldRef, originTransactionId: body.historyTransactionId,
-      transactionId: body.transactionId, direction };
-    let prepared = pending?.prepared;
-    if (!prepared) {
-      const recovering = pending?.prepareAttempted;
-      prepared = recovering ? await this.#adapterCall(adapter,
-        'QueryPreparedHistoryTransaction', { ...common,
-          requestId: `${body.requestId}:history-query-prepared`,
-          historyOperationDigest, authorizationBindingDigest }) :
-        await this.#adapterCall(adapter, 'PrepareHistoryTransaction', {
-          ...common, requestId: `${body.requestId}:history-prepare`,
-          affectedObjectRefs: refs,
-          originVerifiedReceiptDigest: origin.receiptDigest,
-          originBeforeImageDigest: origin.beforeImageDigest,
-          originBeforeStateReadbackDigest: origin.beforeStateReadbackDigest,
-          originAfterReadbackDigest: origin.afterReadbackDigest,
-          expectedHistoryRevision: body.expectedHistoryRevision,
-          expectedWorldRevision: body.expectedWorldRevision,
-          expectedObjectRevisions: body.expectedObjectRevisions,
-          expectedCurrentStateDigest, targetStateDigest,
-          historyOperationDigest, authorizationBinding,
-          guarantee: 'RECOVERABLE_VERIFIED' });
-      if (prepared.originTransactionId !== body.historyTransactionId ||
-          prepared.transactionId !== body.transactionId ||
-          prepared.direction !== direction ||
-          prepared.historyOperationDigest !== historyOperationDigest ||
-          prepared.targetStateDigest !== targetStateDigest ||
-          prepared.status !== 'PREPARED')
-        throw issue('REPLAY_MISMATCH', 'validate', 'PAYLOAD_CHANGED');
-      await this.store.commit(state => {
-        const row = state.pending[body.transactionId];
-        if (!row || row.digest !== requestDigest) throw uncertain(body.transactionId);
-        row.prepared = prepared;
-        row.status = 'HISTORY_PREPARED';
-      });
-    }
-    let applied;
-    if (pending && ['HISTORY_APPLYING', 'HISTORY_APPLIED_PENDING_READBACK',
-      'HISTORY_RECOVERY_PENDING'].includes(pending.status)) {
-      applied = await this.#adapterCall(adapter, 'QueryTransaction', {
-        contractVersion: ADAPTER_VERSION, actorRef: this.serviceActorRef,
-        sessionRef: body.sessionRef, requestId: `${body.requestId}:history-query`,
-        authorizationRef: body.authorizationRef, worldRef: body.worldRef,
-        transactionId: body.transactionId,
-        transactionPayloadDigest: prepared.transactionPayloadDigest }, true);
-    } else {
-      await this.store.commit(state => { state.pending[body.transactionId].status = 'HISTORY_APPLYING'; });
-      try { applied = await this.#adapterCall(adapter, 'ApplyHistoryTransaction', {
-        ...common, requestId: `${body.requestId}:history-apply`,
-        authorizationBinding, historyOperationDigest,
-        expectedWorldRevision: body.expectedWorldRevision,
-        expectedObjectRevisions: body.expectedObjectRevisions,
-        preparedHistoryTransaction: prepared }, true); }
-      catch (error) {
-        await this.store.commit(state => {
-          state.pending[body.transactionId].status = 'HISTORY_RECOVERY_PENDING';
-        });
-        throw error;
-      }
-    }
-    if (applied.status === 'ROLLED_BACK' &&
-        applied.restoreStatus === 'VERIFIED_RESTORED' &&
-        applied.error?.mutationState === 'ROLLED_BACK') {
-      validateResponse(VERSION, operation, envelope(body, applied));
-      await this.store.commit(state => {
-        const row = state.pending[body.transactionId];
-        if (!row || row.digest !== requestDigest) throw uncertain(body.transactionId);
-        row.status = 'ROLLED_BACK';
-        row.receipt = applied;
-        state.replay[`${body.sessionRef}\u0000${operation}\u0000${body.requestId}`] = {
-          digest: requestDigest, authorRef: proof.authorRef,
-          response: envelope(body, applied) };
-      });
-      return envelope(body, applied);
-    }
-    if (applied.status !== 'APPLIED_PENDING_READBACK' ||
-        applied.transactionId !== body.transactionId ||
-        applied.operationDigest !== historyOperationDigest ||
-        applied.transactionPayloadDigest !== prepared.transactionPayloadDigest)
-      throw uncertain(body.transactionId);
-    await this.store.commit(state => {
-      state.pending[body.transactionId].status = 'HISTORY_APPLIED_PENDING_READBACK';
-    });
-    const readback = await this.#adapterCall(adapter, 'Readback', {
-      contractVersion: ADAPTER_VERSION, actorRef: this.serviceActorRef,
-      sessionRef: body.sessionRef, requestId: `${body.requestId}:history-readback`,
-      authorizationRef: body.authorizationRef, worldRef: body.worldRef,
-      transactionId: body.transactionId,
-      coveredPositions: prepared.protectedPositions,
-      stateProfile: prepared.stateProfile }, true);
-    if (readback.readbackDigest !== targetStateDigest ||
-        digestValue('readback', readback.projection).sha256 !== targetStateDigest)
-      throw uncertain(body.transactionId);
-    const fresh = await this.authority.verify(body, operation);
-    if (!fresh?.current || fresh.authorRef !== proof.authorRef ||
-        fresh.actorRef !== body.actorRef || fresh.sessionRef !== body.sessionRef ||
-        fresh.authorizationRef !== body.authorizationRef ||
-        !fresh.allowedActions?.includes(operation) ||
-        !ref(fresh.currentWorldRevision)) throw uncertain(body.transactionId);
-    const verified = { ...applied, status: 'VERIFIED',
-      observedWorldRevision: fresh.currentWorldRevision,
-      readbackDigest: targetStateDigest, restoreStatus: 'NOT_REQUIRED', error: null };
-    validateResponse(VERSION, operation, envelope(body, verified));
-    const receiptDigest = digestValue('receipt', verified).sha256;
-    const linkedHistoryRevision = revision();
-    await this.store.commit(state => {
-      const row = state.pending[body.transactionId];
-      if (!row || row.digest !== requestDigest ||
-          row.status !== 'HISTORY_APPLIED_PENDING_READBACK')
-        throw uncertain(body.transactionId);
-      const histories = state.authorHistory[body.worldRef];
-      for (const objectRef of refs) {
-        const current = histories?.[objectRef]?.[proof.authorRef];
-        if (!current || current.historyRevision !== body.expectedHistoryRevision ||
-            state.objects[body.worldRef]?.[objectRef]?.objectRevision !==
-              body.expectedObjectRevisions[objectRef])
-          throw uncertain(body.transactionId);
-        const originIndex = current.entries.findIndex(entry =>
-          entry.transactionId === body.historyTransactionId);
-        const headTransactionId = direction === 'UNDO' ?
-          current.entries[originIndex - 1]?.transactionId ?? null : body.historyTransactionId;
-        const historyRevision = linkedHistoryRevision;
-        current.entries.push({ transactionId: body.transactionId,
-          originTransactionId: body.historyTransactionId, affectedObjectRefs: refs,
-          operationDigest: historyOperationDigest,
-          beforeImageDigest: prepared.beforeImageDigest,
-          expectedAfterReadbackDigest: targetStateDigest, receiptDigest,
-          historyRevision, status: 'VERIFIED' });
-        current.historyRevision = historyRevision;
-        current.headTransactionId = headTransactionId;
-        current.undoAvailable = headTransactionId !== null;
-        current.redoAvailable = direction === 'UNDO';
-        state.objects[body.worldRef][objectRef].objectRevision =
-          revision(state.objects[body.worldRef][objectRef].objectRevision);
-      }
-      state.transactions[body.worldRef][body.transactionId] = { status: 'VERIFIED',
-        worldRef: body.worldRef, transactionId: body.transactionId,
-        authorRef: proof.authorRef, sessionRef: body.sessionRef,
-        affectedObjectRefs: refs, positions: prepared.protectedPositions,
-        operationDigest: historyOperationDigest,
-        beforeImageDigest: prepared.beforeImageDigest,
-        afterReadbackDigest: targetStateDigest, receiptDigest,
-        originTransactionId: body.historyTransactionId,
-        transactionPayloadDigest: prepared.transactionPayloadDigest,
-        receipt: verified };
-      row.status = 'VERIFIED';
-      state.replay[`${body.sessionRef}\u0000${operation}\u0000${body.requestId}`] = {
-        digest: requestDigest, authorRef: proof.authorRef,
-        response: envelope(body, verified) };
-    });
-    await this.#publishEvent('HistoryPositionChanged', operation, body,
-      verified, 'history-position', { requiredAuthorRef: proof.authorRef,
-        initiatorOnly: true });
-    for (const objectRef of refs) {
-      const current = this.store.snapshot.authorHistory[body.worldRef][objectRef][proof.authorRef];
-      await this.#publishEvent('HistoryInventoryChanged', 'HistoryQuery', body,
-        { worldRef: body.worldRef, objectRef, ...current }, `history:${objectRef}`,
-        { requiredAuthorRef: proof.authorRef, initiatorOnly: true,
-          authorizationRequest: { contractVersion: VERSION, actorRef: body.actorRef,
-            sessionRef: body.sessionRef, requestId: `${body.requestId}:history:${objectRef}`,
-            authorizationRef: body.authorizationRef, worldRef: body.worldRef,
-            objectRef, expectedHistoryRevision: current.historyRevision } });
-    }
-    return envelope(body, verified);
+    if (operation === 'Redo' && !history.redoAvailable)
+      throw issue('REDO_UNAVAILABLE', 'validate', 'POLICY_UNAVAILABLE');
+    // The admitted 0.2.1 public Prepare result omits the distinct before-state
+    // readback digest required by Adapter history prepare. Retain zero-write
+    // refusal until the approved dependency revision supplies that value.
+    throw issue('CAPABILITY_UNAVAILABLE', 'validate', 'POLICY_UNAVAILABLE');
   }
   async #inventory(body) {
     if (!this.adapters.length) throw issue('ADAPTER_UNAVAILABLE', 'validate', 'POLICY_UNAVAILABLE');
     const groups = [];
     for (const entry of this.adapters) {
-      this.#checkAdapterCompatibility(entry.port);
       const request = {
-        contractVersion: ADAPTER_VERSION, actorRef: this.serviceActorRef,
+        contractVersion: 'world-adapter/v3', actorRef: body.actorRef,
         sessionRef: body.sessionRef, requestId: `${body.requestId}:discover:${entry.adapterId}`,
         authorizationRef: body.authorizationRef, adapterId: entry.adapterId };
       const answer = await entry.port?.call?.('DiscoverConnections', request);
@@ -1248,9 +828,8 @@ export class CanvasV4 {
   }
   async #bind(body, connectionRef, worldRef) {
     for (const entry of this.adapters) {
-      this.#checkAdapterCompatibility(entry.port);
       const listRequest = {
-        contractVersion: ADAPTER_VERSION, actorRef: this.serviceActorRef,
+        contractVersion: 'world-adapter/v3', actorRef: body.actorRef,
         sessionRef: body.sessionRef, requestId: `${body.requestId}:list:${entry.adapterId}`,
         authorizationRef: body.authorizationRef, connectionRef };
       const listed = await entry.port?.call?.('ListWorlds', listRequest);
@@ -1263,10 +842,10 @@ export class CanvasV4 {
       const descriptor = listed.result.connections.find(row =>
         row.connectionRef === connectionRef && row.worldRef === worldRef);
       if (!descriptor) continue;
-      if (descriptor.payloadVersion !== '0.2.0')
+      if (descriptor.payloadVersion !== '0.1.1')
         throw issue('PAYLOAD_VERSION_MISMATCH', 'validate', 'PAYLOAD_CHANGED');
       const bindRequest = {
-        contractVersion: ADAPTER_VERSION, actorRef: this.serviceActorRef,
+        contractVersion: 'world-adapter/v3', actorRef: body.actorRef,
         sessionRef: body.sessionRef, requestId: `${body.requestId}:bind`,
         authorizationRef: body.authorizationRef, worldRef, connectionRef,
         expectedCapabilityRevision: descriptor.capabilityRevision,
@@ -1276,7 +855,7 @@ export class CanvasV4 {
           !validBindingReceipt(connected.result) ||
           connected.result.worldRef !== worldRef ||
           connected?.result?.connectionRef !== connectionRef ||
-          connected?.result?.payloadVersion !== '0.2.0' ||
+          connected?.result?.payloadVersion !== '0.1.1' ||
           connected?.result?.binding?.actorRef !== body.actorRef ||
           connected?.result?.binding?.worldRef !== worldRef ||
           connected.result.capabilities.worldRef !== worldRef ||
@@ -1309,7 +888,6 @@ export class CanvasV4 {
       }
       if (this.store.snapshot.sessions[body.sessionRef]?.activeWorldRef === body.worldRef)
         await this.#invalidateInspections(body.worldRef, proof.currentWorldRevision);
-      validateBoundRequest(VERSION, operation, body);
       const replayKey = `${body.sessionRef}\u0000${operation}\u0000${body.requestId}`;
       const prior = this.store.snapshot.replay[replayKey];
       const digest = identity(body);
@@ -1324,18 +902,9 @@ export class CanvasV4 {
               prior.response?.result?.source === 'INSPECTED' &&
               prior.response.result.worldRevision !== proof.currentWorldRevision))
           throw issue('STALE_REVISION', 'validate', 'REVISION_CHANGED');
-        if (operation === 'InspectPlacementRegion') {
-          const recorded = this.store.snapshot.placementInspections?.[replayKey];
-          if (!recorded || recorded.status !== 'RECORDED' ||
-              recorded.worldRevision !== proof.currentWorldRevision ||
-              recorded.settingsRevision !==
-                this.store.snapshot.placementSettings?.[body.worldRef]?.settingsRevision)
-            throw issue('STALE_REVISION', 'validate', 'REVISION_CHANGED');
-        }
         return structuredClone(prior.response);
       }
-      if (operation === 'InspectPlacementRegion')
-        return await this.#inspectPlacementRegion(body, proof, replayKey, digest);
+      validateBoundRequest(VERSION, operation, body);
       if (operation === 'ApplyRecoverableCommit') {
         try { return await this.#apply(body, proof, replayKey, digest); }
         catch (error) {
@@ -1349,17 +918,8 @@ export class CanvasV4 {
       }
       if (operation === 'Readback')
         return await this.#readback(body, proof, replayKey, digest);
-      if (operation === 'Undo' || operation === 'Redo') {
-        try { return await this.#historyAction(operation, body, proof); }
-        catch (error) {
-          const pending = this.store.snapshot.pending[body.transactionId];
-          if (pending?.digest === digest && ['HISTORY_APPLYING',
-            'HISTORY_APPLIED_PENDING_READBACK', 'HISTORY_RECOVERY_PENDING'].includes(pending.status) &&
-              (!error.publicError || error.publicError.mutationState === 'NONE'))
-            throw uncertain(body.transactionId);
-          throw error;
-        }
-      }
+      if (operation === 'Undo' || operation === 'Redo')
+        return await this.#historyAction(operation, body, proof);
       let result;
       if (operation === 'ListWorldConnections') {
         result = await this.#inventory(body);
@@ -1397,12 +957,6 @@ export class CanvasV4 {
           state.sessions[body.sessionRef] = result;
           state.bindings ??= Object.create(null);
           state.bindings[body.sessionRef] = binding;
-          state.placementSettings ??= Object.create(null);
-          if (!Object.hasOwn(state.placementSettings, body.worldRef))
-          state.placementSettings[body.worldRef] = { worldRef: body.worldRef,
-            stored: { 'placement.frontGapCells': 2, 'placement.forwardSearchCells': 16,
-              'placement.lateralSearchCells': 8, 'placement.verticalSearchCells': 4 },
-            settingsRevision: revision() };
           state.replay[replayKey] = { digest, response: envelope(body, result) };
         });
         if (old?.activeWorldRef !== body.worldRef ||
@@ -1432,12 +986,6 @@ export class CanvasV4 {
             throw issue('STALE_REVISION', 'validate', 'REVISION_CHANGED');
           state.sessions[body.sessionRef] = result;
           state.bindings[body.sessionRef] = binding;
-          state.placementSettings ??= Object.create(null);
-          if (!Object.hasOwn(state.placementSettings, body.toWorldRef))
-          state.placementSettings[body.toWorldRef] = { worldRef: body.toWorldRef,
-            stored: { 'placement.frontGapCells': 2, 'placement.forwardSearchCells': 16,
-              'placement.lateralSearchCells': 8, 'placement.verticalSearchCells': 4 },
-            settingsRevision: revision() };
           state.replay[replayKey] = { digest, response: envelope(body, result) };
         });
         if (body.toWorldRef !== body.fromWorldRef)
@@ -1476,20 +1024,17 @@ export class CanvasV4 {
         if (!context || context.activeWorldRef !== body.worldRef)
           throw issue('WORLD_NOT_BOUND', 'validate', 'SCOPE_DENIED');
         const registryRevision = this.store.snapshot.registryRevisions[body.worldRef] ?? '0';
-        if (body.expectedRevision !== null && body.expectedRevision !== registryRevision)
+        if (body.expectedRevision !== registryRevision)
           throw issue('STALE_REVISION', 'validate', 'REVISION_CHANGED');
         result = { worldRef: body.worldRef, registryRevision,
           objects: Object.values(this.store.snapshot.objects[body.worldRef] ?? {}).sort((a, b) =>
             a.creationSequence - b.creationSequence ||
             (a.objectRef < b.objectRef ? -1 : a.objectRef > b.objectRef ? 1 : 0)) };
-        // Current inventory is a coherent durable snapshot. A read does not
-        // advance the registry or persist replay state.
-        const released = await this.authority.verify(body, operation);
-        if (!released?.current || released.actorRef !== body.actorRef ||
-            released.sessionRef !== body.sessionRef ||
-            released.authorizationRef !== body.authorizationRef ||
-            !released.allowedActions?.includes(operation))
-          throw issue('AUTHORIZATION_REVOKED', 'authorize', 'GRANT_REVOKED');
+        await this.store.commit(state => {
+          if ((state.registryRevisions[body.worldRef] ?? '0') !== registryRevision)
+            throw issue('STALE_REVISION', 'validate', 'REVISION_CHANGED');
+          state.replay[replayKey] = { digest, response: envelope(body, result) };
+        });
       } else if (operation === 'NameObject' || operation === 'RenameObject') {
         const context = this.store.snapshot.sessions[body.sessionRef];
         if (!context || context.activeWorldRef !== body.worldRef)
@@ -1638,7 +1183,7 @@ export class CanvasV4 {
         const adapter = this.adapters.find(entry => entry.adapterId === bound?.adapterId)?.port;
         if (!adapter) throw issue('ADAPTER_UNAVAILABLE', 'validate', 'POLICY_UNAVAILABLE');
         const adapterRequest = {
-          contractVersion: ADAPTER_VERSION, actorRef: this.serviceActorRef,
+          contractVersion: 'world-adapter/v3', actorRef: body.actorRef,
           sessionRef: body.sessionRef, requestId: `${body.requestId}:inspect`,
           authorizationRef: body.authorizationRef, worldRef: body.worldRef,
           expectedWorldRevision: proof.currentWorldRevision, sampledBounds: body.sampledBounds };
@@ -1728,11 +1273,7 @@ export class CanvasV4 {
       return envelope(body, result);
     } catch (error) {
       if (this.store?.unavailable) this.storageState = 'UNAVAILABLE';
-      const publicError = error.publicError ??
-        issue('CAPABILITY_UNAVAILABLE', 'validate', 'POLICY_UNAVAILABLE').publicError;
-      return operation === 'InspectPlacementRegion' ?
-        placementEnvelope(body, null, publicError, error.unavailableSettings ?? null) :
-        envelope(body, null, publicError);
+      return envelope(body, null, error.publicError ?? issue('CAPABILITY_UNAVAILABLE', 'validate', 'POLICY_UNAVAILABLE').publicError);
     }
   }
 }
@@ -1740,13 +1281,12 @@ export class CanvasV4 {
 export const name = 'hanaworlds-canvas';
 export const inject = [];
 export function apply(ctx, config = {}) {
-  const adapter = ctx.get?.('hanaworldsWorldAdapterV4');
+  const adapter = ctx.get?.('hanaworldsWorldAdapterV3');
   const adapters = adapter && typeof config.adapterId === 'string' && config.adapterId ?
     [{ adapterId: config.adapterId, port: adapter }] : [];
-  const service = new CanvasV4({ store: null, adapters,
-    authority: ctx.get?.('hanaworldsAuthority'),
-    adminAuthority: ctx.get?.('hanaworldsAdminAuthority') });
-  ctx.provide?.('hanaworldsCanvasV4', service);
+  const service = new CanvasV3({ store: null, adapters,
+    authority: ctx.get?.('hanaworldsAuthority') });
+  ctx.provide?.('hanaworldsCanvasV3', service);
   service.storageState = 'INITIALIZING';
   service.ready = (async () => {
     try {

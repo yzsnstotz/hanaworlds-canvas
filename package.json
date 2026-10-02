@@ -1,6 +1,6 @@
 {
   "name": "hanaworlds-canvas",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "license": "MIT",
@@ -29,12 +29,12 @@
     }
   },
   "scripts": {
-    "build": "node --check src/index.mjs && node --check src/store.mjs && node --check src/strict-json.mjs",
+    "build": "node --check src/index.mjs && node --check src/v3-legacy.mjs && node --check src/store.mjs && node --check src/strict-json.mjs",
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
     "canonicalize": "5.1.0",
-    "hanaworlds-contracts": "https://codeload.github.com/yzsnstotz/hanaworlds-contracts/tar.gz/5ecfce1ba47530b42bba60a674bd16f7bc39c665",
+    "hanaworlds-contracts": "https://codeload.github.com/yzsnstotz/hanaworlds-contracts/tar.gz/e82735780bdfd4ea8e662781455040a6e5306121",
     "icu": "2.3.1"
   }
 }
