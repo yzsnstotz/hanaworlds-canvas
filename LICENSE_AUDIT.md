@@ -1,0 +1,27 @@
+# Canvas 0.1.1 source rights audit
+
+Scope: public baseline `d27be3f51e6733ab4f720700bb86145e9a578a5d`,
+its six commits through that revision, and this Canvas origin's tracked paths.
+
+- `git log --all -- src test README.md GADGET.md cordis.patch.yml NOTICE package.json`
+  shows one author, `yzsnstotz <snstotz@gmail.com>`, for all source and test
+  changes through the baseline. Baseline `NOTICE` declares the source
+  owner-authored. No tracked source file carries a different copyright header
+  or a copied third-party/AGPL derivative notice.
+- `src/`, `test/`, `README.md`, `GADGET.md`, `cordis.patch.yml`, and package
+  metadata are Canvas-owned material. This candidate changes their owner
+  license from AGPL-3.0-only to MIT under the standing Stage 1 instruction.
+  The historical 0.1.0 revision remains AGPL-3.0-only.
+- `canonicalize@5.1.0` is a separately installed Apache-2.0 dependency;
+  `icu@2.3.1` is a separately installed Unicode-3.0 dependency. No source from
+  either package is copied into this repository. Their package license files
+  must remain in the installed dependency trees. The package carries this
+  dependency notice in `NOTICE`.
+- WorldEdit, the Luanti Adapter, and Contracts are separate origins. Canvas
+  imports Contracts through its declared public package only; it does not
+  copy or relicense their source. No WorldEdit bytes are in the Canvas package.
+
+The repository history and owner-authored baseline notice are the available
+provenance evidence. They do not independently prove legal title outside this
+repository; a contrary ownership claim would require the PM to stop a public
+push and resolve the exact file with its holder.

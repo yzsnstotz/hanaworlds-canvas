@@ -1,5 +1,11 @@
-HanaWorlds Canvas 0.1.0 candidate. Owner-authored source: AGPL-3.0-only.
-canonicalize 5.1.0 is an Apache-2.0 dependency. WorldEdit and Luanti Adapter
-are separate components and are not bundled into this package.
-icu 2.3.1 is a Unicode-3.0 dependency. Its compiled ICU4X Unicode 17 data
-supplies NFC and White_Space independently of the host Node/ICU version.
+HanaWorlds Canvas 0.1.1 candidate.
+
+Owner-authored source is MIT; see LICENSE and LICENSE_AUDIT.md. The 0.1.0
+AGPL-3.0-only source remains available at public revision
+d27be3f51e6733ab4f720700bb86145e9a578a5d. All source and test changes in
+that baseline are authored by yzsnstotz; no third-party source is vendored.
+
+Runtime dependencies are separate packages. canonicalize 5.1.0 is Apache-2.0;
+icu 2.3.1 is Unicode-3.0. Their notices and license texts remain with the
+separately installed npm packages. WorldEdit (AGPL-3.0) and the Luanti Adapter
+are separate origins and are not bundled or relicensed by Canvas.

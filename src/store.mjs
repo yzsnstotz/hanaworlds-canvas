@@ -11,8 +11,9 @@ function nullRecords(value) {
 }
 
 function fresh() {
-  return { schemaVersion: 1, sessions: {}, bindings: {}, objects: {}, names: {}, footprints: {},
+  return { schemaVersion: 2, sessions: {}, bindings: {}, objects: {}, names: {}, footprints: {},
     registryRevisions: {}, analyses: {}, decisions: {}, transactions: {}, history: {},
+    authorHistory: {}, connectionInventories: {},
     replay: {}, pending: {} };
 }
 
@@ -28,9 +29,35 @@ export class CanvasStore {
     if (typeof directory !== 'string' || !directory) throw new Error('CANVAS_STORAGE_UNAVAILABLE');
     await mkdir(directory, { recursive: true, mode: 0o700 });
     let snapshot;
-    try { snapshot = JSON.parse(await readFile(join(directory, 'canvas-v2.json'), 'utf8')); }
-    catch (error) { if (error.code !== 'ENOENT') throw error; snapshot = fresh(); }
-    if (snapshot.schemaVersion !== 1) throw new Error('CANVAS_STORAGE_VERSION_UNSUPPORTED');
+    let oldBytes;
+    try {
+      oldBytes = await readFile(join(directory, 'canvas-v2.json'), 'utf8');
+      snapshot = JSON.parse(oldBytes);
+    } catch (error) { if (error.code !== 'ENOENT') throw error; snapshot = fresh(); }
+    if (snapshot.schemaVersion === 1) {
+      const backup = join(directory, 'canvas-v2.pre-v3.json');
+      let existing;
+      try { existing = await readFile(backup, 'utf8'); }
+      catch (error) { if (error.code !== 'ENOENT') throw error; }
+      if (existing !== undefined && existing !== oldBytes)
+        throw new Error('CANVAS_MIGRATION_BACKUP_CONFLICT');
+      if (existing === undefined) {
+        const file = await open(backup, 'wx', 0o600);
+        try { await file.writeFile(oldBytes); await file.sync(); }
+        finally { await file.close(); }
+        const parent = await open(directory, 'r');
+        try { await parent.sync(); } finally { await parent.close(); }
+      }
+      snapshot.schemaVersion = 2;
+      snapshot.authorHistory ??= {};
+      snapshot.connectionInventories ??= {};
+      const migrated = new CanvasStore(directory, nullRecords(snapshot));
+      await migrated.commit(() => {});
+      return migrated;
+    }
+    if (snapshot.schemaVersion !== 2) throw new Error('CANVAS_STORAGE_VERSION_UNSUPPORTED');
+    snapshot.authorHistory ??= {};
+    snapshot.connectionInventories ??= {};
     return new CanvasStore(directory, nullRecords(snapshot));
   }
   async commit(change) {

@@ -1,22 +1,24 @@
 {
   "name": "hanaworlds-canvas",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
-  "license": "AGPL-3.0-only",
+  "license": "MIT",
   "description": "HanaWorlds Stage 1 Canvas engine-neutral object and history owner",
   "repository": {
     "type": "git",
     "url": "https://github.com/yzsnstotz/hanaworlds-canvas.git"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=24.13.1 <25"
   },
   "exports": {
     ".": "./src/index.mjs"
   },
   "files": [
-    "src",
+    "src/index.mjs",
+    "src/store.mjs",
+    "src/strict-json.mjs",
     "cordis.patch.yml",
     "GADGET.md",
     "NOTICE"
@@ -32,6 +34,7 @@
   },
   "dependencies": {
     "canonicalize": "5.1.0",
+    "hanaworlds-contracts": "https://codeload.github.com/yzsnstotz/hanaworlds-contracts/tar.gz/5ecfce1ba47530b42bba60a674bd16f7bc39c665",
     "icu": "2.3.1"
   }
 }

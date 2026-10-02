@@ -1,102 +1,98 @@
-# Canvas 0.1.0 candidate
+# HanaWorlds Canvas 0.1.1 candidate
 
-Status: `PARTIAL / SOURCE+FIXTURE`. The S1-02 product and human validation are
-`UNPROVEN`; no release, deployment or user `ACCEPTED` is claimed.
+Status: `PARTIAL / SOURCE+FIXTURE`. Stage 1 composition and human validation are
+`UNPROVEN`; this source is not a release, deployment, or user `ACCEPTED` receipt.
 
-Given authorized `canvas/v2` calls and an authorized `world-adapter/v2` provider,
-Canvas persists engine-neutral world/object choices, computes affected-object
-decisions, and returns scoped results. It owns the registry, selection, analysis,
-decision and future linked-history state. The Adapter owns engine transport,
-protected before-image, mutation and recovery. Workshop owns Sessions and intent.
+Canvas is the engine-neutral owner of world selection, the named object registry,
+affected-object analysis and decisions, atomic apply/readback orchestration, and
+author-scoped linked object history. Workshop owns Sessions and intent. Brush
+compiles BUILD/V2. The Luanti Adapter owns world transport, protected state,
+restoration, and its journal. Canvas calls its public `world-adapter/v3` port only.
 
-## Public boundary
+## Public host boundary
 
-The package exports a DSH plugin `apply(ctx)` and a `CanvasV2.call(operation,raw)`
-port. Adapter calls use only `WorldAdapterV2.call`. Its DSH host requires:
+The package exports a DSH plugin `apply(ctx)` and `CanvasV3.call(operation, raw)`.
+The plugin provides `hanaworldsCanvasV3` and consumes:
 
-- `hanaworldsAuthority.verify`: current actor/session/authorization/action and
-  world revision proof. A fixture verifier is not a product grant.
-- `hanaworldsProfileStorage.canvasDirectory`: an isolated, writable profile
-  directory. Canvas does not pick a developer path or copy credentials.
-- `hanaworldsWorldAdapterV2` plus a declared adapter identity from composition.
+- `hanaworldsAuthority.verify` for current actor, Session, authorization, action,
+  author identity, and world revision proof;
+- `hanaworldsProfileStorage.canvasDirectory()` for a writable isolated profile
+  directory; and
+- `hanaworldsWorldAdapterV3` with the composition-supplied `adapterId`.
 
-Implemented source operations: ListWorldConnections, SelectWorldConnection,
-SwitchWorldConnection, ListObjects, SetObjectSelection, NameObject,
-RenameObject, InspectObject, AnalyzeAffectedObjects,
-DecideAffectedObjectNotification and HistoryQuery. CreateObject accepts only a
-Canvas-reserved ref linked to a durable VERIFIED transaction; no such production
-entry exists under the current frozen v2 contract, so arbitrary client refs are
-rejected. `ApplyRecoverableCommit`, `Readback`, `Undo` and `Redo` admit their
-frozen request shapes, check current authorization before replay and return a
-typed `CAPABILITY_UNAVAILABLE` response with zero world or history effect.
-Their positive paths remain **not** component checks passed.
+The Canvas service also provides `subscribeCanvasEvents(context, callback)`.
+Subscriptions verify current `ListObjects` permission for the bound world and
+trusted author at registration and again before each delivery. The current
+source emits a typed `ObjectCreated` event only after verified durable
+registration to the creating author. It emits `ObjectInventoryChanged` with
+the current authorized inventory and registry revision after durable creation
+or name changes to subscriptions still authorized for `ListObjects`. Failed
+readback and revoked subscriptions receive no success event. The other frozen
+typed signals follow observed Adapter inventory changes, durable connection,
+world, name and selection changes, completed analysis and blocking decisions,
+pending and verified transaction phases, linked history inventory changes,
+and invalidation of a prior inspected snapshot by a newly observed world
+revision. Private receipts stay with the initiating actor, Session and grant;
+history receipts also require the trusted author. `HistoryPositionChanged`
+waits for the upstream history-prepare digest and successful linked Undo/Redo.
+The returned function unsubscribes. There is no initial snapshot or event
+replay. A caller retaining
+the latest name receipt or inventory event can use its registry revision after
+restart; one holding only an old revision cannot bootstrap a missed change
+through current `ListObjects`. This remains an open product consumer gate.
 
-Raw UTF-8 admission rejects malformed bytes, duplicate decoded keys and unsafe
-JavaScript values before authority lookup. Current authority/revocation precedes
-persisted replay; revision checks precede state changes. Object names use
-`icu@2.3.1` ICU4X WASM NFC and White_Space data, pinned in the npm lock, so the
-host Node 22 Unicode data version is not used for persistent comparison keys.
-The source tests cover representative names and all Unicode scalar White_Space
-membership against the frozen list. An isolated conformance probe also compared
-both NameObject and RenameObject against all 100,170 cases in Unicode 17.0.0's
-NormalizationTest.txt and the local contracts@0.1.1 normalizeName oracle. This
-does not establish conformance for every possible string or against a published
-contracts package; see the S1-02 Canvas batch evidence.
+The implementation admits the strict `canvas/v3` request and response schemas
+from the pinned Contracts source. Malformed raw UTF-8, duplicate decoded keys,
+unknown nested fields, and unsafe JavaScript values fail before authority or
+Adapter entry. Authority and revocation are checked before persisted replay.
+Author-scoped replay is also bound to the current trusted author.
 
-## Durable state and lifecycle
+The v3 source implements ListWorldConnections, SelectWorldConnection,
+SwitchWorldConnection, SetObjectSelection, ListObjects, NameObject, RenameObject,
+AnalyzeAffectedObjects, DecideAffectedObjectNotification, InspectObject,
+HistoryQuery, ApplyRecoverableCommit, Readback, and trusted CreateObject. Canvas
+generates a stable object ref after verified creation readback; an arbitrary
+caller-provided ref cannot register an object. Undo and Redo reject other-player
+origins and currently fail closed for an otherwise valid linked origin. The
+approved dependency repair must expose the distinct original before-state
+readback digest before those paths can be enabled. No world-global or
+other-player history policy is implemented.
 
-Canvas stores `canvas-v2.json` under the host-provided profile directory. Each
-commit writes a mode-0600 temporary file, fsyncs it, renames it over the prior
-snapshot and fsyncs the directory. A single writer instance per profile is
-required. If directory synchronization fails after rename, that writer rejects
-further requests until the store is reopened, because its durable outcome is
-uncertain. Restart opens the same versioned state; unknown schema versions fail
-closed. The file retains object registry, selections, replay records and later
-history until an explicit supported migration or deletion. Uninstall must keep
-this state and Adapter recovery journal.
+## Durable state and recovery
 
-The package has `private: true` as a registry publication guard. `npm ci` from
-the exact lock, `npm run build`, `npm test` and `npm pack --ignore-scripts` are
-the source/package checks. A DSH install must use the declared public origin
-after task-branch publication; local tarballs are diagnostic only. The DSH
-`cordis.patch.yml` registers only this plugin, with no engine payload.
+Canvas stores `canvas-v2.json` under the host-provided profile directory. A
+single writer instance per profile is required. Each commit writes a mode-0600
+temporary snapshot, fsyncs it, atomically renames it, and fsyncs the directory.
+If directory synchronization fails after rename, that writer refuses further
+requests until reopened. Unknown schema versions fail closed.
 
-Rollback of code requires stopping the profile, backing up `canvas-v2.json`,
-installing an earlier verified package and confirming that package can read
-schema version 1 before restart. If it cannot, keep the state and stop the
-downgrade. Removing the package must not erase worlds, objects, histories or
-Adapter pending recovery evidence. A clean isolated DSH profile installed the
-pinned public Git revision, loaded it on loopback, restarted, uninstalled,
-retained an isolated Canvas state file, reinstalled and reopened that state.
-This proves package lifecycle and source identity; the isolated state file was
-created through `CanvasStore`, not an actual Shell/Adapter world flow. A
-downgrade readback remains `NOT_RUN` because no earlier Canvas plugin version
-exists in this Stage 1 beginning.
+Version 0.1.1 upgrades schema 1 to schema 2. Before conversion it durably saves
+the exact old bytes as `canvas-v2.pre-v3.json`. The old 0.1.0 package cannot open
+schema 2. Code rollback therefore requires stopping the profile and restoring
+the schema 1 backup together with the matching earlier package. Preserve both
+Canvas state and the Adapter journal when uninstalling; deleting one side can
+erase the evidence needed to recover a pending world transaction.
 
-## Exact open gates
+Apply reserves the Canvas transaction before Adapter Prepare, persists the
+prepared payload before Apply, and never issues a second world write on an
+uncertain retry. It queries the public Adapter transaction status, then verifies
+readback and durably settles linked history. Related new edits settle verified
+pending history first. Unknown write or storage outcomes return
+`RECOVERY_PENDING/UNKNOWN` rather than claiming no mutation.
 
-The approved rc.5 v2 public contract has three semantic gaps identified by an
-independent audit: a caller cannot legally obtain the required
-`preparedTransaction` before `ApplyRecoverableCommit`; complete inverse state
-for a newly authorized Undo is inaccessible and not encodable in
-`operations/v2` effects; and `CreateObject` does not define how the Canvas-owned
-stable `objectRef` reaches the caller. No private Adapter journal read,
-WorldEdit undo substitution or caller-generated ref is used here. These need a
-new approved semantic closure and fixtures before implementation.
+## Build and install boundary
 
-Separately, the current Adapter captures its `hanaworldsLuantiInspectionContext`
-host hook when it loads before Canvas. The host/Adapter must provide a stable
-trusted context or late binding for real InspectWorld; a fixture response only
-proves the Canvas consumer checks. This is an implementation/composition repair,
-not a product decision. Real Shell+Canvas+Luanti player-visible entry, binding,
-mutation, linked history, restart recovery and rollback are `NOT_RUN`.
+Run `npm ci` from the exact lock under an isolated HOME and npm cache, then
+`npm run build`, `npm test`, and `npm pack --ignore-scripts`. The package has
+`private: true` as a registry publication guard. The exact public source branch
+must be pushed and read back before a public-origin DSH install is claimed.
+An isolated DSH profile must supply its own HOME, cache, store, shim and
+`DSH_HOME`; the desktop-generated `~/.local/bin/dsh` shim points at the shared
+HanaMesh profile and is unsuitable for this proof. Real Shell, Luanti, restart,
+uninstall/reinstall, and rollback results belong in separate labeled evidence.
 
-## Sources and licenses
+## Licenses
 
-Owner-authored source is AGPL-3.0-only; the complete license is included.
-`canonicalize@5.1.0` is Apache-2.0. The portable Unicode implementation uses
-official ICU4X `icu@2.3.1` under Unicode-3.0, locked to its npm integrity.
-The [ICU4X changelog](https://github.com/unicode-org/icu4x/blob/main/CHANGELOG.md)
-records the 2.3 line and Unicode17 data work; its published JavaScript package
-includes a precompiled NFC normalizer and White_Space property. WorldEdit and
-the Luanti Adapter are separate origins with their own licenses and bytes.
+HanaWorlds-owned source is MIT; see `LICENSE` and `LICENSE_AUDIT.md`. Preserve
+the separate `canonicalize@5.1.0` Apache-2.0 and `icu@2.3.1` Unicode-3.0
+notices recorded in `NOTICE`. Neither dependency is relicensed as MIT.
