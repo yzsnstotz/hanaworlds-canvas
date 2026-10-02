@@ -23,10 +23,11 @@ async function fixture(t, { adapter, currentWorldRevision = 'fixture-world-10',
     state.registryRevisions['fixture-world'] = '0';
   });
   let current = true;
+  let currentInspectGrant = inspectGrant;
   const authority = { async verify(body, operation) {
     return { current, actorRef: body.actorRef, sessionRef: body.sessionRef,
       authorizationRef: body.authorizationRef, authorRef: 'alice',
-      allowedActions: inspectGrant ? [operation, 'INSPECT'] : [operation],
+      allowedActions: currentInspectGrant ? [operation, 'INSPECT'] : [operation],
       currentWorldRevision };
   } };
   const calls = [];
@@ -43,7 +44,8 @@ async function fixture(t, { adapter, currentWorldRevision = 'fixture-world-10',
   port.contractHandshake ??= contractHandshake;
   const canvas = new CanvasV4({ store, adapters: [{ adapterId: 'fixture-adapter', port }],
     authority, serviceActorRef: 'canvas-service' });
-  return { directory, store, canvas, calls, revoke: () => { current = false; } };
+  return { directory, store, canvas, calls, revoke: () => { current = false; },
+    setInspectGrant: value => { currentInspectGrant = value; } };
 }
 
 test('v4 current inventory returns one authorized durable snapshot after restart and binds selected ref', async t => {
@@ -374,6 +376,14 @@ test('v4 placement choice releases typed player names only with current INSPECT 
   assert.equal(shown.error, null);
   assert.deepEqual(shown.result.choice.options, ['NAME_PLAYER', 'PICK_WORLD_POINT']);
   assert.deepEqual(shown.result.choice.candidatePlayerNames, names);
+  allowed.setInspectGrant(false);
+  const replay = await allowed.canvas.call('InspectPlacementRegion', chain.canvasInspectRequest);
+  assert.equal(replay.result, null);
+  assert.equal(replay.error.code, 'PERMISSION_DENIED');
+  assert.equal(replay.error.phase, 'authorize');
+  assert.equal(replay.error.reason, 'SCOPE_DENIED');
+  assert.equal(allowed.store.snapshot.placementInspections[
+    'fixture-session\u0000InspectPlacementRegion\u0000workshop-place-1'].status, 'RECORDED');
   const denied = await fixture(t, { adapter: choicePort });
   const hidden = await denied.canvas.call('InspectPlacementRegion', chain.canvasInspectRequest);
   assert.equal(hidden.result, null);

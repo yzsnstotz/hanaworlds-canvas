@@ -1330,6 +1330,9 @@ export class CanvasV4 {
               recorded.settingsRevision !==
                 this.store.snapshot.placementSettings?.[body.worldRef]?.settingsRevision)
             throw issue('STALE_REVISION', 'validate', 'REVISION_CHANGED');
+          if (Array.isArray(prior.response?.result?.choice?.candidatePlayerNames) &&
+              !proof.allowedActions?.includes('INSPECT'))
+            throw issue('PERMISSION_DENIED', 'authorize', 'SCOPE_DENIED');
         }
         return structuredClone(prior.response);
       }
