@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CanvasStore, CanvasV4 } from '../src/index.mjs';
 import placement from 'hanaworlds-contracts/v4/fixtures/placement-region-chain-v4' with { type: 'json' };
-import { validateResponse, contractHandshake } from 'hanaworlds-contracts/v4';
+import { validateBoundRequest, validateResponse, contractHandshake } from 'hanaworlds-contracts/v4';
 
 const chain = placement.validCases[0].materializedChain;
 async function fixture(t, { adapter, currentWorldRevision = 'fixture-world-10',
@@ -209,7 +209,12 @@ test('v4 linked Undo binds the saved before-state digest and moves only the auth
   });
   const calls = [];
   let redoPhase = false;
+  let losePrepareResponse = false;
+  let loseApplyResponse = false;
+  let preparedForQuery = null;
+  let appliedForQuery = null;
   const adapter = { contractHandshake, async call(operation, request) {
+    validateBoundRequest('world-adapter/v4', operation, request);
     calls.push({ operation, request });
     let result;
     if (operation === 'PrepareHistoryTransaction') result = {
@@ -222,6 +227,7 @@ test('v4 linked Undo binds the saved before-state digest and moves only the auth
       stateProfile: seam.savedBeforeImage.stateProfile,
       adapterExecutionRevision: 'adapter-exec-1',
       guarantee: 'RECOVERABLE_VERIFIED', status: 'PREPARED' };
+    else if (operation === 'QueryPreparedHistoryTransaction') result = preparedForQuery;
     else if (operation === 'ApplyHistoryTransaction') result = {
       contractVersion: 'canvas/v2', transactionId: request.transactionId,
       operationDigest: request.historyOperationDigest,
@@ -229,6 +235,7 @@ test('v4 linked Undo binds the saved before-state digest and moves only the auth
       status: 'APPLIED_PENDING_READBACK', previousWorldRevision: request.expectedWorldRevision,
       observedWorldRevision: null, readbackDigest: null,
       restoreStatus: 'NOT_REQUIRED', error: null };
+    else if (operation === 'QueryTransaction') result = appliedForQuery;
     else if (operation === 'Readback') result = {
       projection: redoPhase ? (await import('hanaworlds-contracts/v4/fixtures/production-goldens',
         { with: { type: 'json' } })).default.vectors.find(x => x.id === 'PROD-readback').payload :
@@ -237,16 +244,30 @@ test('v4 linked Undo binds the saved before-state digest and moves only the auth
         source.originBeforeStateReadbackDigest,
       adapterExecutionRevision: 'adapter-exec-1' };
     else throw Error(`Unexpected ${operation}`);
+    if (operation === 'PrepareHistoryTransaction' && losePrepareResponse) {
+      preparedForQuery = result;
+      losePrepareResponse = false;
+      throw Error('fixture lost prepared response after durable prepare');
+    }
+    if (operation === 'ApplyHistoryTransaction' && loseApplyResponse) {
+      appliedForQuery = result;
+      loseApplyResponse = false;
+      throw Error('fixture lost apply response after write barrier');
+    }
     return { contractVersion: 'world-adapter/v4', requestId: request.requestId,
       result, error: null };
   } };
   let verification = 0;
+  let recoveryExpectedWorld = null;
+  let recoveryFinalWorld = null;
+  let recoveryVerification = 0;
   const authority = { async verify(body, operation) {
     verification++;
     return { current: true, actorRef: body.actorRef, sessionRef: body.sessionRef,
       authorizationRef: body.authorizationRef, authorRef: 'alice',
       allowedActions: [operation],
-      currentWorldRevision: redoPhase ?
+      currentWorldRevision: recoveryExpectedWorld ?
+        (++recoveryVerification <= 2 ? recoveryExpectedWorld : recoveryFinalWorld) : redoPhase ?
         (verification === 4 ? 'fixture-world-2' : 'fixture-world-3') :
         (verification === 1 ? source.expectedWorldRevision : 'fixture-world-2'),
       authorizationBinding: source.authorizationBinding };
@@ -291,6 +312,50 @@ test('v4 linked Undo binds the saved before-state digest and moves only the auth
     false);
   assert.equal(store.snapshot.authorHistory[source.worldRef]['fixture-object'].alice.historyRevision,
     store.snapshot.authorHistory[source.worldRef]['fixture-object-2'].alice.historyRevision);
+  redoPhase = false;
+  recoveryExpectedWorld = 'fixture-world-3';
+  recoveryFinalWorld = 'fixture-world-4';
+  const recoveredUndo = { ...redo, requestId: 'canvas-undo-recover-prepare',
+    transactionId: 'fixture-undo-recover-prepare',
+    expectedHistoryRevision: store.snapshot.authorHistory[source.worldRef]
+      ['fixture-object'].alice.historyRevision,
+    expectedWorldRevision: recoveryExpectedWorld,
+    expectedObjectRevisions: {
+      'fixture-object': store.snapshot.objects[source.worldRef]['fixture-object'].objectRevision,
+      'fixture-object-2': store.snapshot.objects[source.worldRef]['fixture-object-2'].objectRevision } };
+  losePrepareResponse = true;
+  const lostPrepare = await canvas.call('Undo', recoveredUndo);
+  assert.equal(lostPrepare.error.code, 'ADAPTER_UNAVAILABLE');
+  const recovered = await canvas.call('Undo', recoveredUndo);
+  assert.equal(recovered.error, null, JSON.stringify(recovered.error));
+  assert.deepEqual(calls.slice(-4).map(x => x.operation), [
+    'PrepareHistoryTransaction', 'QueryPreparedHistoryTransaction',
+    'ApplyHistoryTransaction', 'Readback']);
+  assert.equal(store.snapshot.authorHistory[source.worldRef]['fixture-object'].alice.headTransactionId,
+    null);
+
+  redoPhase = true;
+  recoveryExpectedWorld = 'fixture-world-4';
+  recoveryFinalWorld = 'fixture-world-5';
+  recoveryVerification = 0;
+  const recoveredRedo = { ...recoveredUndo, requestId: 'canvas-redo-recover-apply',
+    transactionId: 'fixture-redo-recover-apply',
+    expectedHistoryRevision: store.snapshot.authorHistory[source.worldRef]
+      ['fixture-object'].alice.historyRevision,
+    expectedWorldRevision: recoveryExpectedWorld,
+    expectedObjectRevisions: {
+      'fixture-object': store.snapshot.objects[source.worldRef]['fixture-object'].objectRevision,
+      'fixture-object-2': store.snapshot.objects[source.worldRef]['fixture-object-2'].objectRevision } };
+  loseApplyResponse = true;
+  const lostApply = await canvas.call('Redo', recoveredRedo);
+  assert.equal(lostApply.error.code, 'RECOVERY_PENDING');
+  const queried = await canvas.call('Redo', recoveredRedo);
+  assert.equal(queried.error, null, JSON.stringify(queried.error));
+  assert.deepEqual(calls.slice(-4).map(x => x.operation), [
+    'PrepareHistoryTransaction', 'ApplyHistoryTransaction',
+    'QueryTransaction', 'Readback']);
+  assert.equal(store.snapshot.authorHistory[source.worldRef]['fixture-object'].alice.headTransactionId,
+    source.originTransactionId);
 });
 
 test('v4 placement choice releases typed player names only with current INSPECT scope', async t => {
