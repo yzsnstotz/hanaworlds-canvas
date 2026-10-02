@@ -873,8 +873,7 @@ export class CanvasV4 {
     if (!ref(record?.settingsRevision)) missing.push(...PLACEMENT_FIELDS);
     if (missing.length) {
       const failure = issue('CAPABILITY_UNAVAILABLE', 'validate', 'POLICY_UNAVAILABLE');
-      failure.unavailableSettings = missing.filter(name => PLACEMENT_FIELDS.includes(name))
-        .sort(compareUtf16);
+      failure.unavailableSettings = [...new Set(missing)].sort(compareUtf16);
       throw failure;
     }
     return admitPlacementSettings(stored, record.settingsRevision);

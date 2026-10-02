@@ -97,6 +97,18 @@ test('v4 placement settings fail closed and expose missing setting names before 
   assert.equal(f.calls.length, 0);
   assert.equal(f.canvas.adminProjection('fixture-world').settings.find(x =>
     x.name === 'placement.frontGapCells').currentValue, null);
+  await f.store.commit(state => {
+    delete state.placementSettings['fixture-world'].settingsRevision;
+  });
+  const combined = await f.canvas.call('InspectPlacementRegion', {
+    ...chain.canvasInspectRequest, requestId: 'missing-value-and-revision' });
+  assert.equal(combined.error.code, 'CAPABILITY_UNAVAILABLE');
+  validateResponse('canvas/v4', 'InspectPlacementRegion', combined);
+  assert.deepEqual(combined.unavailableSettings, [
+    'placement.forwardSearchCells', 'placement.frontGapCells',
+    'placement.lateralSearchCells', 'placement.verticalSearchCells',
+  ].sort());
+  assert.equal(f.calls.length, 0);
 });
 
 test('v4 InspectPlacementRegion durably records Adapter outcome and gates Apply evidence', async t => {
