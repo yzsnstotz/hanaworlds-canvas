@@ -120,3 +120,27 @@ test('invalid UTF-8 state fails closed without a lossy backup', async t => {
   assert.deepEqual(await readFile(file(directory)), bytes);
   await assert.rejects(() => readFile(preV4(directory)), { code: 'ENOENT' });
 });
+
+test('migration commit interruption before and after rename has typed stop and recoverable bytes', async t => {
+  for (const phase of ['before', 'after']) {
+    const directory = await profile(t);
+    const bytes = ` ${JSON.stringify({ schemaVersion: 2, pending: { tx: { phase } } })}\n`;
+    await writeFile(file(directory), bytes);
+    class InterruptedStore extends CanvasStore {
+      async commit(change) {
+        if (phase === 'before') throw new Error('injected before rename');
+        await super.commit(change);
+        throw new Error('injected after rename');
+      }
+    }
+    await assert.rejects(() => InterruptedStore.open(directory),
+      /CANVAS_MIGRATION_WRITE_UNAVAILABLE/);
+    assert.equal(await readFile(preV4(directory), 'utf8'), bytes);
+    assert.equal(JSON.parse(await readFile(file(directory), 'utf8')).schemaVersion,
+      phase === 'before' ? 2 : 3);
+    const recovered = await CanvasStore.open(directory);
+    assert.equal(recovered.snapshot.schemaVersion, 3);
+    assert.equal(recovered.snapshot.pending.tx.phase, phase);
+    assert.equal(await readFile(preV4(directory), 'utf8'), bytes);
+  }
+});

@@ -82,7 +82,7 @@ export class CanvasStore {
       snapshot.schemaVersion = 2;
       snapshot.authorHistory ??= {};
       snapshot.connectionInventories ??= {};
-      const migrated = new CanvasStore(directory, nullRecords(snapshot));
+      const migrated = new this(directory, nullRecords(snapshot));
       try { await migrated.commit(() => {}); }
       catch (error) { throw new Error('CANVAS_MIGRATION_WRITE_UNAVAILABLE', { cause: error }); }
       oldBytes = await readFile(join(directory, 'canvas-v2.json'));
@@ -93,7 +93,7 @@ export class CanvasStore {
       snapshot.schemaVersion = 3;
       snapshot.authorHistory ??= {};
       snapshot.connectionInventories ??= {};
-      const migrated = new CanvasStore(directory, nullRecords(snapshot));
+      const migrated = new this(directory, nullRecords(snapshot));
       try { await migrated.commit(() => {}); }
       catch (error) { throw new Error('CANVAS_MIGRATION_WRITE_UNAVAILABLE', { cause: error }); }
       return migrated;
@@ -101,7 +101,7 @@ export class CanvasStore {
     if (snapshot.schemaVersion !== 3) throw new Error('CANVAS_STORAGE_VERSION_UNSUPPORTED');
     snapshot.authorHistory ??= {};
     snapshot.connectionInventories ??= {};
-    return new CanvasStore(directory, nullRecords(snapshot));
+    return new this(directory, nullRecords(snapshot));
   }
   async commit(change) {
     const operation = this.busy.then(async () => {
