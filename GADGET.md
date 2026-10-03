@@ -57,6 +57,12 @@ facts digest is not inferred to be a region inspection.
 
 ## Durable state and recovery
 
+On DSH, Canvas resolves its own `data/hanaworlds-canvas` directory under the
+native `dshHomePath` service. The path must be absolute, contained in the
+configured DSH home and free of symlinked storage components; an unavailable or invalid
+native path leaves Canvas storage unavailable before any world operation.
+The same DSH home retains this directory across plugin restart and reinstall.
+
 `CanvasStore` atomically writes `canvas-v2.json` with fsync and directory sync.
 Fresh profiles use storage schema 3. Existing schema-2 profiles retain the
 byte-exact original file as `canvas-v2.pre-v4.json`, fsynced before the first

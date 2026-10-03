@@ -1,4 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { lstat, realpath } from 'node:fs/promises';
+import { isAbsolute, join, resolve } from 'node:path';
 import canonicalize from 'canonicalize';
 import { CodePointSetData, ComposingNormalizer } from 'icu';
 import { CanvasStore } from './store.mjs';
@@ -1741,6 +1743,38 @@ export class CanvasV4 {
 
 export const name = 'hanaworlds-canvas';
 export const inject = [];
+async function nativeCanvasDirectory(ctx) {
+  const homePath = ctx.get?.('dshHomePath');
+  if (typeof homePath !== 'function') throw new Error('CANVAS_STORAGE_UNAVAILABLE');
+  const root = homePath();
+  if (typeof root !== 'string' || !isAbsolute(root) || resolve(root) !== root)
+    throw new Error('CANVAS_STORAGE_UNAVAILABLE');
+  const configuredHome = process.env.DSH_HOME?.trim();
+  if (configuredHome && root !== resolve(configuredHome))
+    throw new Error('CANVAS_STORAGE_UNAVAILABLE');
+  const parent = join(root, 'data');
+  const directory = join(parent, 'hanaworlds-canvas');
+  if (homePath('data', 'hanaworlds-canvas') !== directory)
+    throw new Error('CANVAS_STORAGE_UNAVAILABLE');
+  let canonicalRoot;
+  for (const [path, required, expected] of [[root, true, null],
+    [parent, false, 'data'], [directory, false, 'hanaworlds-canvas']]) {
+    try {
+      const stat = await lstat(path);
+      if (!stat.isDirectory() || stat.isSymbolicLink())
+        throw new Error('CANVAS_STORAGE_UNAVAILABLE');
+      const canonical = await realpath(path);
+      if (expected === null) canonicalRoot = canonical;
+      else if (canonical !== (expected === 'data' ? join(canonicalRoot, 'data') :
+        join(canonicalRoot, 'data', 'hanaworlds-canvas')))
+        throw new Error('CANVAS_STORAGE_UNAVAILABLE');
+    } catch (error) {
+      if (error.code === 'ENOENT' && !required) continue;
+      throw error;
+    }
+  }
+  return directory;
+}
 export function apply(ctx, config = {}) {
   const adapter = ctx.get?.('hanaworldsWorldAdapterV4');
   const adapters = adapter && typeof config.adapterId === 'string' && config.adapterId ?
@@ -1752,11 +1786,9 @@ export function apply(ctx, config = {}) {
   service.storageState = 'INITIALIZING';
   service.ready = (async () => {
     try {
-      const directory = await ctx.get?.('hanaworldsProfileStorage')?.canvasDirectory?.();
-      if (directory) {
-        service.store = await CanvasStore.open(directory);
-        service.storageState = 'READY';
-      } else service.storageState = 'UNAVAILABLE';
+      const directory = await nativeCanvasDirectory(ctx);
+      service.store = await CanvasStore.open(directory);
+      service.storageState = 'READY';
     } catch { service.storageState = 'UNAVAILABLE'; }
   })();
 }
