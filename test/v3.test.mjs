@@ -23,11 +23,13 @@ test('v3 store upgrades the existing durable snapshot with an exact rollback bac
   const bytes = JSON.stringify(old);
   await writeFile(join(directory, 'canvas-v2.json'), bytes);
   const store = await canvas.CanvasStore.open(directory);
-  assert.equal(store.snapshot.schemaVersion, 2);
+  assert.equal(store.snapshot.schemaVersion, 3);
   assert.equal(store.snapshot.sessions.existing.activeWorldRef, 'world');
   assert.equal(await readFile(join(directory, 'canvas-v2.pre-v3.json'), 'utf8'), bytes);
+  const preV4 = JSON.parse(await readFile(join(directory, 'canvas-v2.pre-v4.json'), 'utf8'));
+  assert.equal(preV4.schemaVersion, 2);
   const reopened = await canvas.CanvasStore.open(directory);
-  assert.equal(reopened.snapshot.schemaVersion, 2);
+  assert.equal(reopened.snapshot.schemaVersion, 3);
 });
 
 test('v3 ListObjects reads the bound world and rejects a legacy v2 envelope', async t => {

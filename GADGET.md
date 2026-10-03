@@ -58,10 +58,16 @@ facts digest is not inferred to be a region inspection.
 ## Durable state and recovery
 
 `CanvasStore` atomically writes `canvas-v2.json` with fsync and directory sync.
-The v3 schema-2 migration retains its exact schema-1 backup as
-`canvas-v2.pre-v3.json`; schema 2 remains the storage envelope for v4. The
+Fresh profiles use storage schema 3. Existing schema-2 profiles retain the
+byte-exact original file as `canvas-v2.pre-v4.json`, fsynced before the first
+schema-3 write; a conflicting or failed backup stops migration. Schema-1
+profiles retain their byte-exact `canvas-v2.pre-v3.json` backup, then pass
+through schema 2 and its pre-v4 backup before reaching schema 3. The
 registry, per-author history, transaction state, settings and inspection records
-survive restart. `ListObjects(expectedRevision:null)` returns a newly authorized
+survive restart. Older Canvas v3 and pre-repair v4 builds reject schema 3.
+The pre-v4 backup is recovery evidence, not an automatic in-place downgrade;
+later edits in the upgraded profile must be separately archived before a
+snapshot restore. `ListObjects(expectedRevision:null)` returns a newly authorized
 coherent current registry snapshot without a registry write or missed-event
 replay. A nonnull revision remains a strict precondition. Selection checks the
 returned stable ref against the current bound-world registry.
