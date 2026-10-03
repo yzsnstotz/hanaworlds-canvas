@@ -110,3 +110,13 @@ test('backup-only interruption recovers; unsupported schema and writer field do 
     assert.equal(await readFile(file(directory), 'utf8'), unsupported);
   }
 });
+
+test('invalid UTF-8 state fails closed without a lossy backup', async t => {
+  const directory = await profile(t);
+  const bytes = Buffer.concat([Buffer.from('{"schemaVersion":2,"pending":"'),
+    Buffer.from([0xff]), Buffer.from('"}')]);
+  await writeFile(file(directory), bytes);
+  await assert.rejects(() => CanvasStore.open(directory), TypeError);
+  assert.deepEqual(await readFile(file(directory)), bytes);
+  await assert.rejects(() => readFile(preV4(directory)), { code: 'ENOENT' });
+});

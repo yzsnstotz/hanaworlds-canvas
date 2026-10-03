@@ -18,7 +18,7 @@ function fresh() {
 }
 
 async function readBackup(path) {
-  try { return await readFile(path, 'utf8'); }
+  try { return await readFile(path); }
   catch (error) {
     if (error.code === 'ENOENT') return undefined;
     throw new Error('CANVAS_MIGRATION_BACKUP_UNAVAILABLE', { cause: error });
@@ -29,7 +29,7 @@ async function ensureExactBackup(directory, name, bytes) {
   const path = join(directory, name);
   const existing = await readBackup(path);
   if (existing !== undefined) {
-    if (existing !== bytes) throw new Error('CANVAS_MIGRATION_BACKUP_CONFLICT');
+    if (!existing.equals(bytes)) throw new Error('CANVAS_MIGRATION_BACKUP_CONFLICT');
     try {
       const file = await open(path, 'r');
       try { await file.sync(); } finally { await file.close(); }
@@ -66,8 +66,8 @@ export class CanvasStore {
     let snapshot;
     let oldBytes;
     try {
-      oldBytes = await readFile(join(directory, 'canvas-v2.json'), 'utf8');
-      snapshot = JSON.parse(oldBytes);
+      oldBytes = await readFile(join(directory, 'canvas-v2.json'));
+      snapshot = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(oldBytes));
     } catch (error) { if (error.code !== 'ENOENT') throw error; snapshot = fresh(); }
     if (snapshot.schemaVersion === 1) {
       // A conflicting later backup must stop before touching the schema-1 source.
@@ -75,7 +75,8 @@ export class CanvasStore {
         authorHistory: snapshot.authorHistory ?? {},
         connectionInventories: snapshot.connectionInventories ?? {} };
       const existingPreV4 = await readBackup(join(directory, 'canvas-v2.pre-v4.json'));
-      if (existingPreV4 !== undefined && existingPreV4 !== JSON.stringify(intermediate))
+      if (existingPreV4 !== undefined &&
+          !existingPreV4.equals(Buffer.from(JSON.stringify(intermediate))))
         throw new Error('CANVAS_MIGRATION_BACKUP_CONFLICT');
       await ensureExactBackup(directory, 'canvas-v2.pre-v3.json', oldBytes);
       snapshot.schemaVersion = 2;
@@ -84,8 +85,8 @@ export class CanvasStore {
       const migrated = new CanvasStore(directory, nullRecords(snapshot));
       try { await migrated.commit(() => {}); }
       catch (error) { throw new Error('CANVAS_MIGRATION_WRITE_UNAVAILABLE', { cause: error }); }
-      oldBytes = await readFile(join(directory, 'canvas-v2.json'), 'utf8');
-      snapshot = JSON.parse(oldBytes);
+      oldBytes = await readFile(join(directory, 'canvas-v2.json'));
+      snapshot = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(oldBytes));
     }
     if (snapshot.schemaVersion === 2) {
       await ensureExactBackup(directory, 'canvas-v2.pre-v4.json', oldBytes);
