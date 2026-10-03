@@ -1,0 +1,19 @@
+HanaWorlds Canvas 0.2.0 component candidate.
+
+Owner-authored source is MIT; see LICENSE and LICENSE_AUDIT.md. The 0.1.0
+AGPL-3.0-only source remains available at public revision
+d27be3f51e6733ab4f720700bb86145e9a578a5d. All source and test changes in
+that baseline are authored by yzsnstotz; no third-party source is vendored.
+
+Runtime dependencies are separate packages. canonicalize 5.1.0 is Apache-2.0;
+icu 2.3.1 is Unicode-3.0. Their notices and license texts remain with the
+separately installed npm packages. WorldEdit (AGPL-3.0) and the Luanti Adapter
+are separate origins and are not bundled or relicensed by Canvas.
+
+Canvas includes a byte-identical runtime and test-fixture subset of
+hanaworlds-contracts@0.3.0 from public revision
+e82735780bdfd4ea8e662781455040a6e5306121 (admitted npm pack SHA256
+47a2e5cc77590fb471ffedde715682564e169a0d88dbc5005b71d8d542b38f5c).
+That HanaWorlds-owned source is MIT. Its LICENSE, NOTICE, canonicalize Apache-2.0
+license copy, exact file hashes and import closure are retained in
+vendor/contracts/. Canvas continues to install canonicalize separately.

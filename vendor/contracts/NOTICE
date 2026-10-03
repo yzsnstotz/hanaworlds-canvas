@@ -1,0 +1,18 @@
+HanaWorlds Contracts source candidate 0.3.0
+
+The top-level MIT license covers HanaWorlds original code and documentation.
+It does not change the license or copyright of third-party works.
+
+The canonicalize@5.1.0 upstream source snapshot at
+spec/context/supplement/sources/canonicalize/ is used only by the explicit
+source-fixture test. It remains under Apache-2.0, with its upstream license at
+spec/context/supplement/sources/canonicalize/LICENSE. The package depends on
+canonicalize@5.1.0 from the public registry; it does not embed that snapshot
+as its production implementation. A separate copy of the Apache-2.0 license
+is retained at licenses/canonicalize-Apache-2.0.txt.
+
+This branch adds the v4 lane from the approved Stage 1 3.0.0-rc.8 BlueMap
+(with errata 3.0.0-rc.9 and 3.0.0-rc.10) while preserving the public v2 and
+v3 lanes and their digest domains. Source and fixture checks are
+separate from independent admission, registry publication, release, and
+HanaWorlds product acceptance.
