@@ -21,31 +21,44 @@ async function load(homePath) {
 
 const directory = root => join(root, 'data', 'hanaworlds-canvas');
 const native = root => (...parts) => join(root, ...parts);
+async function withHome(root, work) {
+  const original = process.env.DSH_HOME;
+  process.env.DSH_HOME = root;
+  try { return await work(); }
+  finally {
+    if (original === undefined) delete process.env.DSH_HOME;
+    else process.env.DSH_HOME = original;
+  }
+}
 
 test('Canvas uses native DSH home path for durable schema-3 state across reload', async t => {
   const root = await profile(t);
-  const first = await load(native(root));
-  assert.equal(first.storageState, 'READY');
-  assert.equal(first.store.directory, directory(root));
-  await first.store.commit(state => {
-    state.objects.world = { object: { objectRef: 'object' } };
-    state.placementSettings = { world: { settingsRevision: '7' } };
-    state.placementInspections = { inspect: { worldRef: 'world' } };
+  await withHome(root, async () => {
+    const first = await load(native(root));
+    assert.equal(first.storageState, 'READY');
+    assert.equal(first.store.directory, directory(root));
+    await first.store.commit(state => {
+      state.objects.world = { object: { objectRef: 'object' } };
+      state.placementSettings = { world: { settingsRevision: '7' } };
+      state.placementInspections = { inspect: { worldRef: 'world' } };
+    });
+    const restarted = await load(native(root));
+    assert.equal(restarted.storageState, 'READY');
+    assert.equal(restarted.store.snapshot.schemaVersion, 3);
+    assert.equal(restarted.store.snapshot.objects.world.object.objectRef, 'object');
+    assert.equal(restarted.store.snapshot.placementSettings.world.settingsRevision, '7');
+    assert.equal(restarted.store.snapshot.placementInspections.inspect.worldRef, 'world');
   });
-  const restarted = await load(native(root));
-  assert.equal(restarted.storageState, 'READY');
-  assert.equal(restarted.store.snapshot.schemaVersion, 3);
-  assert.equal(restarted.store.snapshot.objects.world.object.objectRef, 'object');
-  assert.equal(restarted.store.snapshot.placementSettings.world.settingsRevision, '7');
-  assert.equal(restarted.store.snapshot.placementInspections.inspect.worldRef, 'world');
 });
 
 test('native home accepts a normalized path through the host filesystem alias', async t => {
   const root = await mkdtemp(join(tmpdir(), 'canvas-native-alias-'));
   t.after(() => rm(root, { recursive: true, force: true }));
-  const service = await load(native(root));
-  assert.equal(service.storageState, 'READY');
-  assert.equal(service.store.directory, directory(root));
+  await withHome(root, async () => {
+    const service = await load(native(root));
+    assert.equal(service.storageState, 'READY');
+    assert.equal(service.store.directory, directory(root));
+  });
 });
 
 test('Canvas native path opens existing schema-2 state with exact pre-v4 backup', async t => {
@@ -54,33 +67,39 @@ test('Canvas native path opens existing schema-2 state with exact pre-v4 backup'
   const bytes = Buffer.from(` ${JSON.stringify({ schemaVersion: 2,
     authorHistory: { author: ['tx'] }, placementInspections: { inspect: {} } })}\n`);
   await writeFile(join(directory(root), 'canvas-v2.json'), bytes);
-  const service = await load(native(root));
-  assert.equal(service.storageState, 'READY');
-  assert.equal(service.store.snapshot.schemaVersion, 3);
-  assert.deepEqual(await readFile(join(directory(root), 'canvas-v2.pre-v4.json')), bytes);
+  await withHome(root, async () => {
+    const service = await load(native(root));
+    assert.equal(service.storageState, 'READY');
+    assert.equal(service.store.snapshot.schemaVersion, 3);
+    assert.deepEqual(await readFile(join(directory(root), 'canvas-v2.pre-v4.json')), bytes);
+  });
 });
 
 test('missing or invalid native path fails closed before creating outside-profile storage', async t => {
   const root = await profile(t);
   const outside = await profile(t);
-  for (const homePath of [undefined, () => 'relative',
-    (...parts) => parts.length ? join(outside, ...parts) : root]) {
-    const service = await load(homePath);
-    assert.equal(service.storageState, 'UNAVAILABLE');
-    assert.equal(service.store, null);
-  }
-  await assert.rejects(() => lstat(directory(root)), { code: 'ENOENT' });
-  await assert.rejects(() => lstat(directory(outside)), { code: 'ENOENT' });
+  await withHome(root, async () => {
+    for (const homePath of [undefined, () => 'relative',
+      (...parts) => parts.length ? join(outside, ...parts) : root]) {
+      const service = await load(homePath);
+      assert.equal(service.storageState, 'UNAVAILABLE');
+      assert.equal(service.store, null);
+    }
+    await assert.rejects(() => lstat(directory(root)), { code: 'ENOENT' });
+    await assert.rejects(() => lstat(directory(outside)), { code: 'ENOENT' });
+  });
 });
 
 test('symlinked native path component cannot redirect Canvas state outside DSH home', async t => {
   const root = await profile(t);
   const outside = await profile(t);
   await symlink(outside, join(root, 'data'));
-  const service = await load(native(root));
-  assert.equal(service.storageState, 'UNAVAILABLE');
-  assert.equal(service.store, null);
-  await assert.rejects(() => lstat(join(outside, 'hanaworlds-canvas')), { code: 'ENOENT' });
+  await withHome(root, async () => {
+    const service = await load(native(root));
+    assert.equal(service.storageState, 'UNAVAILABLE');
+    assert.equal(service.store, null);
+    await assert.rejects(() => lstat(join(outside, 'hanaworlds-canvas')), { code: 'ENOENT' });
+  });
 });
 
 test('native root inconsistent with configured DSH_HOME fails without a write', async t => {
