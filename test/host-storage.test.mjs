@@ -61,6 +61,30 @@ test('native home accepts a normalized path through the host filesystem alias', 
   });
 });
 
+test('native home accepts DSH_HOME tilde expansion under an isolated HOME', async t => {
+  const home = await profile(t);
+  const outside = await profile(t);
+  const root = join(home, 'canvas-profile');
+  await mkdir(root);
+  const priorHome = process.env.HOME;
+  const priorDshHome = process.env.DSH_HOME;
+  process.env.HOME = home;
+  process.env.DSH_HOME = '~/canvas-profile';
+  try {
+    const service = await load(native(root));
+    assert.equal(service.storageState, 'READY');
+    assert.equal(service.store.directory, directory(root));
+    const rejected = await load(native(outside));
+    assert.equal(rejected.storageState, 'UNAVAILABLE');
+    await assert.rejects(() => lstat(directory(outside)), { code: 'ENOENT' });
+  } finally {
+    if (priorHome === undefined) delete process.env.HOME;
+    else process.env.HOME = priorHome;
+    if (priorDshHome === undefined) delete process.env.DSH_HOME;
+    else process.env.DSH_HOME = priorDshHome;
+  }
+});
+
 test('Canvas native path opens existing schema-2 state with exact pre-v4 backup', async t => {
   const root = await profile(t);
   await mkdir(directory(root), { recursive: true });

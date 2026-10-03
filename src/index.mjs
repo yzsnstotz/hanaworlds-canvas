@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { lstat, realpath } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { isAbsolute, join, resolve } from 'node:path';
 import canonicalize from 'canonicalize';
 import { CodePointSetData, ComposingNormalizer } from 'icu';
@@ -1749,9 +1750,14 @@ async function nativeCanvasDirectory(ctx) {
   const root = homePath();
   if (typeof root !== 'string' || !isAbsolute(root) || resolve(root) !== root)
     throw new Error('CANVAS_STORAGE_UNAVAILABLE');
-  const configuredHome = process.env.DSH_HOME?.trim();
-  if (configuredHome && root !== resolve(configuredHome))
-    throw new Error('CANVAS_STORAGE_UNAVAILABLE');
+  const configuredHome = process.env.DSH_HOME;
+  if (configuredHome?.trim()) {
+    const expandedHome = configuredHome === '~' ? homedir() :
+      configuredHome.startsWith('~/') || configuredHome.startsWith('~\\') ?
+        join(homedir(), configuredHome.slice(2)) : configuredHome;
+    if (root !== resolve(expandedHome))
+      throw new Error('CANVAS_STORAGE_UNAVAILABLE');
+  }
   const parent = join(root, 'data');
   const directory = join(parent, 'hanaworlds-canvas');
   if (homePath('data', 'hanaworlds-canvas') !== directory)
