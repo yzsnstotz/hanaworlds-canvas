@@ -17,9 +17,15 @@ its six commits through that revision, and this Canvas origin's tracked paths.
   either package is copied into this repository. Their package license files
   must remain in the installed dependency trees. The package carries this
   dependency notice in `NOTICE`.
-- WorldEdit, the Luanti Adapter, and Contracts are separate origins. Canvas
-  imports Contracts through its declared public package only; it does not
-  copy or relicense their source. No WorldEdit bytes are in the Canvas package.
+- WorldEdit and the Luanti Adapter are separate origins; no bytes from either
+  are in the Canvas package. Canvas now includes only the current v3/v4
+  runtime import closure and six test fixtures from admitted
+  hanaworlds-contracts@0.3.0 public revision
+  `e82735780bdfd4ea8e662781455040a6e5306121`. Its MIT LICENSE and NOTICE
+  are retained under `vendor/contracts/`, with an exact per-file provenance
+  manifest bound to the admitted package SHA256
+  `47a2e5cc77590fb471ffedde715682564e169a0d88dbc5005b71d8d542b38f5c`.
+  Canvas does not relicense third-party source or alter Contracts semantics.
 
 The repository history and owner-authored baseline notice are the available
 provenance evidence. They do not independently prove legal title outside this

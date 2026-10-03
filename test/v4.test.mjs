@@ -4,8 +4,8 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CanvasStore, CanvasV4 } from '../src/index.mjs';
-import placement from 'hanaworlds-contracts/v4/fixtures/placement-region-chain-v4' with { type: 'json' };
-import { validateBoundRequest, validateResponse, contractHandshake } from 'hanaworlds-contracts/v4';
+import placement from '../vendor/contracts/fixtures/v4/candidate/placement-region-chain-v4.json' with { type: 'json' };
+import { validateBoundRequest, validateResponse, contractHandshake } from '../vendor/contracts/dist/v4/index.mjs';
 
 const chain = placement.validCases[0].materializedChain;
 async function fixture(t, { adapter, currentWorldRevision = 'fixture-world-10',
@@ -154,9 +154,9 @@ test('v4 InspectPlacementRegion durably records Adapter outcome and gates Apply 
 });
 
 test('v4 linked Undo binds the saved before-state digest and moves only the author head after readback', async t => {
-  const seam = (await import('hanaworlds-contracts/v4/fixtures/history-seam-chain-v4',
+  const seam = (await import('../vendor/contracts/fixtures/v4/candidate/history-seam-chain-v4.json',
     { with: { type: 'json' } })).default;
-  const oracle = (await import('hanaworlds-contracts/v4/fixtures/contract-v4-oracles',
+  const oracle = (await import('../vendor/contracts/fixtures/v4/candidate/contract-v4-oracles.json',
     { with: { type: 'json' } })).default;
   const source = structuredClone(oracle.cases.find(x =>
     x.id === 'A-VALID-AUTHOR-LINKED-UNDO').request);
@@ -239,7 +239,7 @@ test('v4 linked Undo binds the saved before-state digest and moves only the auth
       restoreStatus: 'NOT_REQUIRED', error: null };
     else if (operation === 'QueryTransaction') result = appliedForQuery;
     else if (operation === 'Readback') result = {
-      projection: redoPhase ? (await import('hanaworlds-contracts/v4/fixtures/production-goldens',
+      projection: redoPhase ? (await import('../vendor/contracts/fixtures/v4/candidate/production-goldens.json',
         { with: { type: 'json' } })).default.vectors.find(x => x.id === 'PROD-readback').payload :
         seam.digestGolden.beforeStateReadbackProjection,
       readbackDigest: redoPhase ? source.originAfterReadbackDigest :

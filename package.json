@@ -19,6 +19,8 @@
     "src/index.mjs",
     "src/store.mjs",
     "src/strict-json.mjs",
+    "vendor/contracts/",
+    "scripts/verify-vendored-contracts.mjs",
     "cordis.patch.yml",
     "GADGET.md",
     "NOTICE"
@@ -29,12 +31,11 @@
     }
   },
   "scripts": {
-    "build": "node --check src/index.mjs && node --check src/v3-legacy.mjs && node --check src/store.mjs && node --check src/strict-json.mjs",
+    "build": "node scripts/verify-vendored-contracts.mjs && node --check src/index.mjs && node --check src/v3-legacy.mjs && node --check src/store.mjs && node --check src/strict-json.mjs",
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
     "canonicalize": "5.1.0",
-    "hanaworlds-contracts": "https://codeload.github.com/yzsnstotz/hanaworlds-contracts/tar.gz/e82735780bdfd4ea8e662781455040a6e5306121",
     "icu": "2.3.1"
   }
 }

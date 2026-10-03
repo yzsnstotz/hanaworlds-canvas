@@ -4,7 +4,7 @@ import { CodePointSetData, ComposingNormalizer } from 'icu';
 import { CanvasStore } from './store.mjs';
 import { readJSON } from './strict-json.mjs';
 import { admitRequest, validateRequest, validateBoundRequest,
-  validateResponse, validateCanvasEvent, digestValue } from 'hanaworlds-contracts/v3';
+  validateResponse, validateCanvasEvent, digestValue } from '../vendor/contracts/dist/v3/index.mjs';
 export { CanvasStore };
 
 const VERSION = 'canvas/v3';

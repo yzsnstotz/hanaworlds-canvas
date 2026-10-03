@@ -2,7 +2,9 @@
 
 Status: component candidate. `canvas/v4` is the public Canvas port;
 `world-adapter/v4` is the only world transport port consumed. Contracts 0.3.0
-is pinned to public revision `e82735780bdfd4ea8e662781455040a6e5306121`.
+is pinned to public revision `e82735780bdfd4ea8e662781455040a6e5306121`
+through the byte-exact runtime subset in `vendor/contracts/`. Its provenance
+manifest and verifier cover the complete current import closure and fixtures.
 No sibling source path or developer profile is a runtime dependency. Stage 1
 composition and human validation remain `UNPROVEN` and `ACCEPTED` unset.
 
@@ -10,8 +12,8 @@ composition and human validation remain `UNPROVEN` and `ACCEPTED` unset.
 
 The DSH plugin `apply(ctx)` provides `hanaworldsCanvasV4` and consumes:
 
-- `hanaworldsProfileStorage.canvasDirectory()` for one isolated, durable Canvas
-  directory with a single writer;
+- native `dshHomePath()` for one isolated, durable Canvas directory with a
+  single writer;
 - `hanaworldsAuthority.verify(request, operation)` for current actor, Session,
   grant, trusted author, world revision, and authorized actions. For linked
   Undo/Redo it must also return the current `authorizationBinding` facts needed

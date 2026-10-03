@@ -5,10 +5,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import * as canvas from '../src/v3-legacy.mjs';
-import oracle from 'hanaworlds-contracts/v3/fixtures/contract-v3-oracles' with { type: 'json' };
-import eventOracle from 'hanaworlds-contracts/v3/fixtures/canvas-events-v3' with { type: 'json' };
+import oracle from '../vendor/contracts/fixtures/v3/candidate/contract-v3-oracles.json' with { type: 'json' };
+import eventOracle from '../vendor/contracts/fixtures/v3/candidate/canvas-events-v3.json' with { type: 'json' };
 import { canonicalJSON, digestValue, validateResponse,
-  validateCanvasEvent } from 'hanaworlds-contracts/v3';
+  validateCanvasEvent } from '../vendor/contracts/dist/v3/index.mjs';
 
 test('Canvas exposes the approved v3 public port', () => {
   assert.equal(typeof canvas.CanvasV3, 'function');

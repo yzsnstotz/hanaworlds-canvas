@@ -10,7 +10,7 @@ import { admitRequest, validateRequest, validateBoundRequest,
   validateResponse, validateCanvasEvent, digestValue, validateRegionInspection,
   projectPreparedTransaction, placementSettingDescriptors,
   placementInvariants, admitPlacementSettings, checkContractHandshake,
-  contractHandshake } from 'hanaworlds-contracts/v4';
+  contractHandshake } from '../vendor/contracts/dist/v4/index.mjs';
 export { CanvasStore };
 
 const VERSION = 'canvas/v4';
