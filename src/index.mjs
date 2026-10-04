@@ -269,10 +269,13 @@ export class CanvasV4 {
     this.adminAuthority = adminAuthority;
     this.serviceActorRef = serviceActorRef;
     this.subscriptions = new Set();
+    this.recoveryRun = null;
+    this.recoveryState = 'NOT_RUN';
   }
   status() {
     return { component: name, version: '0.2.0', canvasContract: VERSION,
       adapterContract: 'world-adapter/v4', storage: this.storageState,
+      recovery: this.recoveryState,
       productReadiness: 'UNPROVEN' };
   }
   get contractHandshake() { return structuredClone(contractHandshake); }
@@ -430,6 +433,153 @@ export class CanvasV4 {
     try { checkContractHandshake(adapter?.contractHandshake, {
       wires: [ADAPTER_VERSION], factProfiles: ['target-facts/v2', 'target-facts/v3'] }); }
     catch { throw issue('UNSUPPORTED_VERSION', 'decode', 'VERSION_UNSUPPORTED'); }
+  }
+  // This is a host service entrypoint, not a canvas/v4 user operation. The
+  // caller supplies no transaction identity: only Canvas' durable store can
+  // select a transaction for service recovery.
+  async recoverPending(...arguments_) {
+    if (arguments_.length) throw issue('SCHEMA_INVALID', 'decode', 'INVALID_SHAPE');
+    if (this.recoveryRun) return this.recoveryRun;
+    this.recoveryState = 'RUNNING';
+    const run = this.#recoverPending();
+    this.recoveryRun = run;
+    try {
+      const results = await run;
+      this.recoveryState = Object.values(this.store.snapshot.pending).some(row =>
+        !['VERIFIED', 'ROLLED_BACK'].includes(row.status)) ? 'PENDING' : 'COMPLETE';
+      return results;
+    } catch (error) {
+      this.recoveryState = 'FAILED';
+      throw error;
+    }
+    finally { if (this.recoveryRun === run) this.recoveryRun = null; }
+  }
+  async #recoverPending() {
+    await this.ready;
+    if (!this.store || this.store.unavailable)
+      throw issue('CAPABILITY_UNAVAILABLE', 'validate', 'POLICY_UNAVAILABLE');
+    const results = [];
+    const postBarrier = new Set(['APPLYING', 'APPLIED_PENDING_READBACK',
+      'RECOVERY_PENDING', 'HISTORY_APPLYING',
+      'HISTORY_APPLIED_PENDING_READBACK', 'HISTORY_RECOVERY_PENDING']);
+    for (const [transactionId, row] of Object.entries(this.store.snapshot.pending)) {
+      if (row.status === 'VERIFIED_PENDING_HISTORY') {
+        const body = row.request;
+        try {
+          if (validateRequest(VERSION, 'ApplyRecoverableCommit', body).transactionId !==
+                transactionId || row.digest !== identity(body) ||
+              row.worldRef !== body.worldRef || row.sessionRef !== body.sessionRef ||
+              this.store.snapshot.transactions[body.worldRef]?.[transactionId] ||
+              validateResponse(VERSION, 'ApplyRecoverableCommit',
+                envelope(body, row.receipt)).result?.status !== 'VERIFIED')
+            throw issue('TRANSACTION_CONFLICT', 'persist', 'POLICY_UNAVAILABLE');
+          await this.#finalizePending(transactionId);
+          results.push({ transactionId, status: 'VERIFIED' });
+        } catch {
+          if (this.store.snapshot.pending[transactionId]?.status === 'VERIFIED')
+            results.push({ transactionId, status: 'VERIFIED' });
+          else results.push(await this.#recoveryFailure(transactionId,
+            'PENDING_RECORD_CONFLICT'));
+        }
+        continue;
+      }
+      if (!postBarrier.has(row.status)) continue;
+      const result = await this.#recoverOne(transactionId, row);
+      results.push(result);
+    }
+    return results;
+  }
+  async #recoveryFailure(transactionId, reason) {
+    await this.store.commit(state => {
+      const row = state.pending[transactionId];
+      if (!row || ['VERIFIED', 'ROLLED_BACK'].includes(row.status)) return;
+      if (row.status !== 'VERIFIED_PENDING_HISTORY')
+        row.status = row.direction ? 'HISTORY_RECOVERY_PENDING' : 'RECOVERY_PENDING';
+      row.lastRecoveryError = reason;
+    });
+    return { transactionId, status: 'RECOVERY_PENDING', reason };
+  }
+  async #recoverOne(transactionId, row) {
+    const history = row.direction === 'UNDO' || row.direction === 'REDO';
+    const body = row.request;
+    const operation = history ? row.direction === 'UNDO' ? 'Undo' : 'Redo' :
+      'ApplyRecoverableCommit';
+    const prepared = row.prepared;
+    const operationDigest = history ? row.historyOperationDigest : body?.operationDigest;
+    try {
+      if (!ref(transactionId) || !body || !prepared ||
+          validateRequest(VERSION, operation, body).transactionId !== transactionId ||
+          row.digest !== identity(body) || row.worldRef !== body.worldRef ||
+          row.sessionRef !== body.sessionRef || row.actorRef !== body.actorRef ||
+          !ref(row.authorRef) || !digest(operationDigest) ||
+          !digest(prepared.beforeImageDigest) || !digest(prepared.transactionPayloadDigest) ||
+          this.store.snapshot.transactions[body.worldRef]?.[transactionId] ||
+          this.store.snapshot.sessions[body.sessionRef]?.activeWorldRef !== body.worldRef)
+        return await this.#recoveryFailure(transactionId, 'PENDING_RECORD_CONFLICT');
+      if (history ? prepared.transactionId !== transactionId ||
+          prepared.historyOperationDigest !== operationDigest ||
+          prepared.direction !== row.direction :
+          !prepared.payload || prepared.payload.transactionId !== transactionId ||
+          prepared.payload.operationDigest !== operationDigest ||
+          prepared.payload.authorizationBindingDigest !== body.authorizationBindingDigest ||
+          prepared.payload.beforeImageDigest !== prepared.beforeImageDigest ||
+          digestValue('transaction-payload', prepared.payload).sha256 !==
+            prepared.transactionPayloadDigest)
+        return await this.#recoveryFailure(transactionId, 'PENDING_RECORD_CONFLICT');
+      const adapter = this.#boundAdapter(body.sessionRef, body.worldRef);
+      const request = validateBoundRequest(ADAPTER_VERSION, 'RestoreTransaction', {
+        contractVersion: ADAPTER_VERSION, actorRef: this.serviceActorRef,
+        sessionRef: body.sessionRef, requestId: `${body.requestId}:recover-restore`,
+        authorizationRef: body.authorizationRef, worldRef: body.worldRef,
+        originTransactionId: transactionId, operationDigest,
+        beforeImageDigest: prepared.beforeImageDigest,
+        restoreAttemptIdentity: createHash('sha256').update(
+          `HanaWorlds|canvas-recovery/v1\n${row.digest}`).digest('hex'),
+        guarantee: 'RECOVERABLE_VERIFIED' });
+      const service = await this.authority?.verifyService?.(request, 'RestoreTransaction');
+      if (service?.current !== true || service.worldRef !== body.worldRef ||
+          service.sessionRef !== body.sessionRef ||
+          service.authorizationRef !== body.authorizationRef ||
+          service.domainOwner !== 'hanaworlds-canvas')
+        return await this.#recoveryFailure(transactionId, 'SERVICE_AUTH_UNAVAILABLE');
+      let answer;
+      try {
+        answer = validateResponse(ADAPTER_VERSION, 'RestoreTransaction',
+          await adapter.call('RestoreTransaction', request));
+      } catch {
+        return await this.#recoveryFailure(transactionId, 'TRANSPORT_OUTCOME_UNKNOWN');
+      }
+      if (answer.requestId !== request.requestId || answer.error)
+        return await this.#recoveryFailure(transactionId, answer.error?.code ??
+          'TRANSPORT_OUTCOME_UNKNOWN');
+      const receipt = answer.result;
+      if (receipt?.status !== 'ROLLED_BACK' ||
+          receipt.restoreStatus !== 'VERIFIED_RESTORED' ||
+          receipt.error?.mutationState !== 'ROLLED_BACK' ||
+          receipt.transactionId !== transactionId ||
+          receipt.operationDigest !== operationDigest ||
+          receipt.transactionPayloadDigest !== prepared.transactionPayloadDigest)
+        return await this.#recoveryFailure(transactionId, 'RESTORE_NOT_VERIFIED');
+      validateResponse(VERSION, operation, envelope(body, receipt));
+      await this.store.commit(state => {
+        const current = state.pending[transactionId];
+        if (!current || current.digest !== row.digest ||
+            state.transactions[body.worldRef]?.[transactionId] ||
+            !['APPLYING', 'APPLIED_PENDING_READBACK', 'RECOVERY_PENDING',
+              'HISTORY_APPLYING', 'HISTORY_APPLIED_PENDING_READBACK',
+              'HISTORY_RECOVERY_PENDING'].includes(current.status))
+          throw issue('TRANSACTION_CONFLICT', 'persist', 'POLICY_UNAVAILABLE');
+        current.status = 'ROLLED_BACK';
+        current.receipt = receipt;
+        delete current.lastRecoveryError;
+        state.replay[`${body.sessionRef}\u0000${operation}\u0000${body.requestId}`] = {
+          digest: row.digest, authorRef: row.authorRef,
+          response: envelope(body, receipt) };
+      });
+      return { transactionId, status: 'ROLLED_BACK' };
+    } catch {
+      return await this.#recoveryFailure(transactionId, 'RECOVERY_VALIDATION_FAILED');
+    }
   }
   async #adapterCall(adapter, operation, request, afterWriteBarrier = false) {
     let response;
@@ -1829,5 +1979,21 @@ export function apply(ctx, config = {}) {
       service.storageState = 'READY';
     } catch { service.storageState = 'UNAVAILABLE'; }
   })();
+  // Start from Canvas' own durable state after each DSH service construction.
+  // A late or unavailable Adapter leaves an explicit pending status; the host
+  // may call recoverPending again when the public port becomes available.
+  service.recoveryState = 'RUNNING';
+  service.recovery = service.ready.then(async () => {
+    if (!service.store) {
+      service.recoveryState = 'UNAVAILABLE';
+      return [];
+    }
+    const results = await service.recoverPending();
+    return results;
+  }).catch(error => {
+    service.recoveryState = 'FAILED';
+    service.recoveryError = error.publicError?.code ?? 'CAPABILITY_UNAVAILABLE';
+    return [];
+  });
 }
 export default { name, inject, apply };

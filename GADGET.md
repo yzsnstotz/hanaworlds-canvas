@@ -90,6 +90,22 @@ Only matched readback followed by one durable linked head commit returns VERIFIE
 Uncertain writes are queried on retry; another blind world write is prohibited.
 Other-player and world-global history are outside this component.
 
+At DSH service construction Canvas scans only its own durable post-write-barrier
+Apply/Undo/Redo pending records. Its host-only `recoverPending()` entrypoint
+accepts no caller-supplied transaction ID and requires a current Canvas service
+proof before using the public Adapter `RestoreTransaction` operation. The
+original world, Session, authorization reference and digests come from the
+pending record. A matching, verified-restored Adapter receipt durably marks
+the transaction `ROLLED_BACK`; an unknown or failed outcome remains
+`RECOVERY_PENDING` (or `HISTORY_RECOVERY_PENDING`) with a durable
+`lastRecoveryError`. Pre-barrier, already verified and conflicting records do
+not cause a world write. A valid `VERIFIED_PENDING_HISTORY` Apply finishes its
+durable history commit without an Adapter call; conflicting verified records
+stay in that status and never become candidates for restore. `service.recovery`
+exposes the startup pass result and
+`service.status().recovery` its current state. A later explicit host call can
+resume a pending record when the Adapter service becomes available.
+
 `HistoryQuery(expectedHistoryRevision:null)` reads the current author's
 durable history position for the bound world and registered object. It takes
 the head and entries from one committed Canvas store state, then rechecks the
