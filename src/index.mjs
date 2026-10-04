@@ -1292,6 +1292,23 @@ export class CanvasV4 {
     }
     throw issue('CONNECTION_NOT_FOUND', 'validate', 'SCOPE_DENIED');
   }
+  async #releaseHistoryQuery(body, authorRef) {
+    const released = await this.authority?.verify?.(body, 'HistoryQuery');
+    if (!released?.current || released.actorRef !== body.actorRef ||
+        released.sessionRef !== body.sessionRef ||
+        released.authorizationRef !== body.authorizationRef ||
+        !released.allowedActions?.includes('HistoryQuery'))
+      throw issue('AUTHORIZATION_REVOKED', 'authorize', 'GRANT_REVOKED');
+    if (released.authorRef !== authorRef)
+      throw issue('PERMISSION_DENIED', 'authorize', 'OWNERSHIP_VIOLATION');
+    if (this.store.unavailable)
+      throw issue('CAPABILITY_UNAVAILABLE', 'validate', 'POLICY_UNAVAILABLE');
+    const state = this.store.snapshot;
+    if (state.sessions[body.sessionRef]?.activeWorldRef !== body.worldRef)
+      throw issue('WORLD_NOT_BOUND', 'validate', 'SCOPE_DENIED');
+    if (!state.objects[body.worldRef]?.[body.objectRef])
+      throw issue('OBJECT_NOT_FOUND', 'validate', 'SCOPE_DENIED');
+  }
   async call(operation, raw) {
     let body;
     try {
@@ -1337,6 +1354,8 @@ export class CanvasV4 {
               !proof.allowedActions?.includes('INSPECT'))
             throw issue('PERMISSION_DENIED', 'authorize', 'SCOPE_DENIED');
         }
+        if (operation === 'HistoryQuery')
+          await this.#releaseHistoryQuery(body, proof.authorRef);
         return structuredClone(prior.response);
       }
       if (operation === 'InspectPlacementRegion')
@@ -1669,26 +1688,22 @@ export class CanvasV4 {
       } else if (operation === 'HistoryQuery') {
         if (typeof proof.authorRef !== 'string' || !proof.authorRef)
           throw issue('PERMISSION_DENIED', 'authorize', 'IDENTITY_UNVERIFIED');
-        const context = this.store.snapshot.sessions[body.sessionRef];
-        if (!context || context.activeWorldRef !== body.worldRef)
-          throw issue('WORLD_NOT_BOUND', 'validate', 'SCOPE_DENIED');
-        const object = this.store.snapshot.objects[body.worldRef]?.[body.objectRef];
-        if (!object) throw issue('OBJECT_NOT_FOUND', 'validate', 'SCOPE_DENIED');
-        const history = this.store.snapshot.authorHistory[body.worldRef]?.[body.objectRef]?.[proof.authorRef] ??
-          { historyRevision: '0', headTransactionId: null, entries: [],
-            undoAvailable: false, redoAvailable: false };
-        if (history.historyRevision !== body.expectedHistoryRevision)
-          throw issue('STALE_REVISION', 'validate', 'REVISION_CHANGED');
-        result = { worldRef: body.worldRef, objectRef: body.objectRef, ...history };
         await this.store.commit(state => {
-          if (state.sessions[body.sessionRef]?.activeWorldRef !== body.worldRef ||
-              !state.objects[body.worldRef]?.[body.objectRef] ||
-              (state.authorHistory[body.worldRef]?.[body.objectRef]?.[proof.authorRef]?.historyRevision ?? '0') !==
-                body.expectedHistoryRevision)
+          if (state.sessions[body.sessionRef]?.activeWorldRef !== body.worldRef)
+            throw issue('WORLD_NOT_BOUND', 'validate', 'SCOPE_DENIED');
+          if (!state.objects[body.worldRef]?.[body.objectRef])
+            throw issue('OBJECT_NOT_FOUND', 'validate', 'SCOPE_DENIED');
+          const history = state.authorHistory[body.worldRef]?.[body.objectRef]?.[proof.authorRef] ??
+            { historyRevision: '0', headTransactionId: null, entries: [],
+              undoAvailable: false, redoAvailable: false };
+          if (body.expectedHistoryRevision !== null &&
+              history.historyRevision !== body.expectedHistoryRevision)
             throw issue('STALE_REVISION', 'validate', 'REVISION_CHANGED');
+          result = { worldRef: body.worldRef, objectRef: body.objectRef, ...history };
           state.replay[replayKey] = { digest, authorRef: proof.authorRef,
             response: envelope(body, result) };
         });
+        await this.#releaseHistoryQuery(body, proof.authorRef);
       } else if (operation === 'CreateObject') {
         if (proof.domainOwner !== 'hanaworlds-canvas')
           throw issue('PERMISSION_DENIED', 'authorize', 'OWNERSHIP_VIOLATION');

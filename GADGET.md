@@ -1,8 +1,8 @@
 # HanaWorlds Canvas 0.2.0 component
 
 Status: component candidate. `canvas/v4` is the public Canvas port;
-`world-adapter/v4` is the only world transport port consumed. Contracts 0.3.0
-is pinned to public revision `e82735780bdfd4ea8e662781455040a6e5306121`
+`world-adapter/v4` is the only world transport port consumed. Contracts 0.3.2
+is pinned to public revision `3d64364782181c8b5abc3150f8fa9f7ae20bf101`
 through the byte-exact runtime subset in `vendor/contracts/`. Its provenance
 manifest and verifier cover the complete current import closure and fixtures.
 No sibling source path or developer profile is a runtime dependency. Stage 1
@@ -89,6 +89,14 @@ reserve the history transaction, then use public Adapter Prepare/Apply/Readback.
 Only matched readback followed by one durable linked head commit returns VERIFIED.
 Uncertain writes are queried on retry; another blind world write is prohibited.
 Other-player and world-global history are outside this component.
+
+`HistoryQuery(expectedHistoryRevision:null)` reads the current author's
+durable history position for the bound world and registered object. It takes
+the head and entries from one committed Canvas store state, then rechecks the
+same author, current grant, object and world binding before release. A nonnull
+revision remains a strict CAS precondition. A missed event or restart does not
+require guessing a revision; query replay still requires the same author and
+current binding. This query does not move history or write the game world.
 
 Typed Canvas events are delivered only to current authorized subscriptions.
 `ObjectCreated` follows verified durable registration; inventory, history,

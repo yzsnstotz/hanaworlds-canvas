@@ -11,9 +11,9 @@ separately installed npm packages. WorldEdit (AGPL-3.0) and the Luanti Adapter
 are separate origins and are not bundled or relicensed by Canvas.
 
 Canvas includes a byte-identical runtime and test-fixture subset of
-hanaworlds-contracts@0.3.0 from public revision
-e82735780bdfd4ea8e662781455040a6e5306121 (admitted npm pack SHA256
-47a2e5cc77590fb471ffedde715682564e169a0d88dbc5005b71d8d542b38f5c).
+hanaworlds-contracts@0.3.2 from public revision
+3d64364782181c8b5abc3150f8fa9f7ae20bf101 (admitted npm pack SHA256
+48f0b56a3b385bd3a17773fd968c0566068fe1a28ecb4aa08d9686d254cdbb0a).
 That HanaWorlds-owned source is MIT. Its LICENSE, NOTICE, canonicalize Apache-2.0
 license copy, exact file hashes and import closure are retained in
 vendor/contracts/. Canvas continues to install canonicalize separately.

@@ -270,6 +270,25 @@ export function checkContractHandshake(advertisedInput, requiredInput) {
   requireFact(supported, 'UNSUPPORTED_VERSION', 'VERSION_UNSUPPORTED', 'decode');
   return deepFreeze({ result: 'HANDSHAKE_VERSION_MATCH', advertised });
 }
+/** A session/v2 major match alone does not advertise the added readback
+ * operation. Reject an older package peer before issuing this operation. */
+export function checkSessionReadbackHandshake(advertisedInput) {
+  const { advertised } = checkContractHandshake(advertisedInput, { wires: ['session/v2'], factProfiles: [] });
+  requireFact(['hanaworlds-contracts@0.3.1', 'hanaworlds-contracts@0.3.2'].includes(advertised.contracts) &&
+    operationContracts['session/v2'].some(op => op.operation === 'ReadSessionTurnDetails'),
+    'UNSUPPORTED_VERSION', 'VERSION_UNSUPPORTED', 'decode');
+  return deepFreeze({ result: 'HANDSHAKE_OPERATION_MATCH', advertised });
+}
+/** Undo requires the 0.3.2 package advertisement; a 0.3.1 peer's matching
+ * canvas/v4 and session/v2 majors do not advertise these added operations. */
+export function checkSessionUndoHandshake(advertisedInput) {
+  const { advertised } = checkContractHandshake(advertisedInput, { wires: ['canvas/v4', 'session/v2'], factProfiles: [] });
+  requireFact(advertised.contracts === 'hanaworlds-contracts@0.3.2' &&
+    ['ReadCurrentUndoStatus', 'UndoCurrentBuild'].every(name =>
+      operationContracts['session/v2'].some(op => op.operation === name)),
+    'UNSUPPORTED_VERSION', 'VERSION_UNSUPPORTED', 'decode');
+  return deepFreeze({ result: 'HANDSHAKE_OPERATION_MATCH', advertised });
+}
 /** interaction-surface/v3 SELECT_CHOICE: the value must be one listed choice of the
  * same frameRef/frameRevision/actionId; renderers never parse frame text for options. */
 export function validateChoiceSelection(frameInput, requestInput) {

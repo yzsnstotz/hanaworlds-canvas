@@ -110,6 +110,17 @@ export function validateDomain(visits) {
       geometry([...v.protectedPositions, ...v.bodyOccupiedPositions].every(p => inside(p, v.targetFacts.sampledBounds)));
     } else if (name === 'PlacementRegionInspection') {
       shape((v.unavailableSettings !== null) === (v.error !== null && v.error.code === 'CAPABILITY_UNAVAILABLE' && v.error.reason === 'POLICY_UNAVAILABLE'));
+    } else if (name === 'SessionTurnDetails') {
+      shape(v.turns.every(turn => turn.confirmedBrief === null ||
+        (turn.confirmedBrief.sessionRef === v.sessionRef && turn.confirmedBrief.turnRevision === turn.turnRevision)));
+    } else if (name === 'CurrentUndoStatus') {
+      if (v.availability === 'NO_VERIFIED_BUILD') shape(v.turnRef === null && v.turnRevision === null && v.head === null);
+      else shape(v.turnRef !== null && v.turnRevision !== null && v.head !== null &&
+        (v.availability !== 'AVAILABLE' || v.head.headTransactionId !== null));
+    } else if (name === 'CurrentBuildUndoResult') {
+      shape(v.beforeHead.headTransactionId !== null &&
+        v.beforeHead.historyRevision !== v.afterHead.historyRevision &&
+        v.beforeHead.headTransactionId !== v.afterHead.headTransactionId);
     } else if (name === 'CreateBuildPlanRequest') {
       // Payload-decidable painter/v3 rules in the approved order; digest coherence is in validateBoundRequest.
       if (v.targetFacts.source === 'REGION_INSPECTED') {
