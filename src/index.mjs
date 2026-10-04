@@ -1330,7 +1330,11 @@ export class CanvasV4 {
         await this.#invalidateInspections(body.worldRef, proof.currentWorldRevision);
       validateBoundRequest(VERSION, operation, body);
       const replayKey = `${body.sessionRef}\u0000${operation}\u0000${body.requestId}`;
-      const prior = this.store.snapshot.replay[replayKey];
+      const currentHistoryRead = operation === 'HistoryQuery' &&
+        body.expectedHistoryRevision === null;
+      // A null HistoryQuery is a fresh read, including when an older build left
+      // a durable replay record for this requestId.
+      const prior = currentHistoryRead ? null : this.store.snapshot.replay[replayKey];
       const digest = identity(body);
       if (prior) {
         if (prior.digest !== digest) throw issue('REPLAY_MISMATCH', 'replay', 'PAYLOAD_CHANGED');
@@ -1688,7 +1692,7 @@ export class CanvasV4 {
       } else if (operation === 'HistoryQuery') {
         if (typeof proof.authorRef !== 'string' || !proof.authorRef)
           throw issue('PERMISSION_DENIED', 'authorize', 'IDENTITY_UNVERIFIED');
-        await this.store.commit(state => {
+        const readHistory = state => {
           if (state.sessions[body.sessionRef]?.activeWorldRef !== body.worldRef)
             throw issue('WORLD_NOT_BOUND', 'validate', 'SCOPE_DENIED');
           if (!state.objects[body.worldRef]?.[body.objectRef])
@@ -1699,10 +1703,23 @@ export class CanvasV4 {
           if (body.expectedHistoryRevision !== null &&
               history.historyRevision !== body.expectedHistoryRevision)
             throw issue('STALE_REVISION', 'validate', 'REVISION_CHANGED');
-          result = { worldRef: body.worldRef, objectRef: body.objectRef, ...history };
-          state.replay[replayKey] = { digest, authorRef: proof.authorRef,
-            response: envelope(body, result) };
-        });
+          return { worldRef: body.worldRef, objectRef: body.objectRef, ...history };
+        };
+        if (currentHistoryRead) {
+          // CanvasStore publishes a new snapshot only after its durable commit.
+          // Waiting for the current writer gives one committed snapshot without
+          // writing replay metadata or moving the history head.
+          await this.store.busy;
+          if (this.store.unavailable)
+            throw issue('CAPABILITY_UNAVAILABLE', 'validate', 'POLICY_UNAVAILABLE');
+          result = readHistory(this.store.snapshot);
+        } else {
+          await this.store.commit(state => {
+            result = readHistory(state);
+            state.replay[replayKey] = { digest, authorRef: proof.authorRef,
+              response: envelope(body, result) };
+          });
+        }
         await this.#releaseHistoryQuery(body, proof.authorRef);
       } else if (operation === 'CreateObject') {
         if (proof.domainOwner !== 'hanaworlds-canvas')

@@ -96,7 +96,9 @@ the head and entries from one committed Canvas store state, then rechecks the
 same author, current grant, object and world binding before release. A nonnull
 revision remains a strict CAS precondition. A missed event or restart does not
 require guessing a revision; query replay still requires the same author and
-current binding. This query does not move history or write the game world.
+current binding for nonnull CAS reads. Null reads ignore older persisted replay
+records and do not write new ones, so reusing a requestId still observes the
+current committed head. This query does not move history or write the game world.
 
 Typed Canvas events are delivered only to current authorized subscriptions.
 `ObjectCreated` follows verified durable registration; inventory, history,
