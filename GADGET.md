@@ -105,6 +105,11 @@ stay in that status and never become candidates for restore. `service.recovery`
 exposes the startup pass result and
 `service.status().recovery` its current state. A later explicit host call can
 resume a pending record when the Adapter service becomes available.
+The DSH host resolves `hanaworldsAuthority` afresh for every user and service
+proof. If that public service arrives after Canvas construction, the host
+injection event schedules one additional pass after the startup pass, allowing
+the host's trusted recovery wrapper to attach in the same activation turn.
+No polling or time based retry drives recovery.
 
 `HistoryQuery(expectedHistoryRevision:null)` reads the current author's
 durable history position for the bound world and registered object. It takes

@@ -4,6 +4,7 @@ import { copyFile, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import canonicalize from 'canonicalize';
 import { apply, CanvasStore, CanvasV4 } from '../src/index.mjs';
 import { contractHandshake, digestValue, validateBoundRequest,
@@ -240,4 +241,54 @@ test('conflicting verified readback never turns into a restore write', async t =
     'VERIFIED_PENDING_HISTORY');
   assert.equal((await canvas.recoverPending())[0].status, 'RECOVERY_PENDING');
   assert.equal(f.calls.length, 0);
+});
+
+test('late DSH authority triggers the original pending recovery through its service wrapper', async t => {
+  const f = await fixture(t);
+  const root = await mkdtemp(join(homedir(), '.cache', 'hanaworlds-runs',
+    'S1-CANVAS-RECOVERY-01', 'late-authority-home-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const directory = join(root, 'data', 'hanaworlds-canvas');
+  await mkdir(directory, { recursive: true });
+  await copyFile(join(f.directory, 'canvas-v2.json'), join(directory, 'canvas-v2.json'));
+  const services = new Map([
+    ['dshHomePath', (...parts) => join(root, ...parts)],
+    ['hanaworldsWorldAdapterV4', (await f.reopen()).adapters[0].port],
+  ]);
+  const injections = [];
+  const ctx = { get: key => services.get(key),
+    provide: (key, value) => services.set(key, value),
+    inject: (keys, callback) => injections.push({ keys, callback }) };
+  apply(ctx, { adapterId: 'fixture-adapter' });
+  const canvas = services.get('hanaworldsCanvasV4');
+  await canvas.recovery;
+  assert.equal(canvas.store.snapshot.pending[request.transactionId].status,
+    'RECOVERY_PENDING');
+  assert.equal(f.calls.length, 0);
+
+  const recoveryCalls = new AsyncLocalStorage();
+  services.set('hanaworldsAuthority', {
+    async verify() { throw Error('the revoked user grant is not a recovery grant'); },
+    async verifyService(body, operation) {
+      return recoveryCalls.getStore() === canvas && operation === 'RestoreTransaction' ?
+        { current: true, worldRef: body.worldRef, sessionRef: body.sessionRef,
+          authorizationRef: body.authorizationRef, domainOwner: 'hanaworlds-canvas' } :
+        { current: false };
+    },
+  });
+  // Cordis announces the newly provided service before Shell finishes
+  // attaching the trust-context wrapper in the same activation turn.
+  for (const injection of injections.filter(row =>
+    row.keys.includes('hanaworldsAuthority')))
+    injection.callback(ctx);
+  const original = canvas.recoverPending;
+  canvas.recoverPending = (...args) => recoveryCalls.run(canvas,
+    () => original.apply(canvas, args));
+  await canvas.recovery;
+  assert.equal(canvas.store.snapshot.pending[request.transactionId].status,
+    'ROLLED_BACK');
+  assert.equal(f.calls.length, 1);
+  assert.equal(f.calls[0].operation, 'RestoreTransaction');
+  assert.equal((await CanvasStore.open(directory)).snapshot.pending[request.transactionId].status,
+    'ROLLED_BACK');
 });

@@ -1967,8 +1967,20 @@ export function apply(ctx, config = {}) {
   const adapter = ctx.get?.('hanaworldsWorldAdapterV4');
   const adapters = adapter && typeof config.adapterId === 'string' && config.adapterId ?
     [{ adapterId: config.adapterId, port: adapter }] : [];
+  // DSH may provide Shell's authority after Canvas is constructed. Resolve
+  // the public host service for each proof, including service recovery.
+  const authority = {
+    async verify(request, operation) {
+      const current = ctx.get?.('hanaworldsAuthority');
+      return current?.verify?.call(current, request, operation);
+    },
+    async verifyService(request, operation) {
+      const current = ctx.get?.('hanaworldsAuthority');
+      return current?.verifyService?.call(current, request, operation);
+    },
+  };
   const service = new CanvasV4({ store: null, adapters,
-    authority: ctx.get?.('hanaworldsAuthority'),
+    authority,
     adminAuthority: ctx.get?.('hanaworldsAdminAuthority') });
   ctx.provide?.('hanaworldsCanvasV4', service);
   service.storageState = 'INITIALIZING';
@@ -1994,6 +2006,17 @@ export function apply(ctx, config = {}) {
     service.recoveryState = 'FAILED';
     service.recoveryError = error.publicError?.code ?? 'CAPABILITY_UNAVAILABLE';
     return [];
+  });
+  // A late public authority is a readiness event, not a retry timer. Queue
+  // exactly one new pass after the startup pass; this also lets a same-turn
+  // host attach its trusted recoverPending wrapper before the call begins.
+  ctx.inject?.(['hanaworldsAuthority'], () => {
+    service.recovery = service.recovery.then(() => service.recoverPending())
+      .catch(error => {
+        service.recoveryState = 'FAILED';
+        service.recoveryError = error.publicError?.code ?? 'CAPABILITY_UNAVAILABLE';
+        return [];
+      });
   });
 }
 export default { name, inject, apply };
