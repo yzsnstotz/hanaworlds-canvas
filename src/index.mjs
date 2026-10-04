@@ -286,6 +286,78 @@ export class CanvasV4 {
       settingsRevision: stored?.settingsRevision ?? null })),
       invariants: placementInvariants };
   }
+  // Host service read of Canvas-owned registration data. It intentionally uses
+  // the existing ListObjects authorization path, which the host already binds
+  // to its trusted Canvas call context; no new canvas/v4 wire is invented here.
+  async readRegisteredFootprints(body) {
+    if (!exact(body, ['contractVersion', 'actorRef', 'sessionRef', 'requestId',
+      'authorizationRef', 'worldRef', 'objectRefs', 'expectedRegistryRevision',
+      'expectedObjectRevisions']) || body.contractVersion !== VERSION ||
+        !['actorRef', 'sessionRef', 'requestId', 'authorizationRef', 'worldRef',
+          'expectedRegistryRevision'].every(key => ref(body[key])) ||
+        !sortedUnique(body.objectRefs, ref) ||
+        !body.expectedObjectRevisions ||
+        typeof body.expectedObjectRevisions !== 'object' ||
+        Array.isArray(body.expectedObjectRevisions) ||
+        Object.keys(body.expectedObjectRevisions).length !== body.objectRefs.length ||
+        body.objectRefs.some(objectRef =>
+          !ref(body.expectedObjectRevisions[objectRef])) ||
+        Object.keys(body.expectedObjectRevisions).some(objectRef =>
+          !body.objectRefs.includes(objectRef)))
+      throw issue('SCHEMA_INVALID', 'decode', 'INVALID_SHAPE');
+    const inventoryRequest = suffix => validateRequest(VERSION, 'ListObjects', {
+      contractVersion: VERSION, actorRef: body.actorRef,
+      sessionRef: body.sessionRef,
+      requestId: `footprint:${body.requestId}:${suffix}:${randomUUID()}`,
+      authorizationRef: body.authorizationRef, worldRef: body.worldRef,
+      expectedRevision: body.expectedRegistryRevision });
+    const readInventory = async suffix => {
+      const request = inventoryRequest(suffix);
+      const answer = validateResponse(VERSION, 'ListObjects',
+        await this.call('ListObjects', request));
+      if (answer.requestId !== request.requestId)
+        throw issue('PERMISSION_DENIED', 'authorize', 'IDENTITY_UNVERIFIED');
+      if (answer.error) {
+        const error = new Error(answer.error.code);
+        error.publicError = answer.error;
+        throw error;
+      }
+      return answer.result;
+    };
+    const inventory = await readInventory('initial');
+    const state = this.store.snapshot;
+    if (state.sessions[body.sessionRef]?.activeWorldRef !== body.worldRef ||
+        state.bindings[body.sessionRef]?.worldRef !== body.worldRef)
+      throw issue('WORLD_NOT_BOUND', 'validate', 'SCOPE_DENIED');
+    if (inventory.worldRef !== body.worldRef ||
+        inventory.registryRevision !== body.expectedRegistryRevision ||
+        (state.registryRevisions[body.worldRef] ?? '0') !== body.expectedRegistryRevision)
+      throw issue('STALE_REVISION', 'validate', 'REVISION_CHANGED');
+    const objects = body.objectRefs.map(objectRef => {
+      const object = state.objects[body.worldRef]?.[objectRef];
+      const listed = inventory.objects.find(row => row.objectRef === objectRef);
+      if (!object || !listed || object.worldRef !== body.worldRef ||
+          object.objectRef !== objectRef || object.status !== 'READY')
+        throw issue('OBJECT_NOT_FOUND', 'validate', 'SCOPE_DENIED');
+      if (object.objectRevision !== body.expectedObjectRevisions[objectRef] ||
+          listed.objectRevision !== object.objectRevision)
+        throw issue('STALE_REVISION', 'validate', 'REVISION_CHANGED');
+      const positions = state.footprints[body.worldRef]?.[objectRef];
+      if (!validPositions(positions, true))
+        throw issue('SAVED_RESOURCE_UNAVAILABLE', 'validate', 'RESOURCE_MISSING');
+      return { objectRef, objectRevision: object.objectRevision,
+        positions: positions.map(position => [...position]) };
+    });
+    const released = await readInventory('release');
+    if (this.store.snapshot !== state || released.worldRef !== body.worldRef ||
+        released.registryRevision !== body.expectedRegistryRevision ||
+        objects.some(({ objectRef, objectRevision }) =>
+          released.objects.find(row => row.objectRef === objectRef)?.objectRevision !==
+            objectRevision))
+      throw issue('STALE_REVISION', 'validate', 'REVISION_CHANGED');
+    return { worldRef: body.worldRef,
+      registryRevision: body.expectedRegistryRevision, objects };
+  }
   async setPlacementSettings(worldRef, settings, context) {
     const proof = await this.adminAuthority?.verify?.(
       context, 'UpdatePlacementSettings', worldRef);

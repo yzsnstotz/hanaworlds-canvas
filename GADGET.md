@@ -127,6 +127,24 @@ selection and transaction events follow their actual durable changes. There is
 no subscription snapshot or event replay. A client may recover missed object
 changes through the authorized `ListObjects(expectedRevision:null)` query.
 
+## Registered object footprints
+
+The Canvas host service exposes `readRegisteredFootprints(request)` as a
+read-only Canvas-owned registration query. Its request carries the normal
+`canvas/v4` actor, Session, grant, world and request refs, a UTF-16 ascending
+unique `objectRefs` array, `expectedRegistryRevision`, and an
+`expectedObjectRevisions` map with exactly those keys. The result identifies
+the same world and registry revision and gives each requested object ref,
+object revision and its complete sorted position list from Canvas' durable
+`footprints` registry. An empty requested set returns `objects: []` for a
+currently authorized bound world. Unknown or unregistered objects, missing or
+malformed saved coordinates, stale revisions, wrong worlds and revoked grants
+fail closed. The query uses the existing trusted `ListObjects` authority path
+before reading and again before release, without writing the world or changing
+the registration. It does not infer a footprint from an opaque Adapter ref or
+read an Adapter journal. The later cross-plugin range wire remains an
+integration concern.
+
 ## Package and rollback
 
 Build and test under Node 24 with isolated HOME and npm cache, then pack from
