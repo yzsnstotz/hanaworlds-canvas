@@ -102,6 +102,11 @@ test('current context reads confirmed unbound Canvas CAS without changing bindin
     JSON.parse(before).sessions);
   assert.deepEqual(JSON.parse(JSON.stringify(f.store.snapshot.bindings)),
     JSON.parse(before).bindings);
+  const committed = f.store.snapshot;
+  const repeat = await f.canvas.call('ReadWorldSelectionContext', readRequest());
+  assert.equal(repeat.error, null);
+  assert.strictEqual(f.store.snapshot, committed,
+    'same read does not rewrite the durable digest record');
 });
 
 test('public selection, lost receipt, restart, same-world and cross-world switch read current facts', async t => {

@@ -300,11 +300,14 @@ export class CanvasV4 {
       throw issue('PERMISSION_DENIED', 'authorize', 'IDENTITY_UNVERIFIED');
     const initial = { sessionIncarnationRef: proof.sessionIncarnationRef,
       nativeGrantRef: proof.nativeGrantRef, invocationRef: proof.invocationRef };
-    await this.store.commit(state => {
-      const prior = state.replay[replayKey];
-      if (prior && prior.digest !== requestDigest)
+    const prior = this.store.snapshot.replay[replayKey];
+    if (prior && prior.digest !== requestDigest)
+      throw issue('REPLAY_MISMATCH', 'replay', 'PAYLOAD_CHANGED');
+    if (!prior) await this.store.commit(state => {
+      const current = state.replay[replayKey];
+      if (current && current.digest !== requestDigest)
         throw issue('REPLAY_MISMATCH', 'replay', 'PAYLOAD_CHANGED');
-      if (!prior) state.replay[replayKey] = { digest: requestDigest };
+      if (!current) state.replay[replayKey] = { digest: requestDigest };
     });
     const state = this.store.snapshot;
     const stored = state.sessions[body.sessionRef];
