@@ -36,6 +36,7 @@
   },
   "dependencies": {
     "canonicalize": "5.1.0",
+    "hanaworlds-contracts": "https://codeload.github.com/yzsnstotz/hanaworlds-contracts/tar.gz/ef681148fc4fd6e7871fcc8417baf102abf01b28",
     "icu": "2.3.1"
   }
 }

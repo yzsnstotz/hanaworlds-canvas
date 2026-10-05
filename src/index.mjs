@@ -10,8 +10,9 @@ import { admitRequest, validateRequest, validateBoundRequest,
   validateResponse, validateCanvasEvent, digestValue, validateRegionInspection,
   projectPreparedTransaction, placementSettingDescriptors,
   placementInvariants, admitPlacementSettings, checkContractHandshake,
+  checkWorldContextHandshake,
   contractHandshake, validateUndoRecoveryRecord,
-  validateUndoRecoveryResponse } from '../vendor/contracts/dist/v4/index.mjs';
+  validateUndoRecoveryResponse } from 'hanaworlds-contracts/v4';
 export { CanvasStore };
 
 const VERSION = 'canvas/v4';
@@ -287,6 +288,84 @@ export class CanvasV4 {
       ...row, currentValue: stored?.stored?.[row.name] ?? null,
       settingsRevision: stored?.settingsRevision ?? null })),
       invariants: placementInvariants };
+  }
+  async #readWorldSelectionContext(body, proof, replayKey, requestDigest) {
+    checkWorldContextHandshake(contractHandshake);
+    if (!ref(proof.sessionIncarnationRef))
+      throw issue('SESSION_NOT_FOUND', 'validate', 'SCOPE_DENIED');
+    if (proof.grantStatus !== 'CURRENT')
+      throw issue('AUTHORIZATION_REVOKED', 'authorize', 'GRANT_REVOKED');
+    if (proof.worldRef !== body.worldRef || !ref(proof.nativeGrantRef) ||
+        !ref(proof.invocationRef) || proof.invocationStatus !== 'ACTIVE')
+      throw issue('PERMISSION_DENIED', 'authorize', 'IDENTITY_UNVERIFIED');
+    const initial = { sessionIncarnationRef: proof.sessionIncarnationRef,
+      nativeGrantRef: proof.nativeGrantRef, invocationRef: proof.invocationRef };
+    await this.store.commit(state => {
+      const prior = state.replay[replayKey];
+      if (prior && prior.digest !== requestDigest)
+        throw issue('REPLAY_MISMATCH', 'replay', 'PAYLOAD_CHANGED');
+      if (!prior) state.replay[replayKey] = { digest: requestDigest };
+    });
+    const state = this.store.snapshot;
+    const stored = state.sessions[body.sessionRef];
+    const binding = state.bindings[body.sessionRef];
+    let selection;
+    if (!stored) {
+      if (binding) throw issue('CAPABILITY_UNAVAILABLE', 'validate', 'REQUIRED_FACT_UNKNOWN');
+      // This is Canvas's actual SelectWorldConnection CAS for an absent record.
+      selection = { status: 'UNBOUND', sessionRef: body.sessionRef,
+        sessionRevision: '0' };
+    } else if (stored.activeWorldRef === null) {
+      if (binding || !ref(stored.sessionRevision))
+        throw issue('CAPABILITY_UNAVAILABLE', 'validate', 'REQUIRED_FACT_UNKNOWN');
+      selection = { status: 'UNBOUND', sessionRef: body.sessionRef,
+        sessionRevision: stored.sessionRevision };
+    } else {
+      if (!ref(stored.activeWorldRef) || !ref(stored.sessionRevision) ||
+          !ref(stored.selectionRevision) ||
+          !Array.isArray(stored.orderedSelectedObjectRefs) ||
+          !stored.orderedSelectedObjectRefs.every(ref) ||
+          new Set(stored.orderedSelectedObjectRefs).size !==
+            stored.orderedSelectedObjectRefs.length ||
+          !binding || binding.worldRef !== stored.activeWorldRef ||
+          !ref(binding.connectionRef) || !ref(binding.adapterId) ||
+          !this.adapters.some(entry => entry.adapterId === binding.adapterId))
+        throw issue('CAPABILITY_UNAVAILABLE', 'validate', 'REQUIRED_FACT_UNKNOWN');
+      selection = { status: 'BOUND', context: {
+        currentSession: body.sessionRef, activeWorldRef: stored.activeWorldRef,
+        orderedSelectedObjectRefs: [...stored.orderedSelectedObjectRefs],
+        sessionRevision: stored.sessionRevision,
+        selectionRevision: stored.selectionRevision },
+      connectionRef: binding.connectionRef };
+    }
+    const targetInventory = async () => {
+      const discovered = await this.#inventory(body);
+      return { capabilityRevision: discovered.capabilityRevision,
+        connections: discovered.connections.filter(row => row.worldRef === body.worldRef) };
+    };
+    const inventory = await targetInventory();
+    const reread = await targetInventory();
+    const released = await this.authority?.verify?.(body, 'ReadWorldSelectionContext');
+    if (!released?.current || released.actorRef !== body.actorRef ||
+        released.sessionRef !== body.sessionRef ||
+        released.authorizationRef !== body.authorizationRef ||
+        !released.allowedActions?.includes('ReadWorldSelectionContext') ||
+        released.grantStatus !== 'CURRENT')
+      throw issue('AUTHORIZATION_REVOKED', 'authorize', 'GRANT_REVOKED');
+    if (released.worldRef !== body.worldRef ||
+        released.sessionIncarnationRef !== initial.sessionIncarnationRef ||
+        released.invocationRef !== initial.invocationRef ||
+        released.invocationStatus !== 'ACTIVE')
+      throw issue('PERMISSION_DENIED', 'authorize', 'IDENTITY_UNVERIFIED');
+    if (released.nativeGrantRef !== initial.nativeGrantRef)
+      throw issue('AUTHORIZATION_REVOKED', 'authorize', 'GRANT_REVOKED');
+    if (this.store.snapshot !== state ||
+        canonicalize(inventory) !== canonicalize(reread))
+      throw issue('CAPABILITY_UNAVAILABLE', 'validate', 'REQUIRED_FACT_UNKNOWN');
+    const response = envelope(body, { actorRef: body.actorRef,
+      sessionRef: body.sessionRef, authorizationRef: body.authorizationRef,
+      worldRef: body.worldRef, inventory, selection });
+    return validateResponse(VERSION, 'ReadWorldSelectionContext', response);
   }
   // Host service read of Canvas-owned registration data. It intentionally uses
   // the existing ListObjects authorization path, which the host already binds
@@ -1645,6 +1724,11 @@ export class CanvasV4 {
       if (this.store.unavailable) {
         this.storageState = 'UNAVAILABLE';
         throw issue('CAPABILITY_UNAVAILABLE', 'validate', 'POLICY_UNAVAILABLE');
+      }
+      if (operation === 'ReadWorldSelectionContext') {
+        const replayKey = `${body.sessionRef}\u0000${operation}\u0000${body.requestId}`;
+        return await this.#readWorldSelectionContext(body, proof, replayKey,
+          identity(body));
       }
       if (this.store.snapshot.sessions[body.sessionRef]?.activeWorldRef === body.worldRef)
         await this.#invalidateInspections(body.worldRef, proof.currentWorldRevision);
