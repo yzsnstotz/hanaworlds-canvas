@@ -3,9 +3,9 @@ import { readFile, readdir } from 'node:fs/promises';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const sourceRevision = '3d64364782181c8b5abc3150f8fa9f7ae20bf101';
-const admittedPackSha256 = '48f0b56a3b385bd3a17773fd968c0566068fe1a28ecb4aa08d9686d254cdbb0a';
-const manifestSha256 = '1cb01081fccb030d821f0e108440e9b6f383d776190c51d2ab863e3caffd61ee';
+const sourceRevision = 'c00a489a6118fda68b80c7c1eee9a2aa90b6ddc0';
+const admittedPackSha256 = '9157fac5942b3604c8b145922c526f7ae6bdafc681ac8ac75feb2489bdddb8a2';
+const manifestSha256 = 'a5b9e4a26b6caa929e67ad4f73dc8688e0ff951b05a4ddfc722a87a05c52f354';
 const defaultRoot = fileURLToPath(new URL('../vendor/contracts/', import.meta.url));
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 
@@ -27,7 +27,7 @@ export async function verifyVendoredContracts(root = defaultRoot) {
   const manifest = JSON.parse(rawManifest);
   if (manifest.sourceRevision !== sourceRevision ||
       manifest.admittedPackSha256 !== admittedPackSha256 ||
-      manifest.sourcePackageVersion !== '0.3.2')
+      manifest.sourcePackageVersion !== '0.3.4')
     throw new Error('VENDOR_SOURCE_PIN_MISMATCH');
   const listed = new Set();
   for (const file of manifest.files) {

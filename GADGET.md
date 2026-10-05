@@ -1,8 +1,8 @@
 # HanaWorlds Canvas 0.2.0 component
 
 Status: component candidate. `canvas/v4` is the public Canvas port;
-`world-adapter/v4` is the only world transport port consumed. Contracts 0.3.2
-is pinned to public revision `3d64364782181c8b5abc3150f8fa9f7ae20bf101`
+`world-adapter/v4` is the only world transport port consumed. Contracts 0.3.4
+is pinned to public revision `c00a489a6118fda68b80c7c1eee9a2aa90b6ddc0`
 through the byte-exact runtime subset in `vendor/contracts/`. Its provenance
 manifest and verifier cover the complete current import closure and fixtures.
 No sibling source path or developer profile is a runtime dependency. Stage 1
@@ -110,6 +110,16 @@ proof. If that public service arrives after Canvas construction, the host
 injection event schedules one additional pass after the startup pass, allowing
 the host's trusted recovery wrapper to attach in the same activation turn.
 No polling or time based retry drives recovery.
+
+The public `RecoverPendingUndo` and `ReadPendingUndoResult` calls accept only
+the original Undo request ID, not a transaction or object ID. Canvas requires
+independent `hanaworldsAuthority.verifyService()` proof of the current
+`hanaworlds-workshop` service, exact `serviceRecoveryRef`, actor, Session,
+world, original authorization reference and operation. It matches its own
+durable Undo row before restoring or releasing a result. Readback stays
+available after restart and never writes the world. A VERIFIED row needs its
+matching saved receipt; an unknown Adapter outcome never claims a history
+head move. Ordinary `Undo` still requires a current user grant.
 
 `HistoryQuery(expectedHistoryRevision:null)` reads the current author's
 durable history position for the bound world and registered object. It takes

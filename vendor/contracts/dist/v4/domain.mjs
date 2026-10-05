@@ -14,6 +14,7 @@ function arrayCompare(name, order) {
   if (order === 'UTF16 ascending') return compareUTF16;
   if (order === 'numeric x,y,z' || order === 'numeric lexicographic six coordinates') return comparePosition;
   if (order === 'position numeric x,y,z') return (a, b) => comparePosition(a.position, b.position);
+  if (order === 'objectRef UTF16 ascending') return (a, b) => compareUTF16(a.objectRef, b.objectRef);
   if (order === 'portalRef UTF16 ascending') return (a, b) => compareUTF16(a.portalRef, b.portalRef);
   if (order === 'witnessId UTF16 ascending') return (a, b) => compareUTF16(a.witnessId, b.witnessId);
   if (order === 'resourceId UTF16 ascending') return (a, b) => compareUTF16(a.resourceId, b.resourceId);
@@ -66,6 +67,29 @@ function receipt(v) {
   if (v.status === 'RECOVERY_PENDING') shape(v.error !== null && v.error.mutationState === 'UNKNOWN');
   if (v.status === 'ROLLED_BACK') shape(v.restoreStatus === 'VERIFIED_RESTORED' && v.readbackDigest !== null && v.observedWorldRevision !== null);
 }
+function scopedWorld(v) {
+  const known = ok => requireFact(ok, 'TARGET_FACTS_INCOMPLETE', 'REQUIRED_FACT_UNKNOWN');
+  known(v.cells.every(cell => cell.availability === 'KNOWN' && cell.stateDigest !== null));
+  known(v.objects.every(object => object.provenance === 'CANVAS_REGISTERED' && object.positions.length > 0));
+  requireFact(v.objects.every(object => object.worldRef === v.worldRef), 'OBJECT_SCOPE_MISMATCH', 'SCOPE_DENIED');
+  const covered = new Map();
+  for (const position of v.checkedPositions) covered.set(positionKey(position), position);
+  for (const object of v.objects) for (const position of object.positions) covered.set(positionKey(position), position);
+  known(covered.size > 0 && covered.size === v.cells.length &&
+    v.cells.every(cell => covered.has(positionKey(cell.position))));
+}
+function scopedRequest(v) {
+  const scope = v.scope;
+  shape(scope.worldRef === v.worldRef && scope.transactionId === v.transactionId &&
+    scope.operationDigest === v.operationDigest && v.operations.worldRef === v.worldRef);
+  const covered = new Set(scope.cells.map(cell => positionKey(cell.position)));
+  requireFact(v.operations.effects.every(effect => covered.has(positionKey(effect.position))),
+    'TARGET_FACTS_INCOMPLETE', 'REQUIRED_FACT_UNKNOWN');
+  shape(v.authorizationBinding.worldRef === v.worldRef &&
+    v.authorizationBinding.transactionId === v.transactionId &&
+    v.authorizationBinding.operationDigest === v.operationDigest &&
+    v.authorizationBinding.sessionRef === v.sessionRef);
+}
 /** Local, declarative domain invariants only. Authenticity, durable storage,
  * actual world occupancy and event emission always require the owning provider. */
 export function validateDomain(visits) {
@@ -98,6 +122,11 @@ export function validateDomain(visits) {
     else if (name === 'ReceiptProjection') receipt(v);
     else if (name === 'BeforeImage' || name === 'ReadbackProjection') shape(same(v.coveredPositions, v.records.map(x => x.position)));
     else if (name === 'PreparedTransaction' || name === 'PreparedTransactionResult') shape(v.beforeImageDigest === v.payload.beforeImageDigest);
+    else if (name === 'ScopedWorldBinding') scopedWorld(v);
+    else if (name === 'ScopedPrepareRequest' || name === 'ScopedApplyRequest') scopedRequest(v);
+    else if (name === 'ScopedPreparedTransaction' || name === 'ScopedPreparedTransactionResult')
+      shape(v.beforeImageDigest === v.payload.beforeImageDigest && v.scopeDigest === v.payload.scopeDigest &&
+        v.guarantee === 'RECOVERABLE_VERIFIED');
     else if (name === 'ActionDescriptor') decodeShape((v.choices !== null) === v.inputKinds.includes('SELECT_CHOICE'));
     else if (name === 'PlacementChoiceRequired') {
       shape((v.candidatePlayerNames !== null) === v.reasons.includes('MULTIPLE_ONLINE_PLAYERS'));
@@ -121,6 +150,9 @@ export function validateDomain(visits) {
       shape(v.beforeHead.headTransactionId !== null &&
         v.beforeHead.historyRevision !== v.afterHead.historyRevision &&
         v.beforeHead.headTransactionId !== v.afterHead.headTransactionId);
+    } else if (name === 'UndoRecoveryResult') {
+      shape((v.status === 'VERIFIED') === (v.receipt !== null));
+      if (v.receipt !== null) shape(v.receipt.status === 'VERIFIED');
     } else if (name === 'CreateBuildPlanRequest') {
       // Payload-decidable painter/v3 rules in the approved order; digest coherence is in validateBoundRequest.
       if (v.targetFacts.source === 'REGION_INSPECTED') {
