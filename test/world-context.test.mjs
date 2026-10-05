@@ -232,3 +232,20 @@ test('concurrent Canvas state replacement during discovery refuses stale context
   assert.equal((await f.canvas.call('ReadWorldSelectionContext',
     readRequest())).error.code, 'CAPABILITY_UNAVAILABLE');
 });
+
+test('corrupt durable Session identity and binding provenance are not projected as current', async t => {
+  const identity = await fixture(t);
+  assert.equal((await identity.canvas.call('SelectWorldConnection',
+    selectRequest('0'))).error, null);
+  await identity.store.commit(state => { state.sessions.session.currentSession = 'other'; });
+  assert.equal((await identity.canvas.call('ReadWorldSelectionContext',
+    readRequest({ requestId: 'bad-session' }))).error.code,
+  'CAPABILITY_UNAVAILABLE');
+  const provenance = await fixture(t);
+  assert.equal((await provenance.canvas.call('SelectWorldConnection',
+    selectRequest('0'))).error, null);
+  await provenance.store.commit(state => { delete state.bindings.session.payloadDigest; });
+  assert.equal((await provenance.canvas.call('ReadWorldSelectionContext',
+    readRequest({ requestId: 'bad-binding' }))).error.code,
+  'CAPABILITY_UNAVAILABLE');
+});

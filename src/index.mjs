@@ -319,12 +319,16 @@ export class CanvasV4 {
       selection = { status: 'UNBOUND', sessionRef: body.sessionRef,
         sessionRevision: '0' };
     } else if (stored.activeWorldRef === null) {
-      if (binding || !ref(stored.sessionRevision))
+      if (binding || stored.currentSession !== body.sessionRef ||
+          !ref(stored.sessionRevision) || !ref(stored.selectionRevision) ||
+          !Array.isArray(stored.orderedSelectedObjectRefs) ||
+          stored.orderedSelectedObjectRefs.length !== 0)
         throw issue('CAPABILITY_UNAVAILABLE', 'validate', 'REQUIRED_FACT_UNKNOWN');
       selection = { status: 'UNBOUND', sessionRef: body.sessionRef,
         sessionRevision: stored.sessionRevision };
     } else {
-      if (!ref(stored.activeWorldRef) || !ref(stored.sessionRevision) ||
+      if (stored.currentSession !== body.sessionRef ||
+          !ref(stored.activeWorldRef) || !ref(stored.sessionRevision) ||
           !ref(stored.selectionRevision) ||
           !Array.isArray(stored.orderedSelectedObjectRefs) ||
           !stored.orderedSelectedObjectRefs.every(ref) ||
@@ -332,6 +336,7 @@ export class CanvasV4 {
             stored.orderedSelectedObjectRefs.length ||
           !binding || binding.worldRef !== stored.activeWorldRef ||
           !ref(binding.connectionRef) || !ref(binding.adapterId) ||
+          !digest(binding.payloadDigest) || !ref(binding.capabilityRevision) ||
           !this.adapters.some(entry => entry.adapterId === binding.adapterId))
         throw issue('CAPABILITY_UNAVAILABLE', 'validate', 'REQUIRED_FACT_UNKNOWN');
       selection = { status: 'BOUND', context: {
