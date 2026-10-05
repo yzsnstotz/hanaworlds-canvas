@@ -1,10 +1,12 @@
 # HanaWorlds Canvas 0.2.0 component
 
 Status: component candidate. `canvas/v4` is the public Canvas port;
-`world-adapter/v4` is the only world transport port consumed. Contracts 0.3.4
-is pinned to public revision `c00a489a6118fda68b80c7c1eee9a2aa90b6ddc0`
-through the byte-exact runtime subset in `vendor/contracts/`. Its provenance
-manifest and verifier cover the complete current import closure and fixtures.
+`world-adapter/v4` is the only world transport port consumed. The v4 runtime
+uses Contracts 0.3.8 from public revision
+`ef681148fc4fd6e7871fcc8417baf102abf01b28`, pinned by URL and integrity
+in the package lock. The older byte-exact Contracts 0.3.4 subset remains in
+`vendor/contracts/` for legacy consumers; its provenance and verifier remain
+unchanged.
 No sibling source path or developer profile is a runtime dependency. Stage 1
 composition and human validation remain `UNPROVEN` and `ACCEPTED` unset.
 
@@ -17,7 +19,10 @@ The DSH plugin `apply(ctx)` provides `hanaworldsCanvasV4` and consumes:
 - `hanaworldsAuthority.verify(request, operation)` for current actor, Session,
   grant, trusted author, world revision, and authorized actions. For linked
   Undo/Redo it must also return the current `authorizationBinding` facts needed
-  to form the Adapter's public binding; absent proof fails closed;
+  to form the Adapter's public binding; absent proof fails closed. For
+  `ReadWorldSelectionContext`, the trusted host proof must identify the live
+  Session incarnation, active invocation, original native grant, exact target
+  world and this one authorized operation on both checks;
 - `hanaworldsAdminAuthority.verify(context, 'UpdatePlacementSettings', worldRef)`
   for a current, world-bound Canvas admin proof before settings mutation;
 - `hanaworldsWorldAdapterV4`, identified by the composition's `adapterId`.
@@ -154,6 +159,23 @@ before reading and again before release, without writing the world or changing
 the registration. It does not infer a footprint from an opaque Adapter ref or
 read an Adapter journal. The later cross-plugin range wire remains an
 integration concern.
+
+## Current world selection context
+
+`ReadWorldSelectionContext` is the Contracts 0.3.8 `canvas/v4` operation. It
+returns Canvas's current durable Session selection and exact Select/Switch CAS
+revision. A verified live Session with no Canvas record yields `UNBOUND` with
+Canvas's actual absent-record CAS token; a committed binding yields `BOUND`
+with its current context and durable connection ref. Canvas discovers target
+connections through the public Adapter port, filters to the authorized target
+world, and preserves the discovered capability revision. A missing or corrupt
+binding, missing live Session proof, changed Adapter discovery, replaced
+invocation/grant, or changed Canvas state rejects the read. A repeated request
+ID retains only its digest for mismatch detection and reads fresh state rather
+than replaying an old success. That metadata does not select a world, create a
+Session or write a world transaction. The Host must authenticate original READ
+or exact active SELECT delegation; Canvas requires its current per-operation
+trusted proof before lookup and again before release.
 
 ## Package and rollback
 

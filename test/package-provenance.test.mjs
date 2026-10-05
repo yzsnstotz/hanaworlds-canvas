@@ -17,11 +17,15 @@ test('Canvas package contains the exact admitted Contracts runtime closure', asy
     '9157fac5942b3604c8b145922c526f7ae6bdafc681ac8ac75feb2489bdddb8a2');
   assert.equal(result.runtimeModuleCount, 25);
   const pkg = JSON.parse(await readFile(packageJson, 'utf8'));
-  assert.equal(pkg.dependencies['hanaworlds-contracts'], undefined);
+  const worldContextSource = 'https://codeload.github.com/yzsnstotz/' +
+    'hanaworlds-contracts/tar.gz/ef681148fc4fd6e7871fcc8417baf102abf01b28';
+  assert.equal(pkg.dependencies['hanaworlds-contracts'], worldContextSource);
   assert.equal(pkg.files.includes('vendor/contracts/'), true);
   const lock = JSON.parse(await readFile(packageLock, 'utf8'));
-  assert.equal(lock.packages['node_modules/hanaworlds-contracts'], undefined);
-  assert.equal(JSON.stringify(lock).includes('codeload.github.com'), false);
+  const admitted = lock.packages['node_modules/hanaworlds-contracts'];
+  assert.equal(admitted.version, '0.3.8');
+  assert.equal(admitted.resolved, worldContextSource);
+  assert.match(admitted.integrity, /^sha512-/);
 });
 
 test('vendored Contracts source or provenance tampering fails closed', async t => {
