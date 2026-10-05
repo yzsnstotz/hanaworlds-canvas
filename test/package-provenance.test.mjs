@@ -12,10 +12,10 @@ const packageLock = fileURLToPath(new URL('../package-lock.json', import.meta.ur
 
 test('Canvas package contains the exact admitted Contracts runtime closure', async () => {
   const result = await verifyVendoredContracts();
-  assert.equal(result.sourceRevision, '3d64364782181c8b5abc3150f8fa9f7ae20bf101');
+  assert.equal(result.sourceRevision, 'c00a489a6118fda68b80c7c1eee9a2aa90b6ddc0');
   assert.equal(result.admittedPackSha256,
-    '48f0b56a3b385bd3a17773fd968c0566068fe1a28ecb4aa08d9686d254cdbb0a');
-  assert.equal(result.runtimeModuleCount, 24);
+    '9157fac5942b3604c8b145922c526f7ae6bdafc681ac8ac75feb2489bdddb8a2');
+  assert.equal(result.runtimeModuleCount, 25);
   const pkg = JSON.parse(await readFile(packageJson, 'utf8'));
   assert.equal(pkg.dependencies['hanaworlds-contracts'], undefined);
   assert.equal(pkg.files.includes('vendor/contracts/'), true);

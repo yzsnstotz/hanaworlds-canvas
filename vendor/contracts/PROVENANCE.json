@@ -1,8 +1,8 @@
 {
   "sourceOrigin": "https://github.com/yzsnstotz/hanaworlds-contracts",
-  "sourceRevision": "3d64364782181c8b5abc3150f8fa9f7ae20bf101",
-  "admittedPackSha256": "48f0b56a3b385bd3a17773fd968c0566068fe1a28ecb4aa08d9686d254cdbb0a",
-  "sourcePackageVersion": "0.3.2",
+  "sourceRevision": "c00a489a6118fda68b80c7c1eee9a2aa90b6ddc0",
+  "admittedPackSha256": "9157fac5942b3604c8b145922c526f7ae6bdafc681ac8ac75feb2489bdddb8a2",
+  "sourcePackageVersion": "0.3.4",
   "runtimeRoots": [
     "dist/v3/index.mjs",
     "dist/v4/index.mjs"
@@ -13,11 +13,11 @@
     "node:util"
   ],
   "fixtureFiles": [
-    "fixtures/v3/candidate/contract-v3-oracles.json",
     "fixtures/v3/candidate/canvas-events-v3.json",
-    "fixtures/v4/candidate/placement-region-chain-v4.json",
-    "fixtures/v4/candidate/history-seam-chain-v4.json",
+    "fixtures/v3/candidate/contract-v3-oracles.json",
     "fixtures/v4/candidate/contract-v4-oracles.json",
+    "fixtures/v4/candidate/history-seam-chain-v4.json",
+    "fixtures/v4/candidate/placement-region-chain-v4.json",
     "fixtures/v4/candidate/production-goldens.json"
   ],
   "files": [
@@ -68,7 +68,7 @@
     },
     {
       "path": "dist/v3/generated/contracts.mjs",
-      "sha256": "9e88eade0b3cb00aabd501d7e8ea0ec546cc6806691796e5305ea1b28de449c8",
+      "sha256": "b0496087ca9befd93d292a03ecc5aec9bc85e1b4dd955d14348326774859fd40",
       "bytes": 226285
     },
     {
@@ -127,24 +127,29 @@
       "bytes": 526
     },
     {
+      "path": "dist/v4/bindings/world-adapter-v5.mjs",
+      "sha256": "6a1645ccb2fa46e278c88bc92fbe420aa42706eb7cb6ab036e63e592da7da9b8",
+      "bytes": 526
+    },
+    {
       "path": "dist/v4/domain.mjs",
-      "sha256": "bcb76b806843690661586584dbc68faf2cf4f70101a8e066e663bf0b6fa13c27",
-      "bytes": 10886
+      "sha256": "58d3b3ea1bd17f4c6e51c683540c0a1e8099ee65a506d066ef409ef00b3d21c6",
+      "bytes": 13101
     },
     {
       "path": "dist/v4/generated/contracts.mjs",
-      "sha256": "298593c031f7d29ad15fea02c06539f37773fabf9c50e011740074631f2469f3",
-      "bytes": 283936
+      "sha256": "d134d8849ac83a6f86d6521894c7110d66b8ed118a745e951e34501177a2e976",
+      "bytes": 304092
     },
     {
       "path": "dist/v4/index.mjs",
-      "sha256": "3ba214fcbdcf12b99f6a985a5549a4bba326e95f1d9e8fb9bff866e32cc1527b",
-      "bytes": 527
+      "sha256": "b58c67a10efed6036e2af51209440977fab7f1db4af92704b277ca52cf0b6004",
+      "bytes": 594
     },
     {
       "path": "dist/v4/runtime.mjs",
-      "sha256": "1645922c4e614755d5796d1d4d685005bf4b1e0a9a960f40d2e2a1b2d5c60f7a",
-      "bytes": 23003
+      "sha256": "724b4633f44d7fb0d1a1d4388df655152ecc8c9357f97a0e23c55d87ae7890d4",
+      "bytes": 30073
     },
     {
       "path": "dist/v4/schema-validator.mjs",

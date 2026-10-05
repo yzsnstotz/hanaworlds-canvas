@@ -10,7 +10,8 @@ import { admitRequest, validateRequest, validateBoundRequest,
   validateResponse, validateCanvasEvent, digestValue, validateRegionInspection,
   projectPreparedTransaction, placementSettingDescriptors,
   placementInvariants, admitPlacementSettings, checkContractHandshake,
-  contractHandshake } from '../vendor/contracts/dist/v4/index.mjs';
+  contractHandshake, validateUndoRecoveryRecord,
+  validateUndoRecoveryResponse } from '../vendor/contracts/dist/v4/index.mjs';
 export { CanvasStore };
 
 const VERSION = 'canvas/v4';
@@ -270,6 +271,7 @@ export class CanvasV4 {
     this.serviceActorRef = serviceActorRef;
     this.subscriptions = new Set();
     this.recoveryRun = null;
+    this.recoveryByTransaction = new Map();
     this.recoveryState = 'NOT_RUN';
   }
   status() {
@@ -561,6 +563,17 @@ export class CanvasV4 {
     }
     return results;
   }
+  #recoverOne(transactionId, row) {
+    const running = this.recoveryByTransaction.get(transactionId);
+    if (running) return running;
+    const run = this.#recoverOneCore(transactionId, row);
+    this.recoveryByTransaction.set(transactionId, run);
+    run.finally(() => {
+      if (this.recoveryByTransaction.get(transactionId) === run)
+        this.recoveryByTransaction.delete(transactionId);
+    }).catch(() => {});
+    return run;
+  }
   async #recoveryFailure(transactionId, reason) {
     await this.store.commit(state => {
       const row = state.pending[transactionId];
@@ -571,7 +584,7 @@ export class CanvasV4 {
     });
     return { transactionId, status: 'RECOVERY_PENDING', reason };
   }
-  async #recoverOne(transactionId, row) {
+  async #recoverOneCore(transactionId, row) {
     const history = row.direction === 'UNDO' || row.direction === 'REDO';
     const body = row.request;
     const operation = history ? row.direction === 'UNDO' ? 'Undo' : 'Redo' :
@@ -582,7 +595,8 @@ export class CanvasV4 {
       if (!ref(transactionId) || !body || !prepared ||
           validateRequest(VERSION, operation, body).transactionId !== transactionId ||
           row.digest !== identity(body) || row.worldRef !== body.worldRef ||
-          row.sessionRef !== body.sessionRef || row.actorRef !== body.actorRef ||
+          row.sessionRef != null && row.sessionRef !== body.sessionRef ||
+          row.actorRef != null && row.actorRef !== body.actorRef ||
           !ref(row.authorRef) || !digest(operationDigest) ||
           !digest(prepared.beforeImageDigest) || !digest(prepared.transactionPayloadDigest) ||
           this.store.snapshot.transactions[body.worldRef]?.[transactionId] ||
@@ -652,6 +666,87 @@ export class CanvasV4 {
     } catch {
       return await this.#recoveryFailure(transactionId, 'RECOVERY_VALIDATION_FAILED');
     }
+  }
+  #matchingUndo(request, operation) {
+    const matches = Object.entries(this.store.snapshot.pending).filter(([, row]) =>
+      row?.direction === 'UNDO' &&
+      row.request?.requestId === request.originalUndoRequestId);
+    if (matches.length !== 1)
+      throw issue('TRANSACTION_CONFLICT', 'validate', 'POLICY_UNAVAILABLE');
+    const [transactionId, row] = matches[0];
+    const original = validateRequest(VERSION, 'Undo', row.request);
+    if (transactionId !== original.transactionId || row.digest !== identity(original) ||
+        row.worldRef !== original.worldRef ||
+        row.sessionRef != null && row.sessionRef !== original.sessionRef ||
+        row.actorRef != null && row.actorRef !== original.actorRef ||
+        !ref(row.authorRef))
+      throw issue('TRANSACTION_CONFLICT', 'validate', 'POLICY_UNAVAILABLE');
+    const status = ['HISTORY_RESERVED', 'HISTORY_PREPARED'].includes(row.status) ?
+      'RESERVED' : row.status;
+    validateUndoRecoveryRecord(request, {
+      actorRef: original.actorRef, sessionRef: original.sessionRef,
+      worldRef: original.worldRef, authorizationRef: original.authorizationRef,
+      originalUndoRequestId: original.requestId, direction: row.direction, status },
+    operation);
+    return [transactionId, row];
+  }
+  #undoRecoveryResult(request, transactionId) {
+    const row = this.store.snapshot.pending[transactionId];
+    const original = row.request;
+    let status;
+    let receipt = null;
+    if (row.status === 'VERIFIED') {
+      const transaction = this.store.snapshot.transactions[original.worldRef]?.[transactionId];
+      if (row.receipt?.status !== 'VERIFIED' ||
+          transaction?.status !== 'VERIFIED' ||
+          transaction.transactionId !== transactionId ||
+          transaction.worldRef !== original.worldRef ||
+          transaction.sessionRef !== original.sessionRef ||
+          transaction.authorRef !== row.authorRef ||
+          transaction.operationDigest !== row.historyOperationDigest ||
+          transaction.receiptDigest !== row.receiptDigest ||
+          row.receiptDigest !== digestValue('receipt', row.receipt).sha256)
+        throw issue('READBACK_FAILED', 'readback', 'READBACK_ERROR');
+      validateResponse(VERSION, 'Undo', envelope(original, row.receipt));
+      status = 'VERIFIED';
+      receipt = row.receipt;
+    } else if (row.status === 'ROLLED_BACK') {
+      if (row.receipt?.status !== 'ROLLED_BACK' ||
+          row.receipt.restoreStatus !== 'VERIFIED_RESTORED' ||
+          row.receipt.error?.mutationState !== 'ROLLED_BACK' ||
+          row.receipt.transactionId !== transactionId ||
+          row.receipt.operationDigest !== row.historyOperationDigest ||
+          row.receipt.transactionPayloadDigest !== row.prepared?.transactionPayloadDigest)
+        throw issue('READBACK_FAILED', 'readback', 'READBACK_ERROR');
+      validateResponse(VERSION, 'Undo', envelope(original, row.receipt));
+      status = 'ROLLED_BACK';
+    } else if (['HISTORY_APPLYING', 'HISTORY_APPLIED_PENDING_READBACK',
+      'HISTORY_RECOVERY_PENDING'].includes(row.status)) {
+      status = ['TRANSPORT_OUTCOME_UNKNOWN', 'RESTORE_NOT_VERIFIED'].includes(
+        row.lastRecoveryError) ? 'UNKNOWN' : 'RECOVERY_PENDING';
+    } else throw issue('TRANSACTION_CONFLICT', 'validate', 'POLICY_UNAVAILABLE');
+    return { sessionRef: original.sessionRef, worldRef: original.worldRef,
+      originalUndoRequestId: original.requestId, status, receipt };
+  }
+  async #serviceUndoRecovery(operation, body) {
+    const service = await this.authority?.verifyService?.(body, operation);
+    if (service?.current !== true ||
+        service.domainOwner !== 'hanaworlds-workshop' ||
+        service.serviceRecoveryRef !== body.serviceRecoveryRef ||
+        service.actorRef !== body.actorRef ||
+        service.sessionRef !== body.sessionRef ||
+        service.worldRef !== body.worldRef ||
+        service.authorizationRef !== body.authorizationRef ||
+        !service.allowedActions?.includes(operation))
+      throw issue('PERMISSION_DENIED', 'authorize', 'IDENTITY_UNVERIFIED');
+    await this.ready;
+    if (!this.store || this.store.unavailable)
+      throw issue('CAPABILITY_UNAVAILABLE', 'validate', 'POLICY_UNAVAILABLE');
+    if (this.recoveryRun) await this.recoveryRun;
+    const [transactionId, row] = this.#matchingUndo(body, operation);
+    if (operation === 'RecoverPendingUndo') await this.#recoverOne(transactionId, row);
+    const response = envelope(body, this.#undoRecoveryResult(body, transactionId));
+    return validateUndoRecoveryResponse(VERSION, operation, body, response);
   }
   async #adapterCall(adapter, operation, request, afterWriteBarrier = false) {
     let response;
@@ -1273,6 +1368,7 @@ export class CanvasV4 {
         throw issue('TRANSACTION_CONFLICT', 'validate', 'POLICY_UNAVAILABLE');
       state.pending[body.transactionId] = { status: 'HISTORY_RESERVED',
         direction, digest: requestDigest, request: body, authorRef: proof.authorRef,
+        actorRef: body.actorRef, sessionRef: body.sessionRef,
         worldRef: body.worldRef, affectedObjectRefs: refs, positions: origin.positions,
         originTransactionId: body.historyTransactionId,
         historyOperationDigest, authorizationBindingDigest,
@@ -1537,6 +1633,8 @@ export class CanvasV4 {
       body = raw instanceof Uint8Array || typeof raw === 'string' ?
         admitRequest(VERSION, operation, Buffer.from(raw)) :
         validateRequest(VERSION, operation, raw);
+      if (operation === 'RecoverPendingUndo' || operation === 'ReadPendingUndoResult')
+        return await this.#serviceUndoRecovery(operation, body);
       const proof = await this.authority?.verify?.(body, operation);
       if (!proof?.current || proof.actorRef !== body.actorRef ||
           proof.sessionRef !== body.sessionRef || proof.authorizationRef !== body.authorizationRef ||
