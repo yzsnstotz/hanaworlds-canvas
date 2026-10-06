@@ -4,7 +4,8 @@ import { randomUUID } from 'node:crypto';
 
 const fresh = () => ({ schemaVersion: 5, sessions: {}, connections: {},
   connectionInventories: {}, objects: {},
-  footprints: {}, registryRevisions: {}, worldRevisions: {}, analyses: {}, transactions: {},
+  footprints: {}, registryRevisions: {}, worldRevisions: {}, placementSettings: {},
+  placementInspections: {}, analyses: {}, transactions: {},
   history: {}, replay: {}, pending: {} });
 
 /** One writer per local profile. An fsynced rename is the durable commit point. */

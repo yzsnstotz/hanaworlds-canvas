@@ -7,7 +7,8 @@ import { CanvasStore } from './store-v5.mjs';
 import { admitRequest, validateRequest, validateResponse, validateBoundResponse,
   validateCurrentRequest, validateWorldSelection, validateCommitReadback,
   projectScopedPreparedTransaction, checkContractHandshake, contractHandshake,
-  digestValue, requestDigest, publicError, validateExactEffects } from 'hanaworlds-contracts';
+  digestValue, requestDigest, publicError, validateExactEffects,
+  validateRegionInspection } from 'hanaworlds-contracts';
 import { validateType } from 'hanaworlds-contracts';
 
 export { CanvasStore };
@@ -40,7 +41,7 @@ export class CanvasV5 {
     this.storageState = store ? 'READY' : 'UNAVAILABLE';
   }
   get contractHandshake() { return structuredClone(contractHandshake); }
-  status() { return { component: 'hanaworlds-canvas', version: '0.3.1',
+  status() { return { component: 'hanaworlds-canvas', version: '0.3.2',
     canvasContract: WIRE, adapterContract: ADAPTER, storage: this.storageState,
     productReadiness: 'UNPROVEN' }; }
   current(sessionRef) { return this.store?.snapshot.sessions[sessionRef] ?? null; }
@@ -204,6 +205,18 @@ export class CanvasV5 {
       throw fail('OTHER_OBJECTS_AFFECTED', 'SCOPE_DENIED');
     if (body.regionInspectionBinding) {
       const build = body.regionInspectionBinding.build;
+      const recorded = this.store.snapshot.placementInspections[
+        body.regionInspectionBinding.inspectionId];
+      const inspection = recorded?.inspection;
+      if (!inspection || recorded.sessionRef !== body.sessionRef ||
+          recorded.worldRef !== body.worldRef ||
+          recorded.worldRevision !== body.expectedWorldRevision ||
+          !same(recorded.localContext, body.localContext) ||
+          inspection.targetFactsDigest !== body.operations.targetFactsDigest ||
+          build.targetFactsDigest !== inspection.targetFactsDigest ||
+          !same(build.coordinateFrame, inspection.frame) ||
+          build.catalogueDigest !== inspection.targetFacts.catalogueDigest)
+        throw fail('INSPECTION_FAILED', 'REQUIRED_FACT_UNKNOWN');
       if (hash('build', build) !== body.operations.buildDigest)
         throw fail('DIGEST_MISMATCH', 'PAYLOAD_CHANGED');
       validateExactEffects(build.operations, build.materials, body.operations.effects);
@@ -501,6 +514,135 @@ export class CanvasV5 {
     const response = validateResponse(WIRE, 'ListObjects', answer(body, result));
     return this.#remember(replayKey, admission.requestDigest, response);
   }
+  async #inspectPlacementRegion(body) {
+    const { replayKey, prior, admission } = await this.#bound('InspectPlacementRegion', body);
+    const state = this.store.snapshot;
+    if (state.sessions[body.sessionRef]?.activeWorldRef !== body.worldRef ||
+        !same(state.sessions[body.sessionRef]?.localContext, body.localContext))
+      throw fail('CURRENT_WORLD_MISMATCH', 'SCOPE_DENIED');
+    const settings = state.placementSettings[body.worldRef];
+    if (!settings) {
+      const error = fail('CAPABILITY_UNAVAILABLE', 'POLICY_UNAVAILABLE');
+      error.unavailableSettings = ['placement.forwardSearchCells',
+        'placement.frontGapCells', 'placement.lateralSearchCells',
+        'placement.verticalSearchCells'];
+      throw error;
+    }
+    if (prior) {
+      const old = prior.response.result;
+      const revision = old.outcome === 'REGION_INSPECTED' ?
+        old.inspection.targetFacts.worldRevision : old.choice.observedWorldRevision;
+      if (revision !== state.worldRevisions[body.worldRef]) throw fail('STALE_REVISION');
+      return prior.response;
+    }
+    const worldRevision = state.worldRevisions[body.worldRef];
+    const inspectionId = rev('inspection');
+    const result = await this.#adapter('InspectRegion', {
+      contractVersion: ADAPTER, sessionRef: body.sessionRef,
+      requestId: `${body.requestId}:region`, worldRef: body.worldRef,
+      expectedWorldRevision: worldRevision, inspectionId,
+      anchor: body.anchor, footprint: body.footprint,
+      placementSettings: settings, localContext: body.localContext });
+    if (result.outcome === 'REGION_INSPECTED') {
+      const inspection = validateRegionInspection(result.inspection);
+      if (inspection.inspectionId !== inspectionId ||
+          inspection.anchorKind !== body.anchor.kind ||
+          inspection.targetFacts.worldRef !== body.worldRef ||
+          inspection.targetFacts.worldRevision !== worldRevision ||
+          inspection.evidence.worldRef !== body.worldRef ||
+          inspection.evidence.worldRevision !== worldRevision ||
+          inspection.targetFactsDigest !== hash('target-facts', inspection.targetFacts) ||
+          !same(inspection.placementSettings, settings))
+        throw fail('INSPECTION_FAILED', 'REQUIRED_FACT_UNKNOWN');
+    } else if (result.outcome === 'PLACEMENT_CHOICE_REQUIRED') {
+      if (result.choice.observedWorldRevision !== worldRevision ||
+          !same(result.choice.placementSettings, settings))
+        throw fail('INSPECTION_FAILED', 'REQUIRED_FACT_UNKNOWN');
+    } else throw fail('INSPECTION_FAILED', 'REQUIRED_FACT_UNKNOWN');
+    const response = validateResponse(WIRE, 'InspectPlacementRegion',
+      { ...answer(body, result), unavailableSettings: null });
+    await this.store.commit(next => {
+      if (!same(next.sessions[body.sessionRef]?.localContext, body.localContext) ||
+          next.worldRevisions[body.worldRef] !== worldRevision ||
+          !same(next.placementSettings[body.worldRef], settings))
+        throw fail('STALE_REVISION');
+      if (result.outcome === 'REGION_INSPECTED')
+        next.placementInspections[inspectionId] = { sessionRef: body.sessionRef,
+          worldRef: body.worldRef, localContext: body.localContext,
+          worldRevision, inspection: result.inspection };
+      next.replay[replayKey] = { digest: admission.requestDigest, response };
+    });
+    return response;
+  }
+  async #publicReadback(body) {
+    const { replayKey, prior, admission } = await this.#bound('Readback', body);
+    if (this.store.snapshot.sessions[body.sessionRef]?.activeWorldRef !== body.worldRef ||
+        !same(this.store.snapshot.sessions[body.sessionRef]?.localContext, body.localContext))
+      throw fail('CURRENT_WORLD_MISMATCH', 'SCOPE_DENIED');
+    const saved = this.store.snapshot.transactions[body.transactionId];
+    if (!saved || saved.worldRef !== body.worldRef ||
+        !same(saved.receipt?.localContext, body.localContext))
+      throw fail('TRANSACTION_NOT_FOUND', 'SCOPE_DENIED');
+    if (saved.receipt.status !== 'VERIFIED' ||
+        saved.receipt.observedWorldRevision !== body.commitRevision ||
+        saved.receipt.transactionPayloadDigest !== body.transactionPayloadDigest ||
+        saved.receipt.operationDigest !== hash('operations', body.expectedOperations) ||
+        this.store.snapshot.worldRevisions[body.worldRef] !== body.commitRevision)
+      throw fail('STALE_REVISION');
+    if (prior) return prior.response;
+    const actual = await this.#read(body, saved.after.coveredPositions,
+      saved.after.stateProfile, 'public-readback');
+    if (!same(actual, saved.after) ||
+        hash('readback', actual) !== saved.receipt.readbackDigest)
+      throw fail('READBACK_MISMATCH', 'PAYLOAD_CHANGED', 'readback');
+    const response = validateResponse(WIRE, 'Readback', answer(body, saved.receipt));
+    await this.store.commit(state => {
+      const current = state.transactions[body.transactionId];
+      if (!same(current?.receipt, saved.receipt) ||
+          state.worldRevisions[body.worldRef] !== body.commitRevision ||
+          !same(state.sessions[body.sessionRef]?.localContext, body.localContext))
+        throw fail('STALE_REVISION');
+      state.replay[replayKey] = { digest: admission.requestDigest, response };
+    });
+    return response;
+  }
+  async #inspectObject(body) {
+    const { replayKey, prior, admission } = await this.#bound('InspectObject', body);
+    const state = this.store.snapshot;
+    if (state.sessions[body.sessionRef]?.activeWorldRef !== body.worldRef ||
+        !same(state.sessions[body.sessionRef]?.localContext, body.localContext))
+      throw fail('CURRENT_WORLD_MISMATCH', 'SCOPE_DENIED');
+    const object = state.objects[body.worldRef]?.[body.objectRef];
+    if (!object) throw fail('OBJECT_NOT_FOUND', 'SCOPE_DENIED');
+    if (object.objectRevision !== body.expectedRevision) throw fail('STALE_REVISION');
+    const worldRevision = state.worldRevisions[body.worldRef];
+    if (prior) {
+      if (prior.response.result.worldRevision !== worldRevision)
+        throw fail('STALE_REVISION');
+      return prior.response;
+    }
+    const result = await this.#adapter('InspectWorld', {
+      contractVersion: ADAPTER, sessionRef: body.sessionRef,
+      requestId: `${body.requestId}:inspect`, worldRef: body.worldRef,
+      expectedWorldRevision: worldRevision, sampledBounds: body.sampledBounds,
+      localContext: body.localContext });
+    if (result.source !== 'INSPECTED' ||
+        result.worldRef !== body.worldRef ||
+        result.objectRef !== body.objectRef ||
+        result.objectRevision !== body.expectedRevision ||
+        result.worldRevision !== worldRevision ||
+        !same(result.sampledBounds, body.sampledBounds))
+      throw fail('INSPECTION_FAILED', 'REQUIRED_FACT_UNKNOWN');
+    const response = validateResponse(WIRE, 'InspectObject', answer(body, result));
+    await this.store.commit(next => {
+      if (!same(next.sessions[body.sessionRef]?.localContext, body.localContext) ||
+          next.worldRevisions[body.worldRef] !== worldRevision ||
+          next.objects[body.worldRef]?.[body.objectRef]?.objectRevision !== body.expectedRevision)
+        throw fail('STALE_REVISION');
+      next.replay[replayKey] = { digest: admission.requestDigest, response };
+    });
+    return response;
+  }
   async #setObjectSelection(body) {
     const { replayKey, prior, admission } = await this.#bound('SetObjectSelection', body);
     if (prior) return prior.response;
@@ -577,6 +719,10 @@ export class CanvasV5 {
       state.connections[body.sessionRef] = connection;
       state.connectionInventories[body.sessionRef] = inventory;
       state.worldRevisions[body.worldRef] ??= 'world-0';
+      state.placementSettings[body.worldRef] ??= {
+        frontGapCells: 2, forwardSearchCells: 16,
+        lateralSearchCells: 8, verticalSearchCells: 4,
+        settingsRevision: 'placement-0' };
       state.replay[replayKey] = { digest: admission.requestDigest, response };
     });
     return response;
@@ -597,11 +743,17 @@ export class CanvasV5 {
         return await this.#listConnections(body, operation);
       if (operation === 'ListObjects') return await this.#listObjects(body);
       if (operation === 'SetObjectSelection') return await this.#setObjectSelection(body);
+      if (operation === 'InspectPlacementRegion')
+        return await this.#inspectPlacementRegion(body);
+      if (operation === 'Readback') return await this.#publicReadback(body);
+      if (operation === 'InspectObject') return await this.#inspectObject(body);
       if (operation === 'HistoryQuery') return await this.#historyQuery(body);
       throw fail('CAPABILITY_UNAVAILABLE', 'REQUIRED_FACT_UNKNOWN');
     } catch (error) {
-      return answer(body ?? { requestId: raw?.requestId ?? 'invalid-request' },
+      const response = answer(body ?? { requestId: raw?.requestId ?? 'invalid-request' },
         null, error.publicError ?? publicError(error));
+      return operation === 'InspectPlacementRegion' ?
+        { ...response, unavailableSettings: error.unavailableSettings ?? null } : response;
     }
   }
 }

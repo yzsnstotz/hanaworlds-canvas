@@ -78,6 +78,9 @@ test('build commits only after complete readback and stores one durable history 
     const preparedTransactions = new Set();
     let scopedFactReads = 0;
     let lastOpaqueDigest;
+    let regionInspection;
+    let inspectedObjectRef;
+    let inspectedObjectRevision;
     const nativeFacts = { async readScopedState(connectionRef, positions) {
       scopedFactReads++;
       assert.equal(connectionRef, connected.connectionRef);
@@ -101,6 +104,22 @@ test('build commits only after complete readback and stores one durable history 
           payloadVersion: connected.payloadVersion, readiness: 'READY',
           connectionIncarnationRef: connected.connectionIncarnationRef }] });
       if (operation === 'ReadLocalConnection') return respond(connected);
+      if (operation === 'InspectRegion') {
+        const targetFacts = { ...fixture.request.regionInspection.targetFacts,
+          worldRevision: request.expectedWorldRevision };
+        regionInspection = { ...fixture.request.regionInspection,
+          inspectionId: request.inspectionId, placementSettings: request.placementSettings,
+          targetFacts, targetFactsDigest: D('target-facts', targetFacts),
+          evidence: { ...fixture.request.regionInspection.evidence,
+            worldRevision: request.expectedWorldRevision } };
+        return respond({ outcome: 'REGION_INSPECTED', inspection: regionInspection });
+      }
+      if (operation === 'InspectWorld') return respond({
+        ...fixture.request.regionInspection.targetFacts, source: 'INSPECTED',
+        worldRevision: request.expectedWorldRevision,
+        objectRef: inspectedObjectRef,
+        objectRevision: inspectedObjectRevision,
+        sampledBounds: request.sampledBounds });
       if (operation === 'Readback') {
         if (!preparedTransactions.has(request.transactionId))
           throw new Error('STALE_TRANSACTION');
@@ -190,12 +209,32 @@ test('build commits only after complete readback and stores one durable history 
     const localContext = selected.result.localContext;
     const initialWorldRevision = await canvas.readWorldRevision(worldRef);
     assert.equal(initialWorldRevision, 'world-0');
+    const placement = await canvas.call('InspectPlacementRegion', {
+      contractVersion: 'canvas/v5', sessionRef, requestId: 'inspect-placement', worldRef,
+      anchor: { kind: 'CURRENT_VIEW', invocationId: 'confirmed-1' },
+      footprint: { widthCells: 1, depthCells: 1, heightCells: 1 }, localContext });
+    assert.equal(placement.error, null, JSON.stringify(placement));
+    assert.equal(placement.result.inspection.targetFacts.worldRevision, initialWorldRevision);
+    assert.deepEqual({ ...placement.result.inspection.placementSettings },
+      { frontGapCells: 2, forwardSearchCells: 16, lateralSearchCells: 8,
+        verticalSearchCells: 4, settingsRevision: 'placement-0' });
+    const placementStore = await CanvasStore.open(directory);
+    assert.equal(placementStore.snapshot.placementInspections[
+      placement.result.inspection.inspectionId].inspection.targetFacts.worldRevision,
+    initialWorldRevision);
+    const build = structuredClone(fixture.response.result.build);
+    build.targetFactsDigest = regionInspection.targetFactsDigest;
+    build.witnesses = build.witnesses.map(witness => ({ ...witness,
+      targetFactsDigest: regionInspection.targetFactsDigest,
+      facts: witness.facts.evidence ? { ...witness.facts,
+        evidence: { ...witness.facts.evidence, worldRevision: initialWorldRevision } } :
+        witness.facts }));
     const operations = { contractVersion: 'operations/v3',
-      buildDigest: fixture.response.result.buildDigest, compilerRevision: 'brush-1',
+      buildDigest: D('build', build), compilerRevision: 'brush-1',
       compilationConfigDigest: 'a'.repeat(64), worldRef,
       frameDigest: fixture.request.targetFacts.frameDigest,
-      catalogueDigest: fixture.response.result.build.catalogueDigest,
-      targetFactsDigest: fixture.request.targetFactsDigest,
+      catalogueDigest: build.catalogueDigest,
+      targetFactsDigest: regionInspection.targetFactsDigest,
       effects: [{ position, nodeName: 'fixture:stone', param2: 0 }] };
     const operationDigest = D('operations', operations);
     const analyzed = await canvas.call('AnalyzeAffectedObjects', {
@@ -212,14 +251,29 @@ test('build commits only after complete readback and stores one durable history 
       decisionRevision: null,
       expectedWorldRevision: initialWorldRevision,
       expectedObjectRevisions: {}, guarantee: 'RECOVERABLE_VERIFIED',
-      regionInspectionBinding: { inspectionId: fixture.request.regionInspection.inspectionId,
-        build: fixture.response.result.build }, localContext };
+      regionInspectionBinding: { inspectionId: regionInspection.inspectionId,
+        build }, localContext };
+    const wrongInspection = await canvas.call('ApplyRecoverableCommit', {
+      ...apply, requestId: 'apply-unregistered-inspection',
+      regionInspectionBinding: { ...apply.regionInspectionBinding,
+        inspectionId: 'unregistered-inspection' } });
+    assert.equal(wrongInspection.error?.code, 'INSPECTION_FAILED');
+    assert.equal(writes, 0);
     const completed = await canvas.call('ApplyRecoverableCommit', apply);
     assert.equal(completed.error, null, JSON.stringify({ calls, completed,
       pending: canvas.store.snapshot.pending }));
     assert.equal(completed.result.status, 'VERIFIED');
     assert.equal(writes, 1);
     assert.equal(scopedFactReads, 1);
+    const readbackRequest = {
+      contractVersion: 'canvas/v5', sessionRef, requestId: 'public-readback', worldRef,
+      transactionId: 'build-1', commitRevision: completed.result.observedWorldRevision,
+      expectedOperations: operations,
+      transactionPayloadDigest: completed.result.transactionPayloadDigest,
+      localContext };
+    const publicReadback = await canvas.call('Readback', readbackRequest);
+    assert.equal(publicReadback.error, null, JSON.stringify(publicReadback));
+    assert.deepEqual(publicReadback.result, completed.result);
     const replay = await canvas.call('ApplyRecoverableCommit', apply);
     assert.equal(replay.result.transactionId, 'build-1');
     assert.equal(writes, 1);
@@ -227,6 +281,8 @@ test('build commits only after complete readback and stores one durable history 
     assert.equal(reopened.snapshot.transactions['build-1'].history.status, 'VERIFIED');
     const objectRef = reopened.snapshot.transactions['build-1'].objectRef;
     const objectRevision = reopened.snapshot.objects[worldRef][objectRef].objectRevision;
+    inspectedObjectRef = objectRef;
+    inspectedObjectRevision = objectRevision;
     const persistedCanvas = new CanvasV5({ store: reopened, adapter });
     const footprints = await persistedCanvas.readFootprints(worldRef, [objectRef], {
       sessionRef, worldRef, localContext });
@@ -245,6 +301,16 @@ test('build commits only after complete readback and stores one durable history 
     assert.equal(historyFacts.originVerifiedReceiptDigest,
       reopened.snapshot.transactions['build-1'].history.receiptDigest);
     assert.equal(historyFacts.objectRevisions[objectRef], objectRevision);
+    const inspectObjectRequest = {
+      contractVersion: 'canvas/v5', sessionRef, requestId: 'inspect-object', worldRef,
+      objectRef, expectedRevision: objectRevision,
+      sampledBounds: fixture.request.regionInspection.targetFacts.sampledBounds,
+      localContext };
+    const inspectedObject = await canvas.call('InspectObject', inspectObjectRequest);
+    assert.equal(inspectedObject.error, null, JSON.stringify(inspectedObject));
+    assert.equal(inspectedObject.result.objectRef, objectRef);
+    assert.equal(inspectedObject.result.objectRevision, objectRevision);
+    assert.equal(inspectedObject.result.worldRevision, 'world-2');
     const objects = await canvas.call('ListObjects', { contractVersion: 'canvas/v5',
       sessionRef, requestId: 'list-objects', worldRef, expectedRevision: null,
       localContext });
@@ -285,6 +351,10 @@ test('build commits only after complete readback and stores one durable history 
     assert.equal(writes, 2);
     const afterUndo = await CanvasStore.open(directory);
     assert.equal(afterUndo.snapshot.history[objectRef].at(-1).originTransactionId, 'build-1');
+    const staleReadback = await canvas.call('Readback', readbackRequest);
+    assert.equal(staleReadback.error?.code, 'STALE_REVISION');
+    const staleObject = await canvas.call('InspectObject', inspectObjectRequest);
+    assert.equal(staleObject.error?.code, 'STALE_REVISION');
     const undoneCanvas = new CanvasV5({ store: afterUndo, adapter });
     assert.equal(await undoneCanvas.readWorldRevision(worldRef), 'world-3');
     assert.deepEqual((await undoneCanvas.readFootprints(worldRef, [objectRef], {
@@ -300,7 +370,25 @@ test('build commits only after complete readback and stores one durable history 
       localContext: { ...localContext, connectionIncarnationRef: 'socket-open-2' } });
     assert.equal(wrongWorld.error.code, 'CURRENT_WORLD_MISMATCH');
     assert.equal(writes, 2);
-    const badOperations = { ...operations, effects: [{ position: [0, 1, 4],
+    const secondPlacement = await canvas.call('InspectPlacementRegion', {
+      contractVersion: 'canvas/v5', sessionRef, requestId: 'inspect-rebuild', worldRef,
+      anchor: { kind: 'CURRENT_VIEW', invocationId: 'confirmed-2' },
+      footprint: { widthCells: 1, depthCells: 1, heightCells: 1 }, localContext });
+    assert.equal(secondPlacement.error, null);
+    const secondInspection = secondPlacement.result.inspection;
+    const secondBuild = structuredClone(build);
+    secondBuild.targetFactsDigest = secondInspection.targetFactsDigest;
+    secondBuild.witnesses = secondBuild.witnesses.map(witness => ({ ...witness,
+      targetFactsDigest: secondInspection.targetFactsDigest,
+      facts: witness.facts.evidence ? { ...witness.facts,
+        evidence: { ...witness.facts.evidence, worldRevision: 'world-3' } } :
+        witness.facts }));
+    const secondOperations = { ...operations, buildDigest: D('build', secondBuild),
+      targetFactsDigest: secondInspection.targetFactsDigest };
+    const secondOperationDigest = D('operations', secondOperations);
+    const secondBinding = { inspectionId: secondInspection.inspectionId,
+      build: secondBuild };
+    const badOperations = { ...secondOperations, effects: [{ position: [0, 1, 4],
       nodeName: 'fixture:stone', param2: 0 }] };
     const badOperationDigest = D('operations', badOperations);
     const badAnalysis = await canvas.call('AnalyzeAffectedObjects', {
@@ -314,12 +402,13 @@ test('build commits only after complete readback and stores one durable history 
       ...apply, requestId: 'apply-bad-geometry', transactionId: 'bad-geometry',
       operations: badOperations, operationDigest: badOperationDigest,
       analysisDigest: D('affected-analysis', badAnalysis.result),
-      expectedWorldRevision: 'world-3' });
+      expectedWorldRevision: 'world-3', regionInspectionBinding: secondBinding });
     assert.equal(badGeometry.error.code, 'CATALOGUE_MISMATCH');
     assert.equal(writes, 2);
     const reanalyzed = await canvas.call('AnalyzeAffectedObjects', {
       contractVersion: 'canvas/v5', sessionRef, requestId: 'analyze-rebuild', worldRef,
-      transactionId: 'build-2', operations, operationDigest,
+      transactionId: 'build-2', operations: secondOperations,
+      operationDigest: secondOperationDigest,
       expectedRevision: 'world-3',
       expectedRegistryRevision: afterUndo.snapshot.registryRevisions[worldRef],
       expectedSelectionRevision: selected.result.selectionRevision, localContext });
@@ -327,8 +416,9 @@ test('build commits only after complete readback and stores one durable history 
     mismatchAfterApply = true;
     const failed = await canvas.call('ApplyRecoverableCommit', {
       ...apply, requestId: 'apply-rebuild', transactionId: 'build-2',
+      operations: secondOperations, operationDigest: secondOperationDigest,
       analysisDigest: D('affected-analysis', reanalyzed.result),
-      expectedWorldRevision: 'world-3' });
+      expectedWorldRevision: 'world-3', regionInspectionBinding: secondBinding });
     assert.equal(failed.error, null, JSON.stringify({ failed, calls }));
     assert.equal(failed.result.status, 'ROLLED_BACK');
     assert.equal(restores, 1);
