@@ -39,10 +39,10 @@ async function fixture(t) {
     const descriptors = [
       { adapterId: 'adapter', connectionRef: 'connection', worldRef: 'world',
         displayName: 'World', capabilityRevision,
-        payloadVersion: '0.2.0', readiness: 'READY' },
+        payloadVersion: '0.2.7', readiness: 'READY' },
       { adapterId: 'adapter', connectionRef: 'connection-2', worldRef: 'world-2',
         displayName: 'World 2', capabilityRevision,
-        payloadVersion: '0.2.0', readiness: 'READY' },
+        payloadVersion: '0.2.7', readiness: 'READY' },
     ];
     if (operation === 'DiscoverConnections') await onDiscovery();
     if (operation === 'ListWorlds' || operation === 'DiscoverConnections')
@@ -53,7 +53,7 @@ async function fixture(t) {
     if (operation === 'AuthorizeBinding')
       return { contractVersion: 'world-adapter/v4', requestId: request.requestId,
         result: { connectionRef: request.connectionRef, worldRef: request.worldRef,
-          payloadVersion: '0.2.0', payloadDigest: 'a'.repeat(64),
+          payloadVersion: '0.2.7', payloadDigest: 'a'.repeat(64),
           binding: { authorizerRef: 'owner', actorRef: 'actor',
             bindingRef: 'binding', worldRef: request.worldRef,
             grantEpoch: 'epoch', allowedActions: ['READ'] },
