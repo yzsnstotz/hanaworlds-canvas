@@ -17,6 +17,7 @@ export { CanvasStore };
 
 const VERSION = 'canvas/v4';
 const ADAPTER_VERSION = 'world-adapter/v4';
+const CURRENT_PAYLOAD_VERSION = '0.2.7';
 const PLACEMENT_FIELDS = ['placement.forwardSearchCells', 'placement.frontGapCells',
   'placement.lateralSearchCells', 'placement.verticalSearchCells'];
 const authorScopedReplay = new Set(['ApplyRecoverableCommit', 'Readback',
@@ -105,6 +106,16 @@ function missingConnection(answer, request) {
     answer.contractVersion === 'world-adapter/v4' && answer.requestId === request.requestId &&
     answer.result === null && exact(error, ['code', 'phase', 'retryability', 'mutationState',
       'transactionRef', 'causeCode', 'reason']) && error.code === 'CONNECTION_NOT_FOUND' &&
+    error.phase === 'validate' && error.retryability === 'AFTER_NEW_FACTS' &&
+    error.mutationState === 'NONE' && error.transactionRef === null &&
+    error.causeCode === null && error.reason === 'POLICY_UNAVAILABLE';
+}
+function payloadMismatch(answer, request) {
+  const error = answer?.error;
+  return exact(answer, ['contractVersion', 'requestId', 'result', 'error']) &&
+    answer.contractVersion === ADAPTER_VERSION && answer.requestId === request.requestId &&
+    answer.result === null && exact(error, ['code', 'phase', 'retryability', 'mutationState',
+      'transactionRef', 'causeCode', 'reason']) && error.code === 'PAYLOAD_VERSION_MISMATCH' &&
     error.phase === 'validate' && error.retryability === 'AFTER_NEW_FACTS' &&
     error.mutationState === 'NONE' && error.transactionRef === null &&
     error.causeCode === null && error.reason === 'POLICY_UNAVAILABLE';
@@ -1670,8 +1681,13 @@ export class CanvasV4 {
       const descriptor = listed.result.connections.find(row =>
         row.connectionRef === connectionRef && row.worldRef === worldRef);
       if (!descriptor) continue;
-      if (descriptor.payloadVersion !== '0.2.0')
+      if (descriptor.payloadVersion !== CURRENT_PAYLOAD_VERSION ||
+          descriptor.readiness === 'PAYLOAD_VERSION_MISMATCH')
         throw issue('PAYLOAD_VERSION_MISMATCH', 'validate', 'PAYLOAD_CHANGED');
+      if (descriptor.readiness === 'CAPABILITY_UNAVAILABLE')
+        throw issue('CAPABILITY_UNAVAILABLE', 'validate', 'POLICY_UNAVAILABLE');
+      if (descriptor.readiness === 'ADAPTER_UNAVAILABLE')
+        throw issue('ADAPTER_UNAVAILABLE', 'validate', 'POLICY_UNAVAILABLE');
       const bindRequest = {
         contractVersion: ADAPTER_VERSION, actorRef: this.serviceActorRef,
         sessionRef: body.sessionRef, requestId: `${body.requestId}:bind`,
@@ -1679,17 +1695,22 @@ export class CanvasV4 {
         expectedCapabilityRevision: descriptor.capabilityRevision,
       };
       const connected = await entry.port.call('AuthorizeBinding', bindRequest);
+      if (payloadMismatch(connected, bindRequest))
+        throw issue('PAYLOAD_VERSION_MISMATCH', 'validate', 'PAYLOAD_CHANGED');
       if (!validAdapterAnswer(connected, bindRequest) ||
           !validBindingReceipt(connected.result) ||
           connected.result.worldRef !== worldRef ||
           connected?.result?.connectionRef !== connectionRef ||
-          connected?.result?.payloadVersion !== '0.2.0' ||
           connected?.result?.binding?.actorRef !== body.actorRef ||
           connected?.result?.binding?.worldRef !== worldRef ||
           connected.result.capabilities.worldRef !== worldRef ||
           connected.result.capabilities.providerRef !== entry.adapterId ||
           connected.result.capabilities.capabilityRevision !== descriptor.capabilityRevision)
         throw issue('CONNECTION_UNAUTHORIZED', 'validate', 'POLICY_UNAVAILABLE');
+      if (connected.result.payloadVersion !== CURRENT_PAYLOAD_VERSION)
+        throw issue('PAYLOAD_VERSION_MISMATCH', 'validate', 'PAYLOAD_CHANGED');
+      if (connected.result.capabilities.recoveryGuarantee !== 'RECOVERABLE_VERIFIED')
+        throw issue('CAPABILITY_UNAVAILABLE', 'validate', 'POLICY_UNAVAILABLE');
       return { adapterId: entry.adapterId, connectionRef, worldRef,
         payloadDigest: connected.result.payloadDigest,
         capabilityRevision: descriptor.capabilityRevision,

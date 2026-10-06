@@ -35,6 +35,10 @@ requests use the Canvas service principal as `actorRef`; the grant and
 adminContext)`. A Shell management surface can render the returned descriptors,
 current values, defaults and non-switchable invariants. The host must restrict
 that administrative surface to current authorized administrators.
+World binding requires the current public Adapter payload version `0.2.7` in
+both discovery and the binding receipt, and a verified recoverable capability.
+A declared payload mismatch, stale version, malformed digest, missing
+capability, or denied binding cannot create a durable Canvas world selection.
 
 The four Canvas-owned per-world settings are
 `placement.frontGapCells=2`, `placement.forwardSearchCells=16`,

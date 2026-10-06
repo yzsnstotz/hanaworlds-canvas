@@ -432,10 +432,10 @@ test('v4 world bind uses admitted Adapter wire and initializes placement default
     calls.push({ operation, body });
     const descriptor = { adapterId: 'adapter', connectionRef: 'connection',
       worldRef: 'world', displayName: 'World', capabilityRevision: 'cap-1',
-      payloadVersion: '0.2.0', readiness: 'READY' };
+      payloadVersion: '0.2.7', readiness: 'READY' };
     const result = operation === 'ListWorlds' ? { capabilityRevision: 'cap-1',
       connections: [descriptor] } : { connectionRef: 'connection', worldRef: 'world',
-      payloadVersion: '0.2.0', payloadDigest: 'a'.repeat(64),
+      payloadVersion: '0.2.7', payloadDigest: 'a'.repeat(64),
       binding: { authorizerRef: 'owner', actorRef: 'actor', bindingRef: 'binding',
         worldRef: 'world', grantEpoch: 'epoch', allowedActions: ['READ'] },
       capabilities: { providerRef: 'adapter', capabilityRevision: 'cap-1',
