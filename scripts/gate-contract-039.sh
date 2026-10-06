@@ -5,6 +5,12 @@ source_root="$(cd "$(dirname "$0")/.." && pwd)"
 run_root="${1:?provide card run directory}"
 node_bin="/Users/yzliu/.local/share/fnm/node-versions/v24.13.1/installation/bin"
 export PATH="$node_bin:$PATH"
+mkdir -p "$run_root"
+if [ -d "$run_root/_evidence" ]; then
+  archive="$run_root/archive-$(date -u +%Y%m%dT%H%M%SZ)"
+  mv "$run_root/_evidence" "$archive"
+  rm -f "$archive/hanaworlds-canvas-0.2.0.tgz"
+fi
 mkdir -p "$run_root/_evidence"
 rm -rf "$run_root/run" "$run_root/npm-cache"
 mkdir -p "$run_root/run/consumer" "$run_root/npm-cache"
