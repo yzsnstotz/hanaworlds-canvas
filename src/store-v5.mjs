@@ -2,8 +2,9 @@ import { mkdir, open, readFile, rename, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
-const fresh = () => ({ schemaVersion: 5, sessions: {}, connections: {}, objects: {},
-  footprints: {}, registryRevisions: {}, analyses: {}, transactions: {},
+const fresh = () => ({ schemaVersion: 5, sessions: {}, connections: {},
+  connectionInventories: {}, objects: {},
+  footprints: {}, registryRevisions: {}, worldRevisions: {}, analyses: {}, transactions: {},
   history: {}, replay: {}, pending: {} });
 
 /** One writer per local profile. An fsynced rename is the durable commit point. */
