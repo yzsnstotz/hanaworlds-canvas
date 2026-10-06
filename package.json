@@ -1,6 +1,6 @@
 {
   "name": "hanaworlds-canvas",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "license": "MIT",
@@ -17,10 +17,8 @@
   },
   "files": [
     "src/index.mjs",
-    "src/store.mjs",
-    "src/strict-json.mjs",
-    "vendor/contracts/",
-    "scripts/verify-vendored-contracts.mjs",
+    "src/local-v5.mjs",
+    "src/store-v5.mjs",
     "cordis.patch.yml",
     "GADGET.md",
     "NOTICE"
@@ -31,12 +29,12 @@
     }
   },
   "scripts": {
-    "build": "node scripts/verify-vendored-contracts.mjs && node --check src/index.mjs && node --check src/v3-legacy.mjs && node --check src/store.mjs && node --check src/strict-json.mjs",
-    "test": "node --test test/*.test.mjs"
+    "build": "node --check src/index.mjs && node --check src/local-v5.mjs && node --check src/store-v5.mjs",
+    "test": "node --test test/local-world.test.mjs"
   },
   "dependencies": {
     "canonicalize": "5.1.0",
-    "hanaworlds-contracts": "https://codeload.github.com/yzsnstotz/hanaworlds-contracts/tar.gz/a4675a4edd7b4a8a7aa4861a7949713a218d8b31",
+    "hanaworlds-contracts": "https://codeload.github.com/yzsnstotz/hanaworlds-contracts/tar.gz/8cfb18f8e13aa33d7a942f230ec6117914322cdd",
     "icu": "2.3.1"
   }
 }
