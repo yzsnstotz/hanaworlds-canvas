@@ -1,6 +1,6 @@
 {
   "name": "hanaworlds-canvas",
-  "version": "0.3.3",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "license": "MIT",
@@ -19,6 +19,7 @@
     "src/index.mjs",
     "src/local-v5.mjs",
     "src/store-v5.mjs",
+    "src/region-v1.mjs",
     "cordis.patch.yml",
     "GADGET.md",
     "NOTICE"
@@ -29,8 +30,8 @@
     }
   },
   "scripts": {
-    "build": "node --check src/index.mjs && node --check src/local-v5.mjs && node --check src/store-v5.mjs",
-    "test": "node --test test/local-world.test.mjs"
+    "build": "node --check src/index.mjs && node --check src/local-v5.mjs && node --check src/store-v5.mjs && node --check src/region-v1.mjs",
+    "test": "node --test test/local-world.test.mjs test/region-undo.test.mjs"
   },
   "dependencies": {
     "canonicalize": "5.1.0",

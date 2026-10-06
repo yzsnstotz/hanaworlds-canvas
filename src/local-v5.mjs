@@ -10,8 +10,9 @@ import { admitRequest, validateRequest, validateResponse, validateBoundResponse,
   digestValue, requestDigest, publicError, validateExactEffects,
   validateRegionInspection } from 'hanaworlds-contracts';
 import { validateType } from 'hanaworlds-contracts';
+import { CanvasRegionV1 } from './region-v1.mjs';
 
-export { CanvasStore };
+export { CanvasStore, CanvasRegionV1 };
 const WIRE = 'canvas/v5';
 const ADAPTER = 'world-adapter/v6';
 const hash = (kind, value) => digestValue(kind, value).sha256;
@@ -41,7 +42,7 @@ export class CanvasV5 {
     this.storageState = store ? 'READY' : 'UNAVAILABLE';
   }
   get contractHandshake() { return structuredClone(contractHandshake); }
-  status() { return { component: 'hanaworlds-canvas', version: '0.3.3',
+  status() { return { component: 'hanaworlds-canvas', version: '0.4.0',
     canvasContract: WIRE, adapterContract: ADAPTER, storage: this.storageState,
     productReadiness: 'UNPROVEN' }; }
   current(sessionRef) { return this.store?.snapshot.sessions[sessionRef] ?? null; }
@@ -380,6 +381,8 @@ export class CanvasV5 {
     const origin = this.store.snapshot.transactions[body.historyTransactionId];
     const object = this.store.snapshot.objects[body.worldRef]?.[body.objectRef];
     const historyRows = this.store.snapshot.history[body.objectRef] ?? [];
+    // A region transaction is undone as a whole region through hanaworldsCanvasRegionV1.
+    if (origin?.kind === 'REGION') throw fail('UNDO_CONFLICT');
     if (!origin?.history || origin.objectRef !== body.objectRef ||
         origin.worldRef !== body.worldRef || historyRows.at(-1)?.transactionId !==
           body.historyTransactionId ||
@@ -580,7 +583,7 @@ export class CanvasV5 {
         !same(this.store.snapshot.sessions[body.sessionRef]?.localContext, body.localContext))
       throw fail('CURRENT_WORLD_MISMATCH', 'SCOPE_DENIED');
     const saved = this.store.snapshot.transactions[body.transactionId];
-    if (!saved || saved.worldRef !== body.worldRef ||
+    if (!saved || saved.kind || saved.worldRef !== body.worldRef ||
         !same(saved.receipt?.localContext, body.localContext))
       throw fail('TRANSACTION_NOT_FOUND', 'SCOPE_DENIED');
     if (saved.receipt.status !== 'VERIFIED' ||
@@ -796,6 +799,9 @@ export function apply(ctx) {
       return current.readScopedState(...args);
     } } });
   ctx.provide?.('hanaworldsCanvasV5', service);
+  // Region port name is the Canvas-side fixture until Adapter/Contracts region v1 bytes exist.
+  ctx.provide?.('hanaworldsCanvasRegionV1', new CanvasRegionV1(service, {
+    call: (...args) => ctx.get?.('hanaworldsWorldAdapterRegionV1')?.call(...args) }));
   ctx.provide?.('hanaworldsCanvasFootprintRegistry', {
     readFootprints: (...args) => service.readFootprints(...args) });
   ctx.provide?.('hanaworldsCanvasHistoryFacts', {
