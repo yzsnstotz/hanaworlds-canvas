@@ -41,7 +41,7 @@ export class CanvasV5 {
     this.storageState = store ? 'READY' : 'UNAVAILABLE';
   }
   get contractHandshake() { return structuredClone(contractHandshake); }
-  status() { return { component: 'hanaworlds-canvas', version: '0.3.2',
+  status() { return { component: 'hanaworlds-canvas', version: '0.3.3',
     canvasContract: WIRE, adapterContract: ADAPTER, storage: this.storageState,
     productReadiness: 'UNPROVEN' }; }
   current(sessionRef) { return this.store?.snapshot.sessions[sessionRef] ?? null; }
