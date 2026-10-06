@@ -42,7 +42,7 @@ export class CanvasV5 {
     this.storageState = store ? 'READY' : 'UNAVAILABLE';
   }
   get contractHandshake() { return structuredClone(contractHandshake); }
-  status() { return { component: 'hanaworlds-canvas', version: '0.4.0',
+  status() { return { component: 'hanaworlds-canvas', version: '0.5.0',
     canvasContract: WIRE, adapterContract: ADAPTER, storage: this.storageState,
     productReadiness: 'UNPROVEN' }; }
   current(sessionRef) { return this.store?.snapshot.sessions[sessionRef] ?? null; }
@@ -799,8 +799,10 @@ export function apply(ctx) {
       return current.readScopedState(...args);
     } } });
   ctx.provide?.('hanaworldsCanvasV5', service);
-  // Region port name is the Canvas-side fixture until Adapter/Contracts region v1 bytes exist.
+  // Host service names are Canvas's choice; the wire shapes are Contracts canvas-/world-adapter-region/v1.
   ctx.provide?.('hanaworldsCanvasRegionV1', new CanvasRegionV1(service, {
+    get protocolHandshake() {
+      return ctx.get?.('hanaworldsWorldAdapterRegionV1')?.protocolHandshake; },
     call: (...args) => ctx.get?.('hanaworldsWorldAdapterRegionV1')?.call(...args) }));
   ctx.provide?.('hanaworldsCanvasFootprintRegistry', {
     readFootprints: (...args) => service.readFootprints(...args) });

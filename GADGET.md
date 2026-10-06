@@ -1,8 +1,8 @@
-# HanaWorlds Canvas 0.4.0 local world component
+# HanaWorlds Canvas 0.5.0 local world component
 
 The package exposes `hanaworldsCanvasV5` and consumes the public
-`hanaworldsWorldAdapterV6` port. It uses the Contracts 0.4.2 root export from
-source revision `aad7c0ea2a4a9a93dfb13555c46cd98b9b5da777`. There is no
+`hanaworldsWorldAdapterV6` port. It uses the Contracts 0.5.0 root export from
+source revision `c006a839a6e6c2c63d57a14b72e4e6b26fa717f1`. There is no
 account, grant, epoch, authorization, or protected region dependency in this
 local MVP protocol.
 
@@ -67,47 +67,47 @@ uncertainty, restart recovery, concurrent writers, broad negative matrices,
 and older profile migration are deferred by CONTRACT 4.3.0. Old v4 source and
 tests remain in the repository for evidence, outside this package's runtime.
 
-## Region v1 transaction and whole-region Undo (0.4.0)
+## Region v1 transaction and whole-region Undo (0.5.0)
 
-`apply(ctx)` also provides `hanaworldsCanvasRegionV1` (`canvas-region/v1`),
-backed by the same durable store, world revisions, footprints and history rows
-as cell BUILD. Canvas stays the only transaction decider; the Adapter region
-port (`hanaworldsWorldAdapterRegionV1`, `world-adapter-region/v1`) only loads,
-reads and writes mapblock chunks.
+`apply(ctx)` also provides `hanaworldsCanvasRegionV1`, implementing the public
+Contracts 0.5.0 `canvas-region/v1` wire (`ApplyRegionCommit`,
+`UndoRegionCommit`) over the same durable store, world revisions, footprints
+and history rows as cell BUILD. Canvas stays the only transaction decider. It
+consumes the Adapter's `world-adapter-region/v1` port (`ReadRegion`,
+`WriteRegion`) from the Host service `hanaworldsWorldAdapterRegionV1`; the
+Adapter only loads, reads and writes mapblock chunks and reports per-chunk facts.
 
-- `DescribeRegionTool` returns the tool's purpose, typical scale and
-  prerequisites for the skill. There is no system threshold or setting: the
-  skill chooses between region writes and cell-by-cell BUILD.
-- `ApplyRegionCommit` takes one `region-voxels/v1` block (origin, size,
-  `x-y-z` order as in Luanti VoxelArea, palette of `nodeName`+`param2`, cells
-  as palette index or `-1`). `-1` is unspecified and never touched; only the
-  palette entry `air` digs. Canvas checks protocol major/capabilities, current
-  world and connection, current world revision and registered footprints, then
-  asks the Adapter to load and read every mapblock chunk of the box. Any chunk
-  still unknown, or written cells with metadata/inventory/timer state, rejects
-  before a write.
-- The complete before image of the box (node, param2, param1) is saved as
-  gzip (RFC 1952, Node zlib) over canonical JSON, in a content-addressed 0600
-  file under `data/hanaworlds-canvas/region-snapshots/`, and referenced from a
-  durable reservation before the first chunk write. Each chunk with specified
-  cells is written once. The complete box is read back and its digest must
-  equal the expected after image (written cells changed, all others unchanged)
-  before the receipt, object, footprint and history row commit together.
-- Any write or readback failure writes every started chunk back from the
-  before image and verifies the full box digest (`ROLLED_BACK`). If that
-  restore cannot be verified the reservation stays `RESTORE_PENDING`;
+- Compatibility: before any read or write Canvas runs
+  `checkProtocolCompatibility` on the Adapter's `ProtocolHandshake` with
+  `world-adapter-region` major 1 and its five capabilities. Another major, a
+  missing handshake (for example the exact-package 0.4.2 handshake) or a
+  missing capability is rejected; a different minor, patch, source or artifact
+  digest is accepted. Canvas advertises its own handshake (`canvas-region` 1.0,
+  four `canvas-region/v1:*` capabilities) as `protocolHandshake`.
+- `describe()` gives the skill the tool's purpose, typical scale and
+  prerequisites. There is no system threshold or setting.
+- Commit: the request carries Brush's `region-operations/v1` chunks and digest
+  (checked with `validateDigestBinding`). Canvas checks current world and
+  connection and registered footprints, reads the before image of every
+  compiled chunk (`requireKnownRegion`; still unknown rejects), and stores the
+  complete `RegionSnapshotContent` (node, param2, air and extras) as gzip
+  (RFC 1952, Node zlib) over its canonical JSON in a content-addressed 0600
+  file under `data/hanaworlds-canvas/region-snapshots/`, recorded as
+  `RegionSnapshotRef`, before a durable reservation and the single `APPLY`
+  `WriteRegion`. Success needs every chunk `WRITTEN`, lighting `COMPLETE` and a
+  full readback summary equal to `expectedRegionSummary`; then receipt, object,
+  footprint and history commit together. The result is checked with
+  `validateRegionCommit`.
+- Any failed, unknown or mismatching chunk restores the whole region: Canvas
+  reads the current state and writes `RESTORE` with the snapshot state for
+  every chunk that differs, then requires the before summary (`ROLLED_BACK`).
+  If that cannot be verified the reservation stays `RESTORE_PENDING`, and
   `recoverPending()` after a normal reopen restores it from the snapshot file.
-- `UndoRegion` names the region history transaction and object. Canvas checks
-  current world/connection, history head, object revision, world revision and
-  other registered footprints, reads the box, refuses to overwrite when the
-  written cells no longer hold the committed state, decompresses and verifies
-  the snapshot (compressed hash, raw hash, region digest) and writes the
-  written cells back. Cell `Undo` refuses a region transaction and the
-  original cell BUILD/Undo path is unchanged.
-- Compatibility is by region protocol major (1) plus required capabilities on
-  both Canvas and Adapter sides; a different minor/patch or package hash is
-  accepted, another major or a 0.x line is rejected before any write.
-
-The block format, Adapter region operations and digest domains are Canvas's
-explicit fixture reading of the S1-CONTRACT-REGION-V1-01 card until Contracts
-delivers region v1 bytes (`REGION_SHAPE_SOURCE = 'canvas-explicit-fixture'`).
+- Undo: only the head history transaction of the same world, after current
+  world/connection, history revision and other footprints are checked, and only
+  while the current region summary still equals the verified after summary
+  (otherwise `UNDO_CONFLICT/EXTERNAL_EDIT_CONFLICT`, no write). The snapshot is
+  decompressed and checked with `validateRegionSnapshotContent`, the pre-Undo
+  image is snapshotted too, and `RESTORE` must read back the origin before
+  summary; a failed Undo restores the pre-Undo image. Cell `Undo` refuses a
+  region transaction; the cell BUILD/Undo path is unchanged.

@@ -1,10 +1,11 @@
 # HanaWorlds Canvas
 
-Stage 1 local world Canvas `0.4.0` component candidate, exposing `canvas/v5`
+Stage 1 local world Canvas `0.5.0` component candidate, exposing `canvas/v5`
 and consuming the public `world-adapter/v6` port. It owns current local world
 selection, object footprints, recoverable apply/readback, durable history and
-same-transaction Undo. `0.4.0` adds region v1 commits over mapblock chunks with a
-compressed before snapshot and whole-region Undo (`hanaworldsCanvasRegionV1`).
+same-transaction Undo. `0.5.0` implements Contracts 0.5.0 `canvas-region/v1`: region commits over
+mapblock chunks with a compressed before snapshot and whole-region Undo
+(`hanaworldsCanvasRegionV1`).
 
 Source and fixture checks are separate from an installed player-visible product
 path. Stage 1 product readiness remains `UNPROVEN`; user `ACCEPTED` is unset.

@@ -458,10 +458,10 @@ test('host exposes durable Canvas facts as separate public ports', async () => {
     assert.equal(typeof ports.get('hanaworldsWorldRevisionOracle')?.read, 'function');
     assert.equal(ports.has('hanaworldsLuantiInspectionContext'), false);
     const advertised = ports.get('hanaworldsCanvasV5').contractHandshake;
-    assert.equal(advertised.contracts, 'hanaworlds-contracts@0.4.2');
-    assert.equal(ports.get('hanaworldsCanvasV5').status().version, '0.4.0');
+    assert.equal(advertised.contracts, 'hanaworlds-contracts@0.5.0');
+    assert.equal(ports.get('hanaworldsCanvasV5').status().version, '0.5.0');
     assert.doesNotThrow(() => checkContractHandshake(advertised));
     assert.throws(() => checkContractHandshake({ ...advertised,
-      contracts: 'hanaworlds-contracts@0.4.0' }), error => error.code === 'UNSUPPORTED_VERSION');
+      contracts: 'hanaworlds-contracts@0.4.2' }), error => error.code === 'UNSUPPORTED_VERSION');
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
