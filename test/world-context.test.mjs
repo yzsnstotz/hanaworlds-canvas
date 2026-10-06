@@ -4,6 +4,8 @@ import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { CanvasStore, CanvasV4 } from '../src/index.mjs';
+import { checkCurrentBuildAuthorizationHandshake,
+  checkWorldContextHandshake } from 'hanaworlds-contracts/v4';
 
 const root = join(homedir(), '.cache', 'hanaworlds-runs', 'S1-CANVAS-WORLD-CONTEXT-01');
 const readRequest = (overrides = {}) => ({ contractVersion: 'canvas/v4',
@@ -90,6 +92,16 @@ const switchRequest = (revision, overrides = {}) => ({ contractVersion: 'canvas/
 
 test('current context reads confirmed unbound Canvas CAS without changing binding', async t => {
   const f = await fixture(t);
+  assert.equal(f.canvas.contractHandshake.contracts, 'hanaworlds-contracts@0.3.9');
+  assert.equal(checkWorldContextHandshake(f.canvas.contractHandshake).result,
+    'HANDSHAKE_OPERATION_MATCH');
+  assert.equal(checkCurrentBuildAuthorizationHandshake(f.canvas.contractHandshake).result,
+    'HANDSHAKE_OPERATION_MATCH');
+  assert.throws(() => checkWorldContextHandshake({ ...f.canvas.contractHandshake,
+    contracts: 'hanaworlds-contracts@0.3.8' }), /UNSUPPORTED_VERSION/);
+  assert.throws(() => checkCurrentBuildAuthorizationHandshake({
+    ...f.canvas.contractHandshake, contracts: 'hanaworlds-contracts@0.3.8' }),
+  /UNSUPPORTED_VERSION/);
   const before = JSON.stringify(f.store.snapshot);
   const result = await f.canvas.call('ReadWorldSelectionContext', readRequest());
   assert.equal(result.error, null);
