@@ -2,8 +2,8 @@
 
 Status: component candidate. `canvas/v4` is the public Canvas port;
 `world-adapter/v4` is the only world transport port consumed. The v4 runtime
-uses Contracts 0.3.8 from public revision
-`ef681148fc4fd6e7871fcc8417baf102abf01b28`, pinned by URL and integrity
+uses Contracts 0.3.9 from public revision
+`a4675a4edd7b4a8a7aa4861a7949713a218d8b31`, pinned by URL and integrity
 in the package lock. The older byte-exact Contracts 0.3.4 subset remains in
 `vendor/contracts/` for legacy consumers; its provenance and verifier remain
 unchanged.
@@ -162,7 +162,7 @@ integration concern.
 
 ## Current world selection context
 
-`ReadWorldSelectionContext` is the Contracts 0.3.8 `canvas/v4` operation. It
+`ReadWorldSelectionContext` is the Contracts 0.3.9 `canvas/v4` operation. It
 returns Canvas's current durable Session selection and exact Select/Switch CAS
 revision. A verified live Session with no Canvas record yields `UNBOUND` with
 Canvas's actual absent-record CAS token; a committed binding yields `BOUND`
