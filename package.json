@@ -1,6 +1,6 @@
 {
   "name": "hanaworlds-canvas",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "private": true,
   "type": "module",
   "license": "MIT",
@@ -34,7 +34,7 @@
   },
   "dependencies": {
     "canonicalize": "5.1.0",
-    "hanaworlds-contracts": "https://codeload.github.com/yzsnstotz/hanaworlds-contracts/tar.gz/8cfb18f8e13aa33d7a942f230ec6117914322cdd",
+    "hanaworlds-contracts": "https://codeload.github.com/yzsnstotz/hanaworlds-contracts/tar.gz/aad7c0ea2a4a9a93dfb13555c46cd98b9b5da777",
     "icu": "2.3.1"
   }
 }

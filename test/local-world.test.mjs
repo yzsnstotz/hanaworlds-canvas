@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CanvasV5, CanvasStore, apply as applyCanvas } from '../src/index.mjs';
 import { readFile } from 'node:fs/promises';
-import { digestValue } from 'hanaworlds-contracts';
+import { digestValue, checkContractHandshake } from 'hanaworlds-contracts';
 import { createHash } from 'node:crypto';
 import canonicalize from 'canonicalize';
 
@@ -457,5 +457,11 @@ test('host exposes durable Canvas facts as separate public ports', async () => {
     assert.equal(typeof ports.get('hanaworldsCanvasHistoryFacts')?.read, 'function');
     assert.equal(typeof ports.get('hanaworldsWorldRevisionOracle')?.read, 'function');
     assert.equal(ports.has('hanaworldsLuantiInspectionContext'), false);
+    const advertised = ports.get('hanaworldsCanvasV5').contractHandshake;
+    assert.equal(advertised.contracts, 'hanaworlds-contracts@0.4.2');
+    assert.equal(ports.get('hanaworldsCanvasV5').status().version, '0.3.3');
+    assert.doesNotThrow(() => checkContractHandshake(advertised));
+    assert.throws(() => checkContractHandshake({ ...advertised,
+      contracts: 'hanaworlds-contracts@0.4.0' }), error => error.code === 'UNSUPPORTED_VERSION');
   } finally { await rm(directory, { recursive: true, force: true }); }
 });

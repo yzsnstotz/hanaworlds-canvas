@@ -1,8 +1,8 @@
-# HanaWorlds Canvas 0.3.2 local world component
+# HanaWorlds Canvas 0.3.3 local world component
 
 The package exposes `hanaworldsCanvasV5` and consumes the public
-`hanaworldsWorldAdapterV6` port. It uses the Contracts 0.4.0 root export from
-source revision `8cfb18f8e13aa33d7a942f230ec6117914322cdd`. There is no
+`hanaworldsWorldAdapterV6` port. It uses the Contracts 0.4.2 root export from
+source revision `aad7c0ea2a4a9a93dfb13555c46cd98b9b5da777`. There is no
 account, grant, epoch, authorization, or protected region dependency in this
 local MVP protocol.
 
