@@ -44,18 +44,59 @@ test('actual connection readback binds the current local world durably', async (
       worldRef: 'local-world' });
     assert.equal(selectionContext.error, null);
     assert.equal(selectionContext.result.selection.status, 'UNBOUND');
+    // A caller only uses what it read: the published UNBOUND sessionRevision.
+    const unboundRevision = selectionContext.result.selection.sessionRevision;
     const request = { contractVersion: 'canvas/v5', sessionRef: 'session-1', requestId: 'select-1',
       worldRef: 'local-world', connectionRef: 'local-connection',
-      connectionIncarnationRef: 'socket-open-1', expectedRevision: 'selection-0',
+      connectionIncarnationRef: 'socket-open-1', expectedRevision: unboundRevision,
       expectedContext: null };
+    // An unpublished private constant is not a revision a fresh Session accepts.
+    const privateConstant = await canvas.call('SelectWorldConnection',
+      { ...request, requestId: 'select-private', expectedRevision: 'selection-0' });
+    assert.equal(privateConstant.error?.code, 'STALE_REVISION');
+    const wrongWorld = await canvas.call('SelectWorldConnection',
+      { ...request, requestId: 'select-wrong-world', worldRef: 'other-world' });
+    assert.notEqual(wrongWorld.error, null);
+    assert.equal(canvas.current('session-1'), null);
+    calls.length = 0;
     const result = await canvas.call('SelectWorldConnection', request);
-    assert.equal(result.error, null);
+    assert.equal(result.error, null, JSON.stringify(result.error));
     assert.equal(result.result.localContext.connectionIncarnationRef, 'socket-open-1');
-    assert.deepEqual(calls, ['DiscoverConnections', 'ReadLocalConnection',
+    assert.deepEqual(calls, ['ReadLocalConnection',
       'DiscoverConnections']);
+    // Read back the binding; reselection uses the published selectionRevision.
+    const bound = await canvas.call('ReadWorldSelectionContext', {
+      contractVersion: 'canvas/v5', sessionRef: 'session-1', requestId: 'context-2',
+      worldRef: 'local-world' });
+    assert.equal(bound.error, null, JSON.stringify(bound.error));
+    assert.equal(bound.result.selection.status, 'BOUND');
+    assert.equal(bound.result.selection.context.selectionRevision,
+      result.result.selectionRevision);
+    assert.equal(JSON.stringify(bound.result.selection.context.localContext),
+      JSON.stringify(result.result.localContext));
+    const staleUnbound = await canvas.call('SelectWorldConnection',
+      { ...request, requestId: 'select-stale-unbound' });
+    // A bound Session never accepts the unbound revision again (refused at admission).
+    assert.equal(staleUnbound.error?.code, 'CURRENT_WORLD_MISMATCH');
+    const reselected = await canvas.call('SelectWorldConnection', { ...request,
+      requestId: 'select-2', expectedRevision: bound.result.selection.context.selectionRevision,
+      expectedContext: bound.result.selection.context.localContext });
+    assert.equal(reselected.error, null, JSON.stringify(reselected.error));
+    assert.notEqual(reselected.result.selectionRevision, result.result.selectionRevision);
+    const staleBound = await canvas.call('SelectWorldConnection', { ...request,
+      requestId: 'select-3', expectedRevision: result.result.selectionRevision,
+      expectedContext: reselected.result.localContext });
+    // Canvas's bound-revision protection is unchanged.
+    assert.equal(staleBound.error?.code, 'STALE_REVISION');
+    const staleContext = await canvas.call('SelectWorldConnection', { ...request,
+      requestId: 'select-4', expectedRevision: reselected.result.selectionRevision,
+      expectedContext: result.result.localContext });
+    assert.equal(staleContext.error?.code, 'CURRENT_WORLD_MISMATCH');
+    assert.equal(canvas.current('session-1').selectionRevision,
+      reselected.result.selectionRevision);
     const reopened = new CanvasV5({ store: await CanvasStore.open(directory), adapter });
     assert.equal(JSON.stringify(reopened.current('session-1').localContext),
-      JSON.stringify(result.result.localContext));
+      JSON.stringify(reselected.result.localContext));
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
@@ -204,7 +245,7 @@ test('build commits only after complete readback and stores one durable history 
       contractVersion: 'canvas/v5', sessionRef, requestId: 'select-build', worldRef,
       connectionRef: connected.connectionRef,
       connectionIncarnationRef: connected.connectionIncarnationRef,
-      expectedRevision: 'selection-0', expectedContext: null });
+      expectedRevision: 'session-0', expectedContext: null });
     assert.equal(selected.error, null);
     const localContext = selected.result.localContext;
     const initialWorldRevision = await canvas.readWorldRevision(worldRef);
@@ -459,7 +500,7 @@ test('host exposes durable Canvas facts as separate public ports', async () => {
     assert.equal(ports.has('hanaworldsLuantiInspectionContext'), false);
     const advertised = ports.get('hanaworldsCanvasV5').contractHandshake;
     assert.equal(advertised.contracts, 'hanaworlds-contracts@0.5.0');
-    assert.equal(ports.get('hanaworldsCanvasV5').status().version, '0.5.0');
+    assert.equal(ports.get('hanaworldsCanvasV5').status().version, '0.5.1');
     assert.doesNotThrow(() => checkContractHandshake(advertised));
     assert.throws(() => checkContractHandshake({ ...advertised,
       contracts: 'hanaworlds-contracts@0.4.2' }), error => error.code === 'UNSUPPORTED_VERSION');

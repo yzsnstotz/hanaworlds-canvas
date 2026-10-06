@@ -15,6 +15,9 @@ import { CanvasRegionV1 } from './region-v1.mjs';
 export { CanvasStore, CanvasRegionV1 };
 const WIRE = 'canvas/v5';
 const ADAPTER = 'world-adapter/v6';
+// The one revision an unbound Session publishes (ReadWorldSelectionContext UNBOUND
+// sessionRevision); a first SelectWorldConnection names exactly this value.
+const UNBOUND_SESSION_REVISION = 'session-0';
 const hash = (kind, value) => digestValue(kind, value).sha256;
 const stableHash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const rev = prefix => `${prefix}-${randomUUID()}`;
@@ -42,7 +45,7 @@ export class CanvasV5 {
     this.storageState = store ? 'READY' : 'UNAVAILABLE';
   }
   get contractHandshake() { return structuredClone(contractHandshake); }
-  status() { return { component: 'hanaworlds-canvas', version: '0.5.0',
+  status() { return { component: 'hanaworlds-canvas', version: '0.5.1',
     canvasContract: WIRE, adapterContract: ADAPTER, storage: this.storageState,
     productReadiness: 'UNPROVEN' }; }
   current(sessionRef) { return this.store?.snapshot.sessions[sessionRef] ?? null; }
@@ -499,7 +502,8 @@ export class CanvasV5 {
       sessionRef: body.sessionRef, worldRef: body.worldRef, inventory,
       selection: selection ? { status: 'BOUND', context: selection,
         connectionRef: selection.localContext.connectionRef } :
-        { status: 'UNBOUND', sessionRef: body.sessionRef, sessionRevision: 'session-0' }
+        { status: 'UNBOUND', sessionRef: body.sessionRef,
+          sessionRevision: UNBOUND_SESSION_REVISION }
     } : inventory;
     const response = validateResponse(WIRE, operation, answer(body, result));
     if (operation === 'ReadWorldSelectionContext') return response;
@@ -692,7 +696,8 @@ export class CanvasV5 {
     const admission = validateCurrentRequest(WIRE, 'SelectWorldConnection', body, facts);
     if (prior) return prior.response;
     const previous = this.current(body.sessionRef);
-    if (body.expectedRevision !== (previous?.selectionRevision ?? 'selection-0'))
+    // Bound: the published selectionRevision. Unbound: the published UNBOUND sessionRevision.
+    if (body.expectedRevision !== (previous ? previous.selectionRevision : UNBOUND_SESSION_REVISION))
       throw fail('STALE_REVISION');
     const connection = await this.#adapter('ReadLocalConnection', {
       contractVersion: ADAPTER, sessionRef: body.sessionRef,

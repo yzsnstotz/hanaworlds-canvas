@@ -1,4 +1,4 @@
-# HanaWorlds Canvas 0.5.0 local world component
+# HanaWorlds Canvas 0.5.1 local world component
 
 The package exposes `hanaworldsCanvasV5` and consumes the public
 `hanaworldsWorldAdapterV6` port. It uses the Contracts 0.5.0 root export from
@@ -18,6 +18,13 @@ connection incarnation, world and Canvas selection revision. Each bound call
 compares its local context with this durable selection and reads the current
 connection again. An old connection incarnation or wrong world fails before
 world mutation.
+
+`expectedRevision` of `SelectWorldConnection` is always a revision Canvas has
+published: for an unbound Session it is the `sessionRevision` of the UNBOUND
+`ReadWorldSelectionContext` result (`session-0`); for a bound Session it is the
+current `selectionRevision` read back from the BOUND context. A caller never
+needs a private constant. Any other value is `STALE_REVISION`, and a bound
+Session never accepts the unbound revision again.
 
 The DSH host receives three Canvas-owned read services from `apply(ctx)`:
 `hanaworldsCanvasFootprintRegistry.readFootprints`,

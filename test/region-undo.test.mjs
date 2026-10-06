@@ -196,11 +196,15 @@ async function boot(directory, world) {
   return { canvas, region: new CanvasRegionV1(canvas, world.region) };
 }
 async function select(canvas, selectedWorld = WORLD) {
+  // Normal caller path: read the public UNBOUND fact, bind with its published revision.
+  const context = await canvas.call('ReadWorldSelectionContext', { contractVersion: 'canvas/v5',
+    sessionRef: 'session-1', requestId: 'context-1', worldRef: selectedWorld });
+  assert.equal(context.result.selection.status, 'UNBOUND');
   const selected = await canvas.call('SelectWorldConnection', { contractVersion: 'canvas/v5',
     sessionRef: 'session-1', requestId: 'select-1', worldRef: selectedWorld,
     connectionRef: connection.connectionRef,
     connectionIncarnationRef: connection.connectionIncarnationRef,
-    expectedRevision: 'selection-0', expectedContext: null });
+    expectedRevision: context.result.selection.sessionRevision, expectedContext: null });
   assert.equal(selected.error, null);
   return selected.result.localContext;
 }
@@ -445,7 +449,7 @@ test('protocol major + capabilities decide compatibility; patch and provenance d
         'PROTOCOL_COMPATIBLE');
       assert.throws(() => checkProtocolCompatibility(canvasProtocolHandshake,
         [protocolRequirement('canvas-region/v2')]), e => e.code === 'UNSUPPORTED_VERSION');
-      assert.equal(canvas.status().version, '0.5.0');
+      assert.equal(canvas.status().version, '0.5.1');
     } finally { await rm(directory, { recursive: true, force: true }); }
   });
 
