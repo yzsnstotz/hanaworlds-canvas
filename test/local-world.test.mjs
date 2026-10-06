@@ -1,0 +1,461 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { CanvasV5, CanvasStore, apply as applyCanvas } from '../src/index.mjs';
+import { readFile } from 'node:fs/promises';
+import { digestValue } from 'hanaworlds-contracts';
+import { createHash } from 'node:crypto';
+import canonicalize from 'canonicalize';
+
+const stateProfile = { profileVersion: 'state-profile/v2',
+  nodeFields: ['nodeName', 'param1', 'param2'], metadataMode: 'exact',
+  inventoryMode: 'exact', timerMode: 'exact', derivedLightMode: 'recompute-with-readback' };
+const connection = { connectionRef: 'local-connection', connectionIncarnationRef: 'socket-open-1',
+  worldRef: 'local-world', payloadVersion: 'local-world/v1', payloadDigest: '1'.repeat(64),
+  capabilities: { providerRef: 'adapter', capabilityRevision: 'cap-1', worldRef: 'local-world',
+    engineBounds: { min: [0, 0, 0], max: [9, 9, 9] }, limits: [],
+    recoveryGuarantee: 'RECOVERABLE_VERIFIED', stateProfile,
+    sessionDeleteSupported: true, imageMediaTypes: [], model: null } };
+
+test('actual connection readback binds the current local world durably', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'canvas-local-'));
+  try {
+    const calls = [];
+    const adapter = { async call(operation, request) {
+      calls.push(operation);
+      if (operation === 'DiscoverConnections') return {
+        contractVersion: 'world-adapter/v6', requestId: request.requestId,
+        result: { capabilityRevision: 'cap-1', connections: [{
+          adapterId: 'hanaworlds-world-adapter', connectionRef: connection.connectionRef,
+          worldRef: connection.worldRef, displayName: 'Local world',
+          capabilityRevision: 'cap-1', payloadVersion: connection.payloadVersion,
+          readiness: 'READY',
+          connectionIncarnationRef: connection.connectionIncarnationRef }] }, error: null };
+      if (operation === 'ReadLocalConnection') return {
+        contractVersion: 'world-adapter/v6', requestId: request.requestId,
+        result: connection, error: null };
+      throw new Error(`unexpected adapter operation ${operation}`);
+    } };
+    const canvas = new CanvasV5({ store: await CanvasStore.open(directory), adapter });
+    const selectionContext = await canvas.call('ReadWorldSelectionContext', {
+      contractVersion: 'canvas/v5', sessionRef: 'session-1', requestId: 'context-1',
+      worldRef: 'local-world' });
+    assert.equal(selectionContext.error, null);
+    assert.equal(selectionContext.result.selection.status, 'UNBOUND');
+    const request = { contractVersion: 'canvas/v5', sessionRef: 'session-1', requestId: 'select-1',
+      worldRef: 'local-world', connectionRef: 'local-connection',
+      connectionIncarnationRef: 'socket-open-1', expectedRevision: 'selection-0',
+      expectedContext: null };
+    const result = await canvas.call('SelectWorldConnection', request);
+    assert.equal(result.error, null);
+    assert.equal(result.result.localContext.connectionIncarnationRef, 'socket-open-1');
+    assert.deepEqual(calls, ['DiscoverConnections', 'ReadLocalConnection',
+      'DiscoverConnections']);
+    const reopened = new CanvasV5({ store: await CanvasStore.open(directory), adapter });
+    assert.equal(JSON.stringify(reopened.current('session-1').localContext),
+      JSON.stringify(result.result.localContext));
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test('build commits only after complete readback and stores one durable history row', async () => {
+  const fixture = JSON.parse(await readFile(new URL(import.meta.resolve(
+    'hanaworlds-contracts/fixtures/main'))));
+  const D = (kind, value) => digestValue(kind, value).sha256;
+  const directory = await mkdtemp(join(tmpdir(), 'canvas-build-'));
+  try {
+    const worldRef = fixture.request.worldRef;
+    const connected = { ...connection, worldRef,
+      capabilities: { ...connection.capabilities, worldRef } };
+    const sessionRef = 'build-session';
+    const position = [0, 1, 3];
+    let record = { position, nodeName: 'air', param1: 0, param2: 0,
+      metadata: {}, inventory: {}, timer: null };
+    let writes = 0;
+    let restores = 0;
+    let mismatchAfterApply = false;
+    const preparedTransactions = new Set();
+    let scopedFactReads = 0;
+    let lastOpaqueDigest;
+    let regionInspection;
+    let inspectedObjectRef;
+    let inspectedObjectRevision;
+    const nativeFacts = { async readScopedState(connectionRef, positions) {
+      scopedFactReads++;
+      assert.equal(connectionRef, connected.connectionRef);
+      assert.deepEqual(positions, [position]);
+      lastOpaqueDigest = createHash('sha256')
+          .update('HanaWorlds|contracts@0.4.0|adapter-scoped-cell/v1\n')
+          .update(canonicalize({ profile: stateProfile, record })).digest('hex');
+      return { worldRef, stateProfile, cells: [{ position,
+        availability: 'KNOWN', stateDigest: lastOpaqueDigest }] };
+    } };
+    const calls = [];
+    const adapter = { async call(operation, request) {
+      calls.push(operation);
+      const respond = result => ({ contractVersion: 'world-adapter/v6',
+        requestId: request.requestId, result, error: null });
+      if (operation === 'DiscoverConnections') return respond({
+        capabilityRevision: 'cap-1', connections: [{
+          adapterId: 'hanaworlds-world-adapter',
+          connectionRef: connected.connectionRef, worldRef,
+          displayName: 'Fixture local world', capabilityRevision: 'cap-1',
+          payloadVersion: connected.payloadVersion, readiness: 'READY',
+          connectionIncarnationRef: connected.connectionIncarnationRef }] });
+      if (operation === 'ReadLocalConnection') return respond(connected);
+      if (operation === 'InspectRegion') {
+        const targetFacts = { ...fixture.request.regionInspection.targetFacts,
+          worldRevision: request.expectedWorldRevision };
+        regionInspection = { ...fixture.request.regionInspection,
+          inspectionId: request.inspectionId, placementSettings: request.placementSettings,
+          targetFacts, targetFactsDigest: D('target-facts', targetFacts),
+          evidence: { ...fixture.request.regionInspection.evidence,
+            worldRevision: request.expectedWorldRevision } };
+        return respond({ outcome: 'REGION_INSPECTED', inspection: regionInspection });
+      }
+      if (operation === 'InspectWorld') return respond({
+        ...fixture.request.regionInspection.targetFacts, source: 'INSPECTED',
+        worldRevision: request.expectedWorldRevision,
+        objectRef: inspectedObjectRef,
+        objectRevision: inspectedObjectRevision,
+        sampledBounds: request.sampledBounds });
+      if (operation === 'Readback') {
+        if (!preparedTransactions.has(request.transactionId))
+          throw new Error('STALE_TRANSACTION');
+        const projection = { worldRef, coveredPositions: [position],
+          records: [record], stateProfile };
+        return respond({ projection, readbackDigest: D('readback', projection),
+          adapterExecutionRevision: `execution-${writes}` });
+      }
+      if (operation === 'PrepareRecoverableTransaction') {
+        assert.equal(request.scope.cells[0].stateDigest, lastOpaqueDigest);
+        preparedTransactions.add(request.transactionId);
+        const payload = { contractVersion: 'world-adapter/v6',
+          transactionId: request.transactionId, worldRef,
+          operationDigest: request.operationDigest, scopeDigest: request.scopeDigest,
+          beforeImageDigest: '3'.repeat(64), localContext: request.localContext };
+        return respond({ payload,
+          transactionPayloadDigest: D('scoped-transaction-payload', payload),
+          beforeImageDigest: payload.beforeImageDigest, scopeDigest: request.scopeDigest,
+          guarantee: 'RECOVERABLE_VERIFIED', stateProfile,
+          adapterExecutionRevision: `execution-${writes}`,
+          beforeStateReadbackDigest: D('readback', {
+            worldRef, coveredPositions: [position], records: [record], stateProfile }) });
+      }
+      if (operation === 'ApplyCompiledTransaction') {
+        writes++;
+        record = { ...record, nodeName: mismatchAfterApply ? 'fixture:wrong' : 'fixture:stone' };
+        const projection = { worldRef, coveredPositions: [position], records: [record],
+          stateProfile };
+        return respond({ contractVersion: 'canvas/v5',
+          transactionId: request.transactionId, operationDigest: request.operationDigest,
+          transactionPayloadDigest: request.preparedTransaction.transactionPayloadDigest,
+          status: 'VERIFIED', previousWorldRevision: writes === 1 ?
+            fixture.request.targetFacts.worldRevision : 'world-3',
+          observedWorldRevision: writes === 1 ? 'world-2' : 'world-4',
+          readbackDigest: D('readback', projection),
+          restoreStatus: 'NOT_REQUIRED', error: null, localContext: request.localContext });
+      }
+      if (operation === 'RestoreTransaction') {
+        restores++;
+        record = { ...record, nodeName: 'air' };
+        const projection = { worldRef, coveredPositions: [position], records: [record],
+          stateProfile };
+        return respond({ contractVersion: 'canvas/v5',
+          transactionId: request.originTransactionId,
+          operationDigest: request.operationDigest,
+          transactionPayloadDigest: '5'.repeat(64), status: 'ROLLED_BACK',
+          previousWorldRevision: 'world-4', observedWorldRevision: 'world-5',
+          readbackDigest: D('readback', projection),
+          restoreStatus: 'VERIFIED_RESTORED', error: null,
+          localContext: request.localContext });
+      }
+      if (operation === 'PrepareHistoryTransaction') {
+        preparedTransactions.add(request.transactionId);
+        return respond({
+        originTransactionId: request.originTransactionId,
+        transactionId: request.transactionId, direction: 'UNDO',
+        historyOperationDigest: request.historyOperationDigest,
+        transactionPayloadDigest: '5'.repeat(64), beforeImageDigest: '6'.repeat(64),
+        targetStateDigest: request.targetStateDigest, stateProfile,
+        adapterExecutionRevision: `execution-${writes}`,
+        guarantee: 'RECOVERABLE_VERIFIED', status: 'PREPARED',
+        localContext: request.localContext });
+      }
+      if (operation === 'ApplyHistoryTransaction') {
+        writes++;
+        record = { ...record, nodeName: 'air' };
+        const projection = { worldRef, coveredPositions: [position], records: [record],
+          stateProfile };
+        return respond({ contractVersion: 'canvas/v5',
+          transactionId: request.transactionId,
+          operationDigest: request.historyOperationDigest,
+          transactionPayloadDigest: request.preparedHistoryTransaction.transactionPayloadDigest,
+          status: 'VERIFIED', previousWorldRevision: 'world-2',
+          observedWorldRevision: 'world-3', readbackDigest: D('readback', projection),
+          restoreStatus: 'NOT_REQUIRED', error: null, localContext: request.localContext });
+      }
+      throw new Error(`unexpected adapter operation ${operation}`);
+    } };
+    const canvas = new CanvasV5({ store: await CanvasStore.open(directory), adapter,
+      nativeFacts });
+    const selected = await canvas.call('SelectWorldConnection', {
+      contractVersion: 'canvas/v5', sessionRef, requestId: 'select-build', worldRef,
+      connectionRef: connected.connectionRef,
+      connectionIncarnationRef: connected.connectionIncarnationRef,
+      expectedRevision: 'selection-0', expectedContext: null });
+    assert.equal(selected.error, null);
+    const localContext = selected.result.localContext;
+    const initialWorldRevision = await canvas.readWorldRevision(worldRef);
+    assert.equal(initialWorldRevision, 'world-0');
+    const placement = await canvas.call('InspectPlacementRegion', {
+      contractVersion: 'canvas/v5', sessionRef, requestId: 'inspect-placement', worldRef,
+      anchor: { kind: 'CURRENT_VIEW', invocationId: 'confirmed-1' },
+      footprint: { widthCells: 1, depthCells: 1, heightCells: 1 }, localContext });
+    assert.equal(placement.error, null, JSON.stringify(placement));
+    assert.equal(placement.result.inspection.targetFacts.worldRevision, initialWorldRevision);
+    assert.deepEqual({ ...placement.result.inspection.placementSettings },
+      { frontGapCells: 2, forwardSearchCells: 16, lateralSearchCells: 8,
+        verticalSearchCells: 4, settingsRevision: 'placement-0' });
+    const placementStore = await CanvasStore.open(directory);
+    assert.equal(placementStore.snapshot.placementInspections[
+      placement.result.inspection.inspectionId].inspection.targetFacts.worldRevision,
+    initialWorldRevision);
+    const build = structuredClone(fixture.response.result.build);
+    build.targetFactsDigest = regionInspection.targetFactsDigest;
+    build.witnesses = build.witnesses.map(witness => ({ ...witness,
+      targetFactsDigest: regionInspection.targetFactsDigest,
+      facts: witness.facts.evidence ? { ...witness.facts,
+        evidence: { ...witness.facts.evidence, worldRevision: initialWorldRevision } } :
+        witness.facts }));
+    const operations = { contractVersion: 'operations/v3',
+      buildDigest: D('build', build), compilerRevision: 'brush-1',
+      compilationConfigDigest: 'a'.repeat(64), worldRef,
+      frameDigest: fixture.request.targetFacts.frameDigest,
+      catalogueDigest: build.catalogueDigest,
+      targetFactsDigest: regionInspection.targetFactsDigest,
+      effects: [{ position, nodeName: 'fixture:stone', param2: 0 }] };
+    const operationDigest = D('operations', operations);
+    const analyzed = await canvas.call('AnalyzeAffectedObjects', {
+      contractVersion: 'canvas/v5', sessionRef, requestId: 'analyze-build', worldRef,
+      transactionId: 'build-1', operations, operationDigest,
+      expectedRevision: initialWorldRevision,
+      expectedRegistryRevision: 'registry-0',
+      expectedSelectionRevision: selected.result.selectionRevision, localContext });
+    assert.equal(analyzed.error, null);
+    assert.deepEqual([...analyzed.result.affectedObjectRefs], []);
+    const apply = { contractVersion: 'canvas/v5', sessionRef,
+      requestId: 'apply-build', worldRef, transactionId: 'build-1', operations,
+      operationDigest, analysisDigest: D('affected-analysis', analyzed.result),
+      decisionRevision: null,
+      expectedWorldRevision: initialWorldRevision,
+      expectedObjectRevisions: {}, guarantee: 'RECOVERABLE_VERIFIED',
+      regionInspectionBinding: { inspectionId: regionInspection.inspectionId,
+        build }, localContext };
+    const wrongInspection = await canvas.call('ApplyRecoverableCommit', {
+      ...apply, requestId: 'apply-unregistered-inspection',
+      regionInspectionBinding: { ...apply.regionInspectionBinding,
+        inspectionId: 'unregistered-inspection' } });
+    assert.equal(wrongInspection.error?.code, 'INSPECTION_FAILED');
+    assert.equal(writes, 0);
+    const completed = await canvas.call('ApplyRecoverableCommit', apply);
+    assert.equal(completed.error, null, JSON.stringify({ calls, completed,
+      pending: canvas.store.snapshot.pending }));
+    assert.equal(completed.result.status, 'VERIFIED');
+    assert.equal(writes, 1);
+    assert.equal(scopedFactReads, 1);
+    const readbackRequest = {
+      contractVersion: 'canvas/v5', sessionRef, requestId: 'public-readback', worldRef,
+      transactionId: 'build-1', commitRevision: completed.result.observedWorldRevision,
+      expectedOperations: operations,
+      transactionPayloadDigest: completed.result.transactionPayloadDigest,
+      localContext };
+    const publicReadback = await canvas.call('Readback', readbackRequest);
+    assert.equal(publicReadback.error, null, JSON.stringify(publicReadback));
+    assert.deepEqual(publicReadback.result, completed.result);
+    const replay = await canvas.call('ApplyRecoverableCommit', apply);
+    assert.equal(replay.result.transactionId, 'build-1');
+    assert.equal(writes, 1);
+    const reopened = await CanvasStore.open(directory);
+    assert.equal(reopened.snapshot.transactions['build-1'].history.status, 'VERIFIED');
+    const objectRef = reopened.snapshot.transactions['build-1'].objectRef;
+    const objectRevision = reopened.snapshot.objects[worldRef][objectRef].objectRevision;
+    inspectedObjectRef = objectRef;
+    inspectedObjectRevision = objectRevision;
+    const persistedCanvas = new CanvasV5({ store: reopened, adapter });
+    const footprints = await persistedCanvas.readFootprints(worldRef, [objectRef], {
+      sessionRef, worldRef, localContext });
+    assert.equal(footprints.current, true);
+    assert.equal(footprints.durable, true);
+    assert.deepEqual([...footprints.objects[0].positions[0]], position);
+    assert.equal(footprints.objects[0].provenance, 'CANVAS_REGISTERED');
+    await assert.rejects(() => persistedCanvas.readFootprints(worldRef, [objectRef], {
+      sessionRef, worldRef,
+      localContext: { ...localContext, connectionIncarnationRef: 'reopened-connection' } }),
+    /CURRENT_WORLD_MISMATCH/);
+    assert.equal(await persistedCanvas.readWorldRevision(worldRef), 'world-2');
+    const historyFacts = await persistedCanvas.readHistoryFacts({
+      sessionRef, worldRef, localContext, originTransactionId: 'build-1' });
+    assert.equal(historyFacts.current, true);
+    assert.equal(historyFacts.originVerifiedReceiptDigest,
+      reopened.snapshot.transactions['build-1'].history.receiptDigest);
+    assert.equal(historyFacts.objectRevisions[objectRef], objectRevision);
+    const inspectObjectRequest = {
+      contractVersion: 'canvas/v5', sessionRef, requestId: 'inspect-object', worldRef,
+      objectRef, expectedRevision: objectRevision,
+      sampledBounds: fixture.request.regionInspection.targetFacts.sampledBounds,
+      localContext };
+    const inspectedObject = await canvas.call('InspectObject', inspectObjectRequest);
+    assert.equal(inspectedObject.error, null, JSON.stringify(inspectedObject));
+    assert.equal(inspectedObject.result.objectRef, objectRef);
+    assert.equal(inspectedObject.result.objectRevision, objectRevision);
+    assert.equal(inspectedObject.result.worldRevision, 'world-2');
+    const objects = await canvas.call('ListObjects', { contractVersion: 'canvas/v5',
+      sessionRef, requestId: 'list-objects', worldRef, expectedRevision: null,
+      localContext });
+    assert.equal(objects.error, null);
+    assert.equal(objects.result.objects[0].objectRef, objectRef);
+    const historyView = await canvas.call('HistoryQuery', {
+      contractVersion: 'canvas/v5', sessionRef, requestId: 'history-build', worldRef,
+      objectRef, expectedHistoryRevision: null, localContext });
+    assert.equal(historyView.error, null);
+    assert.equal(historyView.result.entries[0].transactionId, 'build-1');
+    const conflictAnalysis = await canvas.call('AnalyzeAffectedObjects', {
+      contractVersion: 'canvas/v5', sessionRef, requestId: 'analyze-conflict', worldRef,
+      transactionId: 'conflict-1', operations, operationDigest,
+      expectedRevision: 'world-2',
+      expectedRegistryRevision: reopened.snapshot.registryRevisions[worldRef],
+      expectedSelectionRevision: selected.result.selectionRevision, localContext });
+    assert.equal(conflictAnalysis.error, null);
+    assert.deepEqual([...conflictAnalysis.result.affectedObjectRefs], [objectRef]);
+    const conflict = await canvas.call('ApplyRecoverableCommit', {
+      ...apply, requestId: 'apply-conflict', transactionId: 'conflict-1',
+      analysisDigest: D('affected-analysis', conflictAnalysis.result),
+      expectedWorldRevision: 'world-2' });
+    assert.equal(conflict.error.code, 'OTHER_OBJECTS_AFFECTED');
+    assert.equal(writes, 1);
+    const undoRequest = { contractVersion: 'canvas/v5',
+      sessionRef, requestId: 'undo-build', worldRef, objectRef,
+      transactionId: 'undo-1', historyTransactionId: 'build-1',
+      expectedHistoryRevision: reopened.snapshot.history[objectRef][0].historyRevision,
+      expectedWorldRevision: 'world-2',
+      expectedObjectRevisions: { [objectRef]: objectRevision },
+      intentDigest: '7'.repeat(64), surfaceActionDigest: '8'.repeat(64), localContext };
+    const undo = await canvas.call('Undo', undoRequest);
+    assert.equal(undo.error, null, JSON.stringify({ undo, calls }));
+    assert.equal(undo.result.status, 'VERIFIED');
+    assert.equal(writes, 2);
+    const undoReplay = await canvas.call('Undo', undoRequest);
+    assert.equal(undoReplay.result.transactionId, 'undo-1');
+    assert.equal(writes, 2);
+    const afterUndo = await CanvasStore.open(directory);
+    assert.equal(afterUndo.snapshot.history[objectRef].at(-1).originTransactionId, 'build-1');
+    const staleReadback = await canvas.call('Readback', readbackRequest);
+    assert.equal(staleReadback.error?.code, 'STALE_REVISION');
+    const staleObject = await canvas.call('InspectObject', inspectObjectRequest);
+    assert.equal(staleObject.error?.code, 'STALE_REVISION');
+    const undoneCanvas = new CanvasV5({ store: afterUndo, adapter });
+    assert.equal(await undoneCanvas.readWorldRevision(worldRef), 'world-3');
+    assert.deepEqual((await undoneCanvas.readFootprints(worldRef, [objectRef], {
+      sessionRef, worldRef, localContext })).objects[0].positions, []);
+    await assert.rejects(() => undoneCanvas.readHistoryFacts({ sessionRef, worldRef,
+      localContext, originTransactionId: 'build-1' }), /UNDO_CONFLICT/);
+    const wrongWorld = await canvas.call('AnalyzeAffectedObjects', {
+      contractVersion: 'canvas/v5', sessionRef, requestId: 'wrong-world',
+      worldRef, transactionId: 'wrong-world-tx', operations, operationDigest,
+      expectedRevision: 'world-3',
+      expectedRegistryRevision: afterUndo.snapshot.registryRevisions[worldRef],
+      expectedSelectionRevision: selected.result.selectionRevision,
+      localContext: { ...localContext, connectionIncarnationRef: 'socket-open-2' } });
+    assert.equal(wrongWorld.error.code, 'CURRENT_WORLD_MISMATCH');
+    assert.equal(writes, 2);
+    const secondPlacement = await canvas.call('InspectPlacementRegion', {
+      contractVersion: 'canvas/v5', sessionRef, requestId: 'inspect-rebuild', worldRef,
+      anchor: { kind: 'CURRENT_VIEW', invocationId: 'confirmed-2' },
+      footprint: { widthCells: 1, depthCells: 1, heightCells: 1 }, localContext });
+    assert.equal(secondPlacement.error, null);
+    const secondInspection = secondPlacement.result.inspection;
+    const secondBuild = structuredClone(build);
+    secondBuild.targetFactsDigest = secondInspection.targetFactsDigest;
+    secondBuild.witnesses = secondBuild.witnesses.map(witness => ({ ...witness,
+      targetFactsDigest: secondInspection.targetFactsDigest,
+      facts: witness.facts.evidence ? { ...witness.facts,
+        evidence: { ...witness.facts.evidence, worldRevision: 'world-3' } } :
+        witness.facts }));
+    const secondOperations = { ...operations, buildDigest: D('build', secondBuild),
+      targetFactsDigest: secondInspection.targetFactsDigest };
+    const secondOperationDigest = D('operations', secondOperations);
+    const secondBinding = { inspectionId: secondInspection.inspectionId,
+      build: secondBuild };
+    const badOperations = { ...secondOperations, effects: [{ position: [0, 1, 4],
+      nodeName: 'fixture:stone', param2: 0 }] };
+    const badOperationDigest = D('operations', badOperations);
+    const badAnalysis = await canvas.call('AnalyzeAffectedObjects', {
+      contractVersion: 'canvas/v5', sessionRef, requestId: 'analyze-bad-geometry',
+      worldRef, transactionId: 'bad-geometry', operations: badOperations,
+      operationDigest: badOperationDigest, expectedRevision: 'world-3',
+      expectedRegistryRevision: afterUndo.snapshot.registryRevisions[worldRef],
+      expectedSelectionRevision: selected.result.selectionRevision, localContext });
+    assert.equal(badAnalysis.error, null);
+    const badGeometry = await canvas.call('ApplyRecoverableCommit', {
+      ...apply, requestId: 'apply-bad-geometry', transactionId: 'bad-geometry',
+      operations: badOperations, operationDigest: badOperationDigest,
+      analysisDigest: D('affected-analysis', badAnalysis.result),
+      expectedWorldRevision: 'world-3', regionInspectionBinding: secondBinding });
+    assert.equal(badGeometry.error.code, 'CATALOGUE_MISMATCH');
+    assert.equal(writes, 2);
+    const reanalyzed = await canvas.call('AnalyzeAffectedObjects', {
+      contractVersion: 'canvas/v5', sessionRef, requestId: 'analyze-rebuild', worldRef,
+      transactionId: 'build-2', operations: secondOperations,
+      operationDigest: secondOperationDigest,
+      expectedRevision: 'world-3',
+      expectedRegistryRevision: afterUndo.snapshot.registryRevisions[worldRef],
+      expectedSelectionRevision: selected.result.selectionRevision, localContext });
+    assert.equal(reanalyzed.error, null);
+    mismatchAfterApply = true;
+    const failed = await canvas.call('ApplyRecoverableCommit', {
+      ...apply, requestId: 'apply-rebuild', transactionId: 'build-2',
+      operations: secondOperations, operationDigest: secondOperationDigest,
+      analysisDigest: D('affected-analysis', reanalyzed.result),
+      expectedWorldRevision: 'world-3', regionInspectionBinding: secondBinding });
+    assert.equal(failed.error, null, JSON.stringify({ failed, calls }));
+    assert.equal(failed.result.status, 'ROLLED_BACK');
+    assert.equal(restores, 1);
+    const afterRollback = await CanvasStore.open(directory);
+    assert.equal(afterRollback.snapshot.transactions['build-2'].receipt.status, 'ROLLED_BACK');
+    assert.equal(afterRollback.snapshot.history[objectRef].length, 2);
+    const selectedObject = await canvas.call('SetObjectSelection', {
+      contractVersion: 'canvas/v5', sessionRef, requestId: 'select-object', worldRef,
+      objectRefs: [objectRef],
+      expectedSelectionRevision: selected.result.selectionRevision, localContext });
+    assert.equal(selectedObject.error, null);
+    const selectedContext = { ...localContext,
+      selectionRevision: selectedObject.result.selectionRevision };
+    const selectedView = await canvas.call('ReadWorldSelectionContext', {
+      contractVersion: 'canvas/v5', sessionRef, requestId: 'selected-view', worldRef });
+    assert.equal(selectedView.error, null);
+    assert.equal(selectedView.result.selection.context.localContext.selectionRevision,
+      selectedContext.selectionRevision);
+    assert.deepEqual([...selectedView.result.selection.context.orderedSelectedObjectRefs],
+      [objectRef]);
+    assert.equal(calls.filter(operation => operation === 'DiscoverConnections').length, 1);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test('host exposes durable Canvas facts as separate public ports', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'canvas-host-'));
+  try {
+    const ports = new Map();
+    const homePath = (...parts) => join(directory, ...parts);
+    const ctx = { get: name => name === 'dshHomePath' ? homePath : null,
+      provide: (name, port) => ports.set(name, port) };
+    const canvas = applyCanvas(ctx);
+    await canvas.ready;
+    assert.equal(canvas.storageState, 'READY');
+    assert.equal(typeof ports.get('hanaworldsCanvasFootprintRegistry')?.readFootprints, 'function');
+    assert.equal(typeof ports.get('hanaworldsCanvasHistoryFacts')?.read, 'function');
+    assert.equal(typeof ports.get('hanaworldsWorldRevisionOracle')?.read, 'function');
+    assert.equal(ports.has('hanaworldsLuantiInspectionContext'), false);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
