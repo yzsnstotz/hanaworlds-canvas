@@ -19,7 +19,9 @@ connection again. An old connection incarnation or wrong world fails before
 world mutation.
 
 `AnalyzeAffectedObjects` uses Canvas's durable object footprints. A fresh
-build can commit only when the affected set is empty. `ApplyRecoverableCommit`
+build can commit only when the affected set is empty. When a BUILD document is
+bound, Canvas also checks its digest and exact compiled geometry before world
+readback or mutation. `ApplyRecoverableCommit`
 reserves the transaction before Adapter prepare/apply, saves the complete
 before state, and compares the actual complete after state with the compiled
 effects. The verified receipt, object footprint and history row commit in one

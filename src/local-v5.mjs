@@ -7,7 +7,7 @@ import { CanvasStore } from './store-v5.mjs';
 import { admitRequest, validateRequest, validateResponse, validateBoundResponse,
   validateCurrentRequest, validateWorldSelection, validateCommitReadback,
   projectScopedPreparedTransaction, checkContractHandshake, contractHandshake,
-  digestValue, requestDigest, publicError } from 'hanaworlds-contracts';
+  digestValue, requestDigest, publicError, validateExactEffects } from 'hanaworlds-contracts';
 
 export { CanvasStore };
 const WIRE = 'canvas/v5';
@@ -142,6 +142,12 @@ export class CanvasV5 {
         body.guarantee !== 'RECOVERABLE_VERIFIED' ||
         hash('operations', body.operations) !== body.operationDigest)
       throw fail('OTHER_OBJECTS_AFFECTED', 'SCOPE_DENIED');
+    if (body.regionInspectionBinding) {
+      const build = body.regionInspectionBinding.build;
+      if (hash('build', build) !== body.operations.buildDigest)
+        throw fail('DIGEST_MISMATCH', 'PAYLOAD_CHANGED');
+      validateExactEffects(build.operations, build.materials, body.operations.effects);
+    }
     const positions = this.#positions(body.operations);
     if (this.#affected(body.worldRef, positions).length)
       throw fail('OTHER_OBJECTS_AFFECTED', 'SCOPE_DENIED');

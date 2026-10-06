@@ -242,6 +242,23 @@ test('build commits only after complete readback and stores one durable history 
       localContext: { ...localContext, connectionIncarnationRef: 'socket-open-2' } });
     assert.equal(wrongWorld.error.code, 'CURRENT_WORLD_MISMATCH');
     assert.equal(writes, 2);
+    const badOperations = { ...operations, effects: [{ position: [0, 1, 4],
+      nodeName: 'fixture:stone', param2: 0 }] };
+    const badOperationDigest = D('operations', badOperations);
+    const badAnalysis = await canvas.call('AnalyzeAffectedObjects', {
+      contractVersion: 'canvas/v5', sessionRef, requestId: 'analyze-bad-geometry',
+      worldRef, transactionId: 'bad-geometry', operations: badOperations,
+      operationDigest: badOperationDigest, expectedRevision: 'world-3',
+      expectedRegistryRevision: afterUndo.snapshot.registryRevisions[worldRef],
+      expectedSelectionRevision: selected.result.selectionRevision, localContext });
+    assert.equal(badAnalysis.error, null);
+    const badGeometry = await canvas.call('ApplyRecoverableCommit', {
+      ...apply, requestId: 'apply-bad-geometry', transactionId: 'bad-geometry',
+      operations: badOperations, operationDigest: badOperationDigest,
+      analysisDigest: D('affected-analysis', badAnalysis.result),
+      expectedWorldRevision: 'world-3' });
+    assert.equal(badGeometry.error.code, 'CATALOGUE_MISMATCH');
+    assert.equal(writes, 2);
     const reanalyzed = await canvas.call('AnalyzeAffectedObjects', {
       contractVersion: 'canvas/v5', sessionRef, requestId: 'analyze-rebuild', worldRef,
       transactionId: 'build-2', operations, operationDigest,
