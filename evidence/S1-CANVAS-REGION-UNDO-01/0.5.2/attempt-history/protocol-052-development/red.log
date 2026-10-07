@@ -1,0 +1,40 @@
+✖ real Cordis Canvas publicly advertises canvas/v5 and retains its region declaration (6.560833ms)
+✖ public consumer names wrong major, missing declaration, and missing published capability (3.055ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 0
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 97.863292
+
+✖ failing tests:
+
+test at test/protocol-handshake.test.mjs:14:1
+✖ real Cordis Canvas publicly advertises canvas/v5 and retains its region declaration (6.560833ms)
+  AssertionError [ERR_ASSERTION]: MISSING_PUBLIC_CANVAS_V5_PROTOCOL_HANDSHAKE
+      at TestContext.<anonymous> (file:///Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/source/test/protocol-handshake.test.mjs:21:12)
+      at async Test.run (node:internal/test_runner/test:1110:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:358:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at test/protocol-handshake.test.mjs:41:1
+✖ public consumer names wrong major, missing declaration, and missing published capability (3.055ms)
+  AssertionError [ERR_ASSERTION]: MISSING_PUBLIC_CANVAS_V5_PROTOCOL_HANDSHAKE
+      at TestContext.<anonymous> (file:///Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/source/test/protocol-handshake.test.mjs:47:12)
+      at async Test.run (node:internal/test_runner/test:1110:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:785:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }

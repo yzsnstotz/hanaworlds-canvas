@@ -1,0 +1,18 @@
+{
+  "removedOwnDevelopment": [
+    {
+      "path": "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/source/node_modules",
+      "bytes": 286133687
+    },
+    {
+      "path": "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/protocol-052-npm-cache",
+      "bytes": 397443738
+    },
+    {
+      "path": "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/protocol-052-tmp",
+      "bytes": 1351180
+    }
+  ],
+  "gateScratch": "each gate trap/finally removed its own scratch, exact paths in cleanup.json",
+  "retained": "source, newest canonical 0.5.2 tar, all E including failed attempt packed bytes, fixed 0.5.1/032/042 inputs, prior world/profile/rollback; no card-external cleanup"
+}

@@ -1,0 +1,154 @@
+{
+  "files": [
+    {
+      "path": "cleanup.json",
+      "bytes": 197,
+      "sha256": "631da13e5547acc7003ab2298e7c7356ea6350e213705de97c3c30fc75ea8a2b"
+    },
+    {
+      "path": "consumer-install.log",
+      "bytes": 27,
+      "sha256": "7d387fa2cde31f397ec7abafcaf6584360f6af9c82c751dadd0632cc2447adb7"
+    },
+    {
+      "path": "consumer052-README.md",
+      "bytes": 28638,
+      "sha256": "65fdddb051b95bbc135888d05052c6e532552d5191b5410d942138e32ef5bb73"
+    },
+    {
+      "path": "consumer052-types-local-contracts.d.ts",
+      "bytes": 104126,
+      "sha256": "5031bcf31d7e5acd7023ff510ffc417331c28016cd0f4d5f3d75edfbd5e9997a"
+    },
+    {
+      "path": "consumer052-types-local-index.d.ts",
+      "bytes": 14356,
+      "sha256": "3799e231db9bf184b322a5e551c6c0d2ce0a83088b014c2aa0bbef2daaee56fc"
+    },
+    {
+      "path": "contract-byte-comparison.json",
+      "bytes": 1460,
+      "sha256": "97ce3781a0138fb19c3ad434f7dee026e67a58f3ee4a14875b2f2beebc3f3fdc"
+    },
+    {
+      "path": "hanaworlds-canvas-0.5.2.tgz",
+      "bytes": 23689,
+      "sha256": "a441fac3088e8915e513e1f3e44ed6107a5fd43a75bac370365718b83538199d"
+    },
+    {
+      "path": "inputs.json",
+      "bytes": 763,
+      "sha256": "3d39787e498c25490896be08291fa51f0b7bc552c69ef0c795f69a01090bc5d6"
+    },
+    {
+      "path": "node-version.log",
+      "bytes": 9,
+      "sha256": "adc2fc6c2cfc7713e5d938152d45594a33c82a28857fb99667a5a5388c399e1a"
+    },
+    {
+      "path": "npm-pack.log",
+      "bytes": 1439,
+      "sha256": "65a079f5d4d544f813d4179344243957c115e0c85c77c89cd09dd65f5e6fbcb3"
+    },
+    {
+      "path": "npm-version.log",
+      "bytes": 7,
+      "sha256": "b396e3e19de55c61b6773383a0a92ee45dd6cddcbec8a09d731a6f2caefa2c5b"
+    },
+    {
+      "path": "pack.json",
+      "bytes": 1297,
+      "sha256": "174e7f00003c943be89ad135ac429d376fec3ac8cddf969ee7bcf728a769bd39"
+    },
+    {
+      "path": "packed-byte-comparison.json",
+      "bytes": 206,
+      "sha256": "017df3316f254bd11a71bfe8436962111dc6bc7d65af9db33f461a93ded7cf5e"
+    },
+    {
+      "path": "packed-install.log",
+      "bytes": 24,
+      "sha256": "a65e2ebbeefa7468ed9eaa3606113dc79f8a4566de46ff05b3577f611f8013f8"
+    },
+    {
+      "path": "packed-runtime/cell-after-rollback.json",
+      "bytes": 28286,
+      "sha256": "4d00b7a3ac246fb9d92b67f4c26fcdb43208d9ea62b91bde0a8e81786ed61194"
+    },
+    {
+      "path": "packed-runtime/cell-after-same-transaction-undo.json",
+      "bytes": 20344,
+      "sha256": "458d25e4d49834546a47c42f2d1bdadd0467bc3ac1ce199ca0032441c322a2af"
+    },
+    {
+      "path": "packed-runtime/cell-before-normal-reopen.json",
+      "bytes": 12232,
+      "sha256": "60e235ed76aa60b525d071986119c9a1a6d150bbd6cbfae0523d0c2fbaeed58c"
+    },
+    {
+      "path": "packed-test.log",
+      "bytes": 3904,
+      "sha256": "7744d4d34bc6b01c162811db26b1afb6488830ea36927c85b1c0be018addb72d"
+    },
+    {
+      "path": "runtime-resolution.log",
+      "bytes": 493,
+      "sha256": "1b60e6124c542746508646fc680ca869d19e284bd140f9b204e9d590cecc50b7"
+    },
+    {
+      "path": "source-build.log",
+      "bytes": 163,
+      "sha256": "e2b334b8d0b9d12969c3f78e23307093b8b268e76adc5cd1a8ea0ec9d3e20268"
+    },
+    {
+      "path": "source-npm-ci.log",
+      "bytes": 24,
+      "sha256": "302cb0c0333833168178660a84137aecfd0255b8d22c0679529dd1e1a5bb87c9"
+    },
+    {
+      "path": "source-runtime/cell-after-rollback.json",
+      "bytes": 28286,
+      "sha256": "089d2448f38383417d742ee378c9b3ea27ff08d02a10308b61e45d3260a6d64f"
+    },
+    {
+      "path": "source-runtime/cell-after-same-transaction-undo.json",
+      "bytes": 20344,
+      "sha256": "1bdad614ab90a60b7d6effe182f5bf7a708bf943f6250eef6bab347bad687b86"
+    },
+    {
+      "path": "source-runtime/cell-before-normal-reopen.json",
+      "bytes": 12232,
+      "sha256": "02ddcbc706eb99e0c4c0999e8714703f6b944ac17052d5c209df1aa03883c2c0"
+    },
+    {
+      "path": "source-test.log",
+      "bytes": 1995,
+      "sha256": "c06866b8284b433c3232ba0667f3d8d299d6387ce9ecf0b8d72e0446f015dede"
+    },
+    {
+      "path": "source-types.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "source050-README.md",
+      "bytes": 25222,
+      "sha256": "17fc91643a90b74659f8119c065e01bacc6db8b046d5fb8a811d25ec7ce91921"
+    },
+    {
+      "path": "source050-types-local-contracts.d.ts",
+      "bytes": 103469,
+      "sha256": "8ce0b9d032b3cb11df497de281dcb3b557d7ccb2d7db84b1207e5eed37a4bab8"
+    },
+    {
+      "path": "source050-types-local-index.d.ts",
+      "bytes": 13045,
+      "sha256": "d14d15bc9584e37545513d48764591413e494958a40f81b454201e3e682f0727"
+    },
+    {
+      "path": "steps.json",
+      "bytes": 6629,
+      "sha256": "7f8fef4d9c36139d2f41252951fa1b227fdc688a21e1328aa41a2000f55de049"
+    }
+  ]
+}

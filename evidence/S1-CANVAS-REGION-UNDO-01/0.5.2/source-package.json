@@ -1,0 +1,51 @@
+{
+  "name": "hanaworlds-canvas",
+  "version": "0.5.2",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "description": "HanaWorlds Stage 1 Canvas engine-neutral object and history owner",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yzsnstotz/hanaworlds-canvas.git"
+  },
+  "engines": {
+    "node": ">=24.13.1 <25"
+  },
+  "exports": {
+    ".": {
+      "types": "./types/index.d.ts",
+      "import": "./src/index.mjs",
+      "default": "./src/index.mjs"
+    }
+  },
+  "files": [
+    "src/index.mjs",
+    "src/local-v5.mjs",
+    "src/store-v5.mjs",
+    "src/region-v1.mjs",
+    "cordis.patch.yml",
+    "GADGET.md",
+    "NOTICE",
+    "types/index.d.ts"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "node --check src/index.mjs && node --check src/local-v5.mjs && node --check src/store-v5.mjs && node --check src/region-v1.mjs",
+    "test": "node --test test/local-world.test.mjs test/protocol-handshake.test.mjs test/region-undo.test.mjs"
+  },
+  "dependencies": {
+    "canonicalize": "5.1.0",
+    "hanaworlds-contracts": "https://codeload.github.com/yzsnstotz/hanaworlds-contracts/tar.gz/c006a839a6e6c2c63d57a14b72e4e6b26fa717f1",
+    "icu": "2.3.1"
+  },
+  "devDependencies": {
+    "cordis": "4.0.0-rc.10",
+    "typescript": "5.8.3"
+  },
+  "types": "./types/index.d.ts"
+}

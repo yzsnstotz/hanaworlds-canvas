@@ -1,0 +1,16 @@
+✔ actual connection readback binds the current local world durably (41.836709ms)
+{"runtime":"REAL_CORDIS_CANVAS_AND_FS_STORE","external":"ADAPTER_AND_WORLD_FIXTURE","consumerVersion":"0.5.2","publicReadback":"VERIFIED","reopenedReadback":"VERIFIED","undo":"VERIFIED","originalTransaction":"build-1","undoTransaction":"undo-1","noDuplicateWrites":true,"rollback":"ROLLED_BACK","restores":1}
+✔ build commits only after complete readback and stores one durable history row (241.845542ms)
+✔ host exposes durable Canvas facts as separate public ports (1.303291ms)
+{"consumerVersion":"0.5.2","actualCellHandshake":{"profileVersion":"protocol-handshake/v1","component":"hanaworlds-canvas","protocols":[{"protocol":"canvas","major":5,"minor":0}],"capabilities":[],"provenance":{"packageName":"hanaworlds-canvas","packageVersion":"0.5.2","sourceRevision":null,"artifactDigest":null}},"actualRegionHandshake":{"profileVersion":"protocol-handshake/v1","component":"hanaworlds-canvas","protocols":[{"protocol":"canvas-region","major":1,"minor":0}],"capabilities":["canvas-region/v1:compressed-before-snapshot","canvas-region/v1:rollback-on-failure","canvas-region/v1:single-logical-transaction","canvas-region/v1:whole-region-undo"],"provenance":{"packageName":"hanaworlds-canvas","packageVersion":"0.5.2","sourceRevision":null,"artifactDigest":null}},"storage":"READY"}
+✔ real Cordis Canvas publicly advertises canvas/v5 and retains its region declaration (7.952291ms)
+{"consumerVersion":"0.5.2","wrongMajor":"UNSUPPORTED_VERSION","noDeclaration":"UNSUPPORTED_VERSION","regionOnlyForCell":"UNSUPPORTED_VERSION","exactOnlyForCell":"UNSUPPORTED_VERSION","missingPublishedRegionCapability":"CAPABILITY_UNAVAILABLE","missingPerCellCapability":"NOT_APPLICABLE_NO_PUBLISHED_TOKEN"}
+✔ public consumer names wrong major, missing declaration, and missing published capability (4.122458ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 351.646708

@@ -1,0 +1,69 @@
+{
+  "id": "hanaworlds-canvas@0.5.2",
+  "name": "hanaworlds-canvas",
+  "version": "0.5.2",
+  "size": 23689,
+  "unpackedSize": 98043,
+  "shasum": "7dd24a3321d5b4281bc50b2c4002882ddb92069c",
+  "integrity": "sha512-ZA+SpelwNFmKTBBlXRp7zvLqTglPNz0jv+t6xJeRBKnzI9VNGt5eVIKxTl6sOyC2Ng8PYXLD07VKpopteC0x8A==",
+  "filename": "hanaworlds-canvas-0.5.2.tgz",
+  "files": [
+    {
+      "path": "GADGET.md",
+      "size": 8311,
+      "mode": 420
+    },
+    {
+      "path": "LICENSE",
+      "size": 1066,
+      "mode": 420
+    },
+    {
+      "path": "NOTICE",
+      "size": 1097,
+      "mode": 420
+    },
+    {
+      "path": "README.md",
+      "size": 3462,
+      "mode": 420
+    },
+    {
+      "path": "cordis.patch.yml",
+      "size": 68,
+      "mode": 420
+    },
+    {
+      "path": "package.json",
+      "size": 1364,
+      "mode": 420
+    },
+    {
+      "path": "src/index.mjs",
+      "size": 360,
+      "mode": 420
+    },
+    {
+      "path": "src/local-v5.mjs",
+      "size": 47965,
+      "mode": 420
+    },
+    {
+      "path": "src/region-v1.mjs",
+      "size": 28860,
+      "mode": 420
+    },
+    {
+      "path": "src/store-v5.mjs",
+      "size": 2304,
+      "mode": 420
+    },
+    {
+      "path": "types/index.d.ts",
+      "size": 3186,
+      "mode": 420
+    }
+  ],
+  "entryCount": 11,
+  "bundled": []
+}
