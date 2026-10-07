@@ -1,0 +1,50 @@
+{
+  "runtime": "REAL_CORDIS_CANVAS_FS_STORE_AND_DSH_GATEWAY",
+  "world_adapter": "FIXTURE",
+  "product_UI": "NOT_RUN",
+  "checks": [
+    {
+      "check": "build",
+      "command": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "exit_code": 0,
+      "log": "/Users/yzliu/.cache/hanaworlds-runs/F-CANVAS-OBJECTS-HISTORY-01/_evidence/source-display-060/build.log",
+      "sha256": "918bb1509d1460055cc9abe29cada59eab2370b3a5321722546cb6a39ae3146f"
+    },
+    {
+      "check": "component",
+      "command": [
+        "npm",
+        "test"
+      ],
+      "exit_code": 0,
+      "log": "/Users/yzliu/.cache/hanaworlds-runs/F-CANVAS-OBJECTS-HISTORY-01/_evidence/source-display-060/component.log",
+      "sha256": "a94985e946bef4974edbd6e9cc5a7e6cdb4bcac35fd9ea2c2dd55027d9e3860b"
+    },
+    {
+      "check": "public-gateway",
+      "command": [
+        "npm",
+        "run",
+        "test:display:gateway"
+      ],
+      "exit_code": 0,
+      "log": "/Users/yzliu/.cache/hanaworlds-runs/F-CANVAS-OBJECTS-HISTORY-01/_evidence/source-display-060/public-gateway.log",
+      "sha256": "fb530c8c8259f7c9c8128faa737c9012c131c3834681ce5a3c989544ccd38dd2"
+    },
+    {
+      "check": "diff-check",
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exit_code": 0,
+      "log": "/Users/yzliu/.cache/hanaworlds-runs/F-CANVAS-OBJECTS-HISTORY-01/_evidence/source-display-060/diff-check.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ]
+}
