@@ -210,3 +210,36 @@ complete notices are in `LICENSES/`. `test:objects-example` verifies the public
 transaction-produced records, HTTP display, store isolation, rejection of
 writes, unchanged durable bytes and service reopen. Fixture runtime/UI evidence
 never establishes a real world commit or owner acceptance.
+
+## Undo and redo development page (shared host)
+
+The same Canvas-owned host serves `http://127.0.0.1:47601/objects` (unchanged
+read-only view) and `http://127.0.0.1:47601/undo`. With Node24.13.1:
+
+```sh
+npm run build:objects        # objects + undo assets -> ~/.cache/hanaworlds-runs/F-CANVAS-UNDO-01/undo-web/assets
+npm run prepare:undo-example # once, fresh isolated /undo example directory
+npm run dev:objects          # binds 127.0.0.1:47601; `-- --port N` only for pre-switch checks
+```
+
+`/objects` still reads the F-CANVAS-OBJECTS-HISTORY-01 stores and never writes.
+`/undo` acts only on `undo-web/isolated-example`: a durable CanvasStore plus an
+explicit fixture world file (`fixture-world.json`) standing in for the world and
+its Adapter. The one-time producer makes one region commit and one per-cell
+commit through Canvas's public operations and refuses an existing directory.
+
+Canvas now implements the canvas/v5 **Redo** operation defined by Contracts
+(previously `CAPABILITY_UNAVAILABLE`). Undo and Redo share one history
+transaction path: Canvas checks the history head, world/object revisions and
+the actual current cells, prepares and applies one Adapter history
+transaction, reads it back against the saved target image and commits receipt,
+history row and footprint together, or rolls back. Redo names the transaction
+whose Undo is the head and restores its footprint; an Undo row itself cannot be
+undone. `CanvasV5.readHistoryActions(sessionRef)` publishes, per object, the
+exact public operation and revisions for Undo/Redo or a named reason:
+`NOTHING_TO_UNDO`, `NOTHING_TO_REDO`, `WORLD_CHANGED_SINCE` (Canvas only moves
+the latest world change), `TRANSACTION_PENDING`, and
+`REGION_REDO_NOT_IN_PROTOCOL` — canvas-region/v1 defines whole-region Undo but
+no region Redo. A page click posts only `{objectRef}` from the same origin; the
+host executes what Canvas published and returns the read-back view.
+`readObjectsHistory` keeps its published `COMMITTED | UNDONE` statuses.

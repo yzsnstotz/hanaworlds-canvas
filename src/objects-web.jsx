@@ -35,6 +35,7 @@ function App() {
   return <div className="canvas-web-shell">
     <aside className="canvas-web-nav"><a className="canvas-web-brand" href="/objects"><span className="canvas-web-mark">▦</span><span>HanaWorlds<small>CANVAS</small></span></a>
       <div className="canvas-web-nav-caption">世界档案</div><a href="/objects" className="canvas-web-nav-item" aria-current="page">对象与历史 <span>↗</span></a>
+      <a href="/undo" className="canvas-web-nav-item">撤回与重做 <span>↺</span></a>
       <p className="canvas-web-nav-note">每一件作品，<br/>都有留下的痕迹。</p><span className="canvas-web-readonly">仅供查看</span></aside>
     <main><div className="canvas-web-topline"><span>HanaWorlds / Canvas</span><span className="canvas-web-mode">{sample ? '示例记录 · 隔离环境' : '真实记录'}</span></div>
       <div className="canvas-web-session"><label htmlFor="canvas-session">{sample ? '示例会话' : '当前会话'}</label><select id="canvas-session" value={sample ? '' : session} disabled={sample || !sessions.length}

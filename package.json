@@ -68,7 +68,9 @@
     "dev:objects": "node scripts/objects-web-server.mjs",
     "test:objects": "node --test test/objects-web.test.mjs",
     "prepare:objects-example": "node scripts/objects-example.mjs",
-    "test:objects-example": "node --test test/objects-example.test.mjs"
+    "test:objects-example": "node --test test/objects-example.test.mjs",
+    "prepare:undo-example": "node scripts/undo-example.mjs",
+    "test:undo": "node --test test/undo-redo.test.mjs test/objects-web.test.mjs"
   },
   "dependencies": {
     "canonicalize": "5.1.0",
