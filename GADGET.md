@@ -151,3 +151,10 @@ The client mounts the same strict descriptor through `ctx.remote.$mount`.
 The global sidebar/main slot id is `hanaworlds-canvas-objects-history`.
 No Desktop private transport or sibling plugin imports are used. All visible
 history metadata is owned by Canvas and is separate from Contracts wire rows.
+
+
+## 本机对象与历史网页
+
+试用入口：http://127.0.0.1:47601/objects。由本origin自起只读开发服务；不依赖App安装、GUI锁或私有profile。网页复用对象/历史纯展示视图与既有Canvas公开readObjectsHistory，持有自己run下的真实CanvasStore。没有连接世界的会话时明确为空；示例数据只在浏览器展示、醒目标注，不写入真实记录。真实世界连接/写入/撤回不从此页执行；App内组合留整合卡。
+
+启动：Node24.13.1下 `npm run build:objects` 生成本卡run两项资源，再 `npm run dev:objects`。资源与本服务data位于本卡 `objects-web/`；停止服务使用正常SIGINT/SIGTERM，不清data。页面关闭/重开保留示例开关，服务重开重新读取本origin存储。API仅GET/HEAD，其他方法返回READ_ONLY；没有世界写入端点。

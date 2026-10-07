@@ -10,7 +10,7 @@ function timeLabel(value) {
   if (value === null) return '未记录时间';
   return new Date(value).toLocaleString('zh-CN', { hour12: false });
 }
-export function ObjectsHistoryView({ view, sample, toggleSample, refresh, pending = false, error = null }) {
+export function ObjectsHistoryView({ view, sample, toggleSample, refresh, pending = false, error = null, emptyReason, footer = '这里仅供查看。建造或撤回请使用对应面板。' }) {
   const objects = view?.objects ?? [];
   const history = view?.history ?? [];
   return h('section', { className: 'hw-canvas-display', 'aria-label': '对象与历史（Canvas）' },
@@ -28,7 +28,7 @@ export function ObjectsHistoryView({ view, sample, toggleSample, refresh, pendin
     error && h('p', { role: 'alert', className: 'hw-canvas-error' }, '读取失败：', error),
     pending && !view && h('p', { role: 'status' }, '正在读取 Canvas 的对象与历史…'),
     view && view.state !== 'READY' && h('div', { className: 'hw-canvas-empty', role: 'status' },
-      h('strong', null, '这里还没有记录'), h('p', null, emptyReasons[view.state])),
+      h('strong', null, '这里还没有记录'), h('p', null, emptyReason ?? emptyReasons[view.state])),
     h('div', { className: 'hw-canvas-grid' },
       h('section', { className: 'hw-canvas-card', 'aria-labelledby': 'hw-canvas-objects-title' },
         h('div', { className: 'hw-canvas-sectionhead' }, h('h2', { id: 'hw-canvas-objects-title' }, '世界里的对象'), h('span', null, `${objects.length} 个对象`)),
@@ -50,5 +50,5 @@ export function ObjectsHistoryView({ view, sample, toggleSample, refresh, pendin
                 ' · ', entry.affectedCells === null ? '影响格数未记录' : `影响 ${entry.affectedCells} 格`),
               (entry.committedAt === null || entry.mode === null || entry.affectedCells === null) &&
                 h('small', { className: 'hw-canvas-muted' }, '这笔旧记录没有保存完整展示信息。')))))),
-    h('footer', null, '这里仅供查看。建造或撤回请使用对应面板。'));
+    h('footer', null, footer));
 }

@@ -25,3 +25,8 @@ from the official deepseek-ai/deepseek-harness runtime. React 18.3.1 (MIT),
 https://github.com/facebook/react, is a development/render dependency; the
 browser uses DSH's shared React seed. esbuild 0.25.10 (MIT),
 https://github.com/evanw/esbuild, builds the client bundle and is not a runtime.
+
+Independent objects/history web entry: React18.3.1 and ReactDOM18.3.1,
+MIT; installed npm sources; browser runtime/UI only. Complete licenses:
+LICENSES/REACT-MIT.txt and LICENSES/REACT-DOM-MIT.txt. esbuild0.25.10 (MIT)
+is a development build tool; no third-party CDN or new SDK runtime dependency.

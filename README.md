@@ -162,3 +162,33 @@ composed application; these optional peers allow independent Canvas component
 checks without a DSH installation. The client bundle includes its Zod codec
 and expects the application's shared React18 seed. Actual product installation
 and first-step screenshots are recorded separately in the card REPORT.
+
+
+## Independent objects/history development page
+
+The Canvas-owned page runs at `http://127.0.0.1:47601/objects`. App installation,
+GUI locks and the DSH browser module graph are unnecessary for this entry. The
+existing App client remains in this package; App integration is a separate gate.
+
+With Node24.13.1 and this checkout's installed development dependencies:
+
+```sh
+npm run build:objects
+npm run dev:objects
+```
+
+`build:objects` writes only two web assets under
+`~/.cache/hanaworlds-runs/F-CANVAS-OBJECTS-HISTORY-01/objects-web/assets`.
+`dev:objects` binds 127.0.0.1:47601 and opens Canvas's own store under that run's
+`objects-web/data`. It reads no App profile or peer private data. The server has
+only GET/HEAD routes; it uses the existing `CanvasV5.readObjectsHistory()` for
+record projection. A session selector uses the local Canvas session catalog.
+A fresh store has no connected session and explains its empty view. This page
+does not create connections or transactions. Actual world bindings and commits
+must already belong to Canvas; no example or fabricated history fills the live store.
+
+The separately labelled example is browser-only. Its toggle preference survives
+closing and reopening the page. React18.3.1 and ReactDOM18.3.1 (MIT) are bundled
+locally without CDN access; their complete notices are in `LICENSES/`.
+`npm run test:objects` checks real Canvas durable read projection through the
+new HTTP entry and rejects write methods, using explicitly isolated test records.
