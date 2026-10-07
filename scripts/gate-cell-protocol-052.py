@@ -79,7 +79,10 @@ def main():
         (out / 'inputs.json').write_text(json.dumps(sources, indent=2) + '\n')
         paths = execute('runtime-resolution', ['npx', '--yes', '--package=node@24.13.1',
             '--package=npm@11.8.0', '-c', 'command -v node; command -v npm']).strip().splitlines()
+        paths = [line for line in paths if Path(line).is_absolute() and Path(line).is_file()]
+        assert len(paths) == 2, 'runtime resolver must yield exactly Node and npm paths'
         node, npm = paths
+        assert Path(node).name == 'node' and Path(npm).name == 'npm'
         env['PATH'] = str(Path(node).parent) + os.pathsep + str(Path(npm).parent) + os.pathsep + env['PATH']
         assert execute('node-version', [node, '--version']).strip() == 'v24.13.1'
         assert execute('npm-version', [node, npm, '--version']).strip() == '11.8.0'
