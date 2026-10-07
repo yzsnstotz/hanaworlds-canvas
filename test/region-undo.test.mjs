@@ -280,6 +280,10 @@ test('cross-mapblock fill and air carve commit once, survive reopen and undo the
       const footprint = await canvas.readFootprints(worldRef, [objectRef],
         { sessionRef: 'session-1', worldRef, localContext });
       assert.ok(footprint.objects[0].positions.length > 0);
+      const display = canvas.store.snapshot.transactions['region-tx-1'].displayMetadata;
+      assert.equal(display.mode, 'REGION');
+      assert.equal(display.affectedCells, footprint.objects[0].positions.length);
+      assert.ok(Number.isFinite(Date.parse(display.committedAt)));
 
       // normal reopen over the same directory, then whole-region Undo
       ({ canvas, region } = await boot(directory, world));
@@ -294,7 +298,15 @@ test('cross-mapblock fill and air carve commit once, survive reopen and undo the
       assert.equal(again.error?.code, 'UNDO_CONFLICT');
       const reopened = await boot(directory, world);
       assert.equal(reopened.canvas.store.snapshot.history[objectRef].length, 2);
+      assert.deepEqual(reopened.canvas.store.snapshot.transactions['region-tx-1'].displayMetadata, display);
+      assert.equal(reopened.canvas.store.snapshot.transactions['region-undo-1'].displayMetadata.mode, 'REGION');
+      assert.equal(reopened.canvas.store.snapshot.transactions['region-undo-1'].displayMetadata.affectedCells, display.affectedCells);
       assert.deepEqual(reopened.canvas.store.snapshot.footprints[worldRef][objectRef].positions, []);
+      const panel = await reopened.canvas.readObjectsHistory('session-1');
+      assert.equal(panel.objects[0].occupiedCells, 0);
+      assert.equal(panel.history[0].mode, 'REGION');
+      assert.equal(panel.history[0].affectedCells, display.affectedCells);
+      assert.ok(panel.history.every(row => row.status === 'UNDONE'));
     } finally { await rm(directory, { recursive: true, force: true }); }
   });
 
@@ -449,7 +461,7 @@ test('protocol major + capabilities decide compatibility; patch and provenance d
         'PROTOCOL_COMPATIBLE');
       assert.throws(() => checkProtocolCompatibility(canvasProtocolHandshake,
         [protocolRequirement('canvas-region/v2')]), e => e.code === 'UNSUPPORTED_VERSION');
-      assert.equal(canvas.status().version, '0.5.3');
+      assert.equal(canvas.status().version, '0.6.0');
     } finally { await rm(directory, { recursive: true, force: true }); }
   });
 

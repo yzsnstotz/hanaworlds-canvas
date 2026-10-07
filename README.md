@@ -1,6 +1,6 @@
 # HanaWorlds Canvas
 
-Stage 1 local world Canvas `0.5.3` component candidate, exposing `canvas/v5`
+Stage 1 local world Canvas `0.6.0` component candidate, exposing `canvas/v5`
 and consuming the public `world-adapter/v6` port. It owns current local world
 selection, object footprints, recoverable apply/readback, durable history and
 same-transaction Undo. `0.5.0` implements Contracts 0.5.0 `canvas-region/v1`: region commits over
@@ -128,3 +128,37 @@ same-transaction Undo path, from frozen source and an independent installed tar
 with an actual Contracts0.5.2 consumer. Complete raw call/return and durable
 before/Undo states are retained. Prior declaration, G1 and region gates are not
 rerun. Real peers, Luanti, UI, model, clean-machine and product gates remain open.
+
+## Objects and history panel (0.6.0)
+
+The Canvas bundle provides its own sidebar entry **对象与历史（Canvas）** through
+DSH's public client slots. Its `hanaworldsCanvasDisplay.read(sessionRef)` Typert
+Remote returns the new Canvas-owned `readObjectsHistory` display projection.
+The Host selects the world from the stored Session binding; the renderer cannot
+supply a world or transaction. No write method is exposed. The read waits for
+pending store commits, uses current public footprints and returns a cloned
+projection without a store commit or replay. Global history order follows
+recorded commit times; old untimestamped rows keep their durable order.
+
+Successful per-cell BUILD/Undo and regional commit/Undo save `displayMetadata`
+in the same finalized durable transaction as history: `committedAt` is captured
+inside the final commit callback after verification, `mode` records the actual
+production path, and `affectedCells` counts its verified complete positions.
+These are display facts only; they never participate in transaction decisions.
+Replays reuse the stored timestamp. Rolled-back or pending work creates no
+visible committed history. Old records are not backfilled: missing values read
+as null and the panel says 未记录时间 / 方式未记录 / 影响格数未记录.
+
+Objects show the current footprint's minimum coordinate, bounding size, and
+actual occupied cells; a withdrawn object with no footprint says 当前无占地.
+The **查看示例数据** switch shows fixed, visibly labelled illustrative data and
+writes no Canvas/world data. The switch preference belongs to browser local
+storage, while live content remains Canvas durable state.
+
+Build with Node24.13.1: `npm run build`. Install the resulting Canvas tarball
+through the product **Plugins → Add plugin** path. The host needs the official
+DSH0.2.0-rc.2 Typert/registry/gateway services, Cordis4.0.4 and Zod4.6.5 from the
+composed application; these optional peers allow independent Canvas component
+checks without a DSH installation. The client bundle includes its Zod codec
+and expects the application's shared React18 seed. Actual product installation
+and first-step screenshots are recorded separately in the card REPORT.

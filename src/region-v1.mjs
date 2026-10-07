@@ -19,7 +19,7 @@ import { canonicalJSON, checkProtocolCompatibility, comparePosition, digestValue
 export const REGION_WIRE = 'canvas-region/v1';
 export const REGION_ADAPTER = 'world-adapter-region/v1';
 const ADAPTER = 'world-adapter/v6';
-const PACKAGE_VERSION = '0.5.3';
+const PACKAGE_VERSION = '0.6.0';
 export const CANVAS_REGION_CAPABILITIES = Object.freeze(regionCapabilities
   .filter(c => c.owner === 'hanaworlds-canvas').map(c => c.id).sort());
 export const ADAPTER_REGION_REQUIREMENT = protocolRequirement(REGION_ADAPTER,
@@ -283,6 +283,8 @@ export class CanvasRegionV1 {
       receiptDigest: sha(canonicalJSON(result)), historyRevision, status: 'VERIFIED' });
     await this.store.commit(state => {
       state.transactions[body.transactionId] = { kind: 'REGION', result, history, box, layout,
+        displayMetadata: { committedAt: new Date().toISOString(), mode: 'REGION',
+          affectedCells: positions.length },
         objectRef, worldRef: body.worldRef, operations: body.operations, worldRevision,
         receipt: { status: 'VERIFIED', localContext: body.localContext } };
       state.history[objectRef] = [history];
@@ -453,6 +455,8 @@ export class CanvasRegionV1 {
       receiptDigest: sha(canonicalJSON(result)), historyRevision, status: 'VERIFIED' });
     await this.store.commit(next => {
       next.transactions[body.undoTransactionId] = { kind: 'REGION_UNDO', result, history,
+        displayMetadata: { committedAt: new Date().toISOString(), mode: 'REGION',
+          affectedCells: positions.length },
         originTransactionId: body.originTransactionId, objectRef: origin.objectRef,
         worldRef: body.worldRef, receipt: { status: 'VERIFIED', localContext: body.localContext } };
       next.history[origin.objectRef].push(history);

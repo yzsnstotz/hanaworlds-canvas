@@ -17,3 +17,11 @@ c00a489a6118fda68b80c7c1eee9a2aa90b6ddc0 (admitted npm pack SHA256
 That HanaWorlds-owned source is MIT. Its LICENSE, NOTICE, canonicalize Apache-2.0
 license copy, exact file hashes and import closure are retained in
 vendor/contracts/. Canvas continues to install canonicalize separately.
+
+Canvas 0.6.0 display bundle includes Zod 4.6.5 (MIT) from the official DSH runtime,
+https://github.com/colinhacks/zod, for the public Remote schemas. Host peers:
+@deepseek-ai/cordis 4.0.4 and @deepseek-ai/dsh-typert-protocol 0.2.0-rc.2 (MIT),
+from the official deepseek-ai/deepseek-harness runtime. React 18.3.1 (MIT),
+https://github.com/facebook/react, is a development/render dependency; the
+browser uses DSH's shared React seed. esbuild 0.25.10 (MIT),
+https://github.com/evanw/esbuild, builds the client bundle and is not a runtime.

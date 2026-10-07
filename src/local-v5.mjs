@@ -15,7 +15,7 @@ import { CanvasRegionV1 } from './region-v1.mjs';
 export { CanvasStore, CanvasRegionV1 };
 const WIRE = 'canvas/v5';
 const ADAPTER = 'world-adapter/v6';
-const PACKAGE_VERSION = '0.5.3';
+const PACKAGE_VERSION = '0.6.0';
 // The public wire defines canvas major 5, minor 0. Contracts publishes no
 // per-cell Canvas capability token; regional tokens describe the region port.
 const cellRequirement = protocolRequirement(WIRE, []);
@@ -90,6 +90,54 @@ export class CanvasV5 {
     });
     return structuredClone({ current: true, durable: true, worldRef,
       objects: validateType('ScopedObjectFootprints', objects) });
+  }
+  /** Plugin-owned display API. No Adapter writes, replay or store commit. */
+  async readObjectsHistory(sessionRef) {
+    await this.#durable();
+    await this.store.busy;
+    await this.#durable();
+    const snapshot = this.store.snapshot;
+    if (sessionRef === null) return { state: 'NO_SESSION', worldRef: null, objects: [], history: [] };
+    if (typeof sessionRef !== 'string' || !sessionRef) throw fail('SCHEMA_INVALID', 'INVALID_SHAPE');
+    const session = snapshot.sessions[sessionRef];
+    if (!session) return { state: 'NO_WORLD', worldRef: null, objects: [], history: [] };
+    const worldRef = session.activeWorldRef;
+    const registered = Object.values(snapshot.objects[worldRef] ?? {})
+      .sort((a, b) => a.creationSequence - b.creationSequence);
+    const footprints = registered.length ? await this.readFootprints(worldRef,
+      registered.map(row => row.objectRef).sort(), { sessionRef, worldRef,
+        localContext: session.localContext }) : { objects: [] };
+    if (this.store.snapshot !== snapshot) throw fail('STALE_REVISION');
+    const objects = registered.map(object => {
+      const positions = footprints.objects.find(row => row.objectRef === object.objectRef).positions;
+      let bounds = null;
+      if (positions.length) {
+        const min = [0,1,2].map(axis => positions.reduce((v, p) => Math.min(v, p[axis]), Infinity));
+        const max = [0,1,2].map(axis => positions.reduce((v, p) => Math.max(v, p[axis]), -Infinity));
+        bounds = { min, max, size: min.map((v, axis) => max[axis] - v + 1) };
+      }
+      return { objectRef: object.objectRef, name: object.displayName,
+        occupiedCells: positions.length, bounds };
+    });
+    const history = registered.flatMap(object => {
+      const entries = snapshot.history[object.objectRef] ?? [];
+      const undone = new Set(entries.map(row => row.originTransactionId).filter(Boolean));
+      return entries.map((entry, index) => {
+        const transaction = snapshot.transactions[entry.transactionId];
+        const metadata = transaction?.worldRef === worldRef && transaction.objectRef === object.objectRef ?
+          transaction.displayMetadata : null;
+        return { transactionId: entry.transactionId, objectRef: object.objectRef,
+          objectName: object.displayName, sequence: index + 1,
+          committedAt: metadata?.committedAt ?? null, mode: metadata?.mode ?? null,
+          affectedCells: metadata?.affectedCells ?? null,
+          status: entry.originTransactionId || undone.has(entry.transactionId) ? 'UNDONE' : 'COMMITTED' };
+      });
+    });
+    history.sort((a, b) => a.committedAt === null ? b.committedAt === null ? 0 : 1 :
+      b.committedAt === null ? -1 : a.committedAt.localeCompare(b.committedAt));
+    // Old entries retain their durable order after timestamped rows; no invented time.
+    return structuredClone({ state: registered.length ? 'READY' : 'EMPTY',
+      worldRef, objects, history });
   }
   async readHistoryFacts(request) {
     const state = await this.#durable();
@@ -320,6 +368,8 @@ export class CanvasV5 {
       const response = validateResponse(WIRE, 'ApplyRecoverableCommit', answer(body, receipt));
       await this.store.commit(state => {
         state.transactions[body.transactionId] = { receipt, history, before, after: actual,
+          displayMetadata: { committedAt: new Date().toISOString(), mode: 'CELL',
+            affectedCells: positions.length },
           objectRef, operationDigest: body.operationDigest, worldRef: body.worldRef,
           worldRevision: receipt.observedWorldRevision };
         state.history[objectRef] = [history];
@@ -472,6 +522,8 @@ export class CanvasV5 {
       const response = validateResponse(WIRE, 'Undo', answer(body, receipt));
       await this.store.commit(state => {
         state.transactions[body.transactionId] = { receipt, history,
+          displayMetadata: { committedAt: new Date().toISOString(), mode: 'CELL',
+            affectedCells: positions.length },
           before: beforeUndo, after: actual, originTransactionId: body.historyTransactionId,
           objectRef: body.objectRef, worldRef: body.worldRef };
         state.history[body.objectRef].push(history);
@@ -827,6 +879,11 @@ export function apply(ctx) {
     read: request => service.readHistoryFacts(request) });
   ctx.provide?.('hanaworldsWorldRevisionOracle', {
     read: worldRef => service.readWorldRevision(worldRef) });
+  // One Loader entry per package; the display binds inside Canvas's own fiber.
+  ctx.inject?.(['typert'], async displayCtx => {
+    const display = await import('./display-host.mjs');
+    display.apply(displayCtx);
+  });
   service.storageState = 'INITIALIZING';
   service.ready = (async () => {
     try { service.store = await CanvasStore.open(await nativeDirectory(ctx));

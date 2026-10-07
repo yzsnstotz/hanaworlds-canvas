@@ -36,6 +36,7 @@ export class CanvasV5 implements CanvasV5ProtocolSource {
   current(sessionRef: string): any;
   call<N extends keyof OperationMap['canvas/v5']>(operation: N,
     request: unknown): Promise<OperationMap['canvas/v5'][N]['response']>;
+  readObjectsHistory(sessionRef: string | null): Promise<ObjectsHistoryDisplay>;
   readFootprints(worldRef: string, objectRefs: string[], request: unknown): Promise<any>;
   readHistoryFacts(request: unknown): Promise<any>;
   readWorldRevision(worldRef: string): Promise<string>;
@@ -65,3 +66,15 @@ export const inject: string[];
 export function apply(ctx: CanvasHostContext): CanvasV5;
 declare const plugin: { name: typeof name; inject: typeof inject; apply: typeof apply };
 export default plugin;
+
+/** Canvas-owned read-only display projection, not a BUILD wire protocol. */
+export interface ObjectsHistoryDisplay {
+  state: 'NO_SESSION' | 'NO_WORLD' | 'EMPTY' | 'READY';
+  worldRef: string | null;
+  objects: { objectRef: string; name: string | null; occupiedCells: number;
+    bounds: { min: [number, number, number]; max: [number, number, number];
+      size: [number, number, number] } | null }[];
+  history: { transactionId: string; objectRef: string; objectName: string | null;
+    sequence: number; committedAt: string | null; mode: 'CELL' | 'REGION' | null;
+    affectedCells: number | null; status: 'COMMITTED' | 'UNDONE' }[];
+}

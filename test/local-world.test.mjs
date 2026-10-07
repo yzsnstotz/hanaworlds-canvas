@@ -347,7 +347,14 @@ test('build commits only after complete readback and stores one durable history 
     assert.equal(writes, 1);
     const reopened = await CanvasStore.open(directory);
     assert.equal(reopened.snapshot.transactions['build-1'].history.status, 'VERIFIED');
+    assert.equal(reopened.snapshot.transactions['build-1'].displayMetadata.mode, 'CELL');
+    assert.equal(reopened.snapshot.transactions['build-1'].displayMetadata.affectedCells, 1);
+    assert.ok(Number.isFinite(Date.parse(reopened.snapshot.transactions['build-1'].displayMetadata.committedAt)));
     const objectRef = reopened.snapshot.transactions['build-1'].objectRef;
+    const displayBeforeUndo = await canvas.readObjectsHistory(sessionRef);
+    assert.equal(displayBeforeUndo.history[0].mode, 'CELL');
+    assert.equal(displayBeforeUndo.history[0].affectedCells, 1);
+    assert.deepEqual(displayBeforeUndo.objects[0].bounds.min, position);
     const objectRevision = reopened.snapshot.objects[worldRef][objectRef].objectRevision;
     inspectedObjectRef = objectRef;
     inspectedObjectRevision = objectRevision;
@@ -447,6 +454,9 @@ test('build commits only after complete readback and stores one durable history 
     const staleObject = await canvas.call('InspectObject', inspectObjectRequest);
     assert.equal(staleObject.error?.code, 'STALE_REVISION');
     const undoneCanvas = new CanvasV5({ store: afterUndo, adapter });
+    assert.equal(afterUndo.snapshot.transactions['undo-1'].displayMetadata.mode, 'CELL');
+    assert.equal(afterUndo.snapshot.transactions['undo-1'].displayMetadata.affectedCells, 1);
+    assert.ok(Date.parse(afterUndo.snapshot.transactions['undo-1'].displayMetadata.committedAt) >= Date.parse(afterUndo.snapshot.transactions['build-1'].displayMetadata.committedAt));
     assert.equal(await undoneCanvas.readWorldRevision(worldRef), 'world-3');
     assert.deepEqual((await undoneCanvas.readFootprints(worldRef, [objectRef], {
       sessionRef, worldRef, localContext })).objects[0].positions, []);
@@ -556,7 +566,7 @@ test('host exposes durable Canvas facts as separate public ports', async () => {
     assert.equal(ports.has('hanaworldsLuantiInspectionContext'), false);
     const advertised = ports.get('hanaworldsCanvasV5').contractHandshake;
     assert.equal(advertised.contracts, 'hanaworlds-contracts@0.5.0');
-    assert.equal(ports.get('hanaworldsCanvasV5').status().version, '0.5.3');
+    assert.equal(ports.get('hanaworldsCanvasV5').status().version, '0.6.0');
     // The provider keeps its 0.5.0 exact identity. A separate 0.5.2 consumer
     // must reject that exact identity; its cell admission uses ProtocolHandshake.
     if (advertised.contracts === contractHandshake.contracts)
