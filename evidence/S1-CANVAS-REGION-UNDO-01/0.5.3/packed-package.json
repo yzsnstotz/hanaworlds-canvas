@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "cordis": "^4.0.0-rc.10",
+    "hanaworlds-canvas": "file:../../_evidence/gate-nativefacts-053-43e4dac/hanaworlds-canvas-0.5.3.tgz",
+    "hanaworlds-contracts": "file:../../../S1-CONTRACT-REGION-V1-01/_evidence/final-052/hanaworlds-contracts-0.5.2.tgz",
+    "typescript": "^5.8.3"
+  }
+}

@@ -1,0 +1,19 @@
+[
+  "GADGET.md",
+  "LICENSE",
+  "NOTICE",
+  "README.md",
+  "cordis.patch.yml",
+  "examples/native-facts-consumer.mjs",
+  "fixtures/native-facts-scoped-state.json",
+  "fixtures/native-facts-scoped-state.schema.json",
+  "fixtures/native-facts-scoped-state.source.json",
+  "package.json",
+  "src/index.mjs",
+  "src/local-v5.mjs",
+  "src/region-v1.mjs",
+  "src/store-v5.mjs",
+  "types/index.d.ts",
+  "types/native-facts-consumer.d.ts",
+  "types/native-facts.d.ts"
+]

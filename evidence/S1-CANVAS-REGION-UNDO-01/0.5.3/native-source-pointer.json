@@ -1,0 +1,23 @@
+{
+  "path": "/Users/yzliu/.codex/sessions/2026/10/07/rollout-2026-10-07T09-20-25-01a113bb-9f35-7581-9d5d-8f5a5d823ab0.jsonl",
+  "sourceLines": [
+    602,
+    604,
+    627,
+    631
+  ],
+  "excerptLines": [
+    1,
+    2,
+    3,
+    4
+  ],
+  "session": 54343,
+  "startChunk": "3170a3",
+  "completionChunk": "670b72",
+  "actualExit": 0,
+  "contextSourceLines": [
+    1,
+    598
+  ]
+}
