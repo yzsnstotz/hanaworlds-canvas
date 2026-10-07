@@ -39,6 +39,12 @@ function fail(code, reason = 'REVISION_CHANGED', phase = 'validate') {
     mutationState: 'NONE', transactionRef: null, causeCode: null, reason };
   return error;
 }
+function boxCells(box) {
+  const cells = [];
+  for (let z = box.min[2]; z <= box.max[2]; z++) for (let y = box.min[1]; y <= box.max[1]; y++)
+    for (let x = box.min[0]; x <= box.max[0]; x++) cells.push([x, y, z]);
+  return cells;
+}
 function answer(body, result, error = null) {
   return { contractVersion: WIRE, requestId: body.requestId, result, error };
 }
@@ -121,7 +127,13 @@ export class CanvasV5 {
     });
     const history = registered.flatMap(object => {
       const entries = snapshot.history[object.objectRef] ?? [];
-      const undone = new Set(entries.map(row => row.originTransactionId).filter(Boolean));
+      const isRedo = row => snapshot.transactions[row.transactionId]?.direction === 'REDO';
+      // An applied row reads UNDONE once its latest history move is an Undo; a Redo
+      // re-applies it, and that Redo row carries the state from then on.
+      const undone = row => {
+        const move = entries.findLast(next => next.originTransactionId === row.transactionId);
+        return !move ? false : isRedo(move) ? undone(move) : true;
+      };
       return entries.map((entry, index) => {
         const transaction = snapshot.transactions[entry.transactionId];
         const metadata = transaction?.worldRef === worldRef && transaction.objectRef === object.objectRef ?
@@ -130,7 +142,8 @@ export class CanvasV5 {
           objectName: object.displayName, sequence: index + 1,
           committedAt: metadata?.committedAt ?? null, mode: metadata?.mode ?? null,
           affectedCells: metadata?.affectedCells ?? null,
-          status: entry.originTransactionId || undone.has(entry.transactionId) ? 'UNDONE' : 'COMMITTED' };
+          status: entry.originTransactionId && !isRedo(entry) || undone(entry) ?
+            'UNDONE' : 'COMMITTED' };
       });
     });
     history.sort((a, b) => a.committedAt === null ? b.committedAt === null ? 0 : 1 :
@@ -138,6 +151,61 @@ export class CanvasV5 {
     // Old entries retain their durable order after timestamped rows; no invented time.
     return structuredClone({ state: registered.length ? 'READY' : 'EMPTY',
       worldRef, objects, history });
+  }
+  /**
+   * Plugin-owned read of what each object's history can do next. Canvas states the
+   * public operation, the exact revisions it will check, or the reason it cannot run.
+   * It never executes anything; Undo/Redo/UndoRegionCommit re-validate on call.
+   */
+  async readHistoryActions(sessionRef) {
+    await this.#durable();
+    await this.store.busy;
+    const s = this.store.snapshot;
+    if (typeof sessionRef !== 'string' || !sessionRef) throw fail('SCHEMA_INVALID', 'INVALID_SHAPE');
+    const session = s.sessions[sessionRef];
+    if (!session) return structuredClone({ state: 'NO_WORLD', worldRef: null, objects: [] });
+    const worldRef = session.activeWorldRef;
+    const worldRevision = s.worldRevisions[worldRef];
+    const pending = Object.values(s.pending).some(row =>
+      (row.body?.worldRef ?? row.worldRef) === worldRef);
+    const objects = Object.values(s.objects[worldRef] ?? {})
+      .sort((a, b) => a.creationSequence - b.creationSequence).map(object => {
+        const rows = s.history[object.objectRef] ?? [];
+        const head = rows.at(-1);
+        const headTransaction = head ? s.transactions[head.transactionId] : null;
+        const region = s.transactions[rows[0]?.transactionId]?.kind === 'REGION';
+        const undone = head ? this.#undoRow(head) : false;
+        const blocked = pending ? 'TRANSACTION_PENDING' : null;
+        let undo, redo;
+        if (region) {
+          undo = undone ? { available: false, reason: 'NOTHING_TO_UNDO' } :
+            blocked ? { available: false, reason: blocked } :
+            { available: true, operation: 'UndoRegionCommit', originTransactionId: head.transactionId,
+              expectedHistoryRevision: headTransaction.result.historyRevision };
+          // canvas-region/v1 publishes ApplyRegionCommit and UndoRegionCommit only.
+          redo = { available: false, reason: undone ? 'REGION_REDO_NOT_IN_PROTOCOL' : 'NOTHING_TO_REDO' };
+        } else {
+          const expected = { expectedHistoryRevision: head.historyRevision,
+            expectedWorldRevision: headTransaction.receipt.observedWorldRevision,
+            expectedObjectRevisions: { [object.objectRef]: object.objectRevision } };
+          const stale = expected.expectedWorldRevision !== worldRevision ? 'WORLD_CHANGED_SINCE' : null;
+          undo = undone ? { available: false, reason: 'NOTHING_TO_UNDO' } :
+            blocked || stale ? { available: false, reason: blocked ?? stale } :
+            { available: true, operation: 'Undo', historyTransactionId: head.transactionId, ...expected };
+          redo = !undone ? { available: false, reason: 'NOTHING_TO_REDO' } :
+            blocked || stale ? { available: false, reason: blocked ?? stale } :
+            { available: true, operation: 'Redo', historyTransactionId: head.originTransactionId, ...expected };
+        }
+        return { objectRef: object.objectRef, mode: region ? 'REGION' : 'CELL',
+          originTransactionId: rows[0]?.transactionId ?? null, applied: !undone,
+          footprint: s.footprints[worldRef]?.[object.objectRef]?.positions ?? [],
+          // Cells this entry changes: the verified cell scope, or the committed region box.
+          cells: region ? boxCells(s.transactions[rows[0].transactionId].box) :
+            s.transactions[rows[0].transactionId].after.coveredPositions,
+          undo, redo };
+      });
+    return structuredClone({ state: objects.length ? 'READY' : 'EMPTY', worldRef,
+      worldRevision, localContext: session.localContext, objects });
   }
   async readHistoryFacts(request) {
     const state = await this.#durable();
@@ -440,63 +508,83 @@ export class CanvasV5 {
       throw pending;
     }
   }
-  async #undo(body) {
-    const { replayKey, prior, admission } = await this.#bound('Undo', body);
+  /** Undo and Redo share one history-transaction path; only the target image differs. */
+  async #history(operation, body) {
+    const { replayKey, prior, admission } = await this.#bound(operation, body);
     if (prior) return prior.response;
-    const origin = this.store.snapshot.transactions[body.historyTransactionId];
-    const object = this.store.snapshot.objects[body.worldRef]?.[body.objectRef];
-    const historyRows = this.store.snapshot.history[body.objectRef] ?? [];
-    // A region transaction is undone as a whole region through hanaworldsCanvasRegionV1.
-    if (origin?.kind === 'REGION') throw fail('UNDO_CONFLICT');
+    const redo = operation === 'Redo';
+    const state = this.store.snapshot;
+    const origin = state.transactions[body.historyTransactionId];
+    const object = state.objects[body.worldRef]?.[body.objectRef];
+    const historyRows = state.history[body.objectRef] ?? [];
+    const head = historyRows.at(-1);
+    // A region transaction is undone as a whole region through hanaworldsCanvasRegionV1;
+    // canvas-region/v1 defines no region Redo.
+    if (origin?.kind === 'REGION') throw fail(redo ? 'REDO_UNAVAILABLE' : 'UNDO_CONFLICT',
+      redo ? 'POLICY_UNAVAILABLE' : 'REVISION_CHANGED');
     if (!origin?.history || origin.objectRef !== body.objectRef ||
-        origin.worldRef !== body.worldRef || historyRows.at(-1)?.transactionId !==
-          body.historyTransactionId ||
-        body.expectedHistoryRevision !== origin.history.historyRevision ||
-        body.expectedWorldRevision !== origin.receipt.observedWorldRevision ||
-        !object || Object.keys(body.expectedObjectRevisions).length !== 1 ||
+        origin.worldRef !== body.worldRef || !object)
+      throw fail('STALE_REVISION');
+    // Undo: the head row itself, never an Undo row. Redo: the head row must be the
+    // Undo of exactly this transaction.
+    const headTransaction = head ? state.transactions[head.transactionId] : null;
+    if (redo ? !head || !this.#undoRow(head) ||
+          head.originTransactionId !== body.historyTransactionId :
+        head?.transactionId !== body.historyTransactionId || this.#undoRow(head))
+      throw fail(redo ? 'REDO_UNAVAILABLE' : 'UNDO_CONFLICT',
+        redo ? 'POLICY_UNAVAILABLE' : 'REVISION_CHANGED');
+    if (body.expectedHistoryRevision !== head.historyRevision ||
+        body.expectedWorldRevision !== headTransaction.receipt.observedWorldRevision ||
+        Object.keys(body.expectedObjectRevisions).length !== 1 ||
         body.expectedObjectRevisions[body.objectRef] !== object.objectRevision)
       throw fail('STALE_REVISION');
     const positions = origin.after.coveredPositions;
     const stateProfile = origin.after.stateProfile;
-    const beforeUndo = await this.#read({ ...body,
-      transactionId: body.historyTransactionId }, positions, stateProfile, 'before-undo');
-    if (!same(beforeUndo, origin.after))
-      throw fail('READBACK_MISMATCH', 'PAYLOAD_CHANGED', 'readback');
+    const expectedCurrent = redo ? origin.before : origin.after;
+    const target = redo ? origin.after : origin.before;
+    const current = await this.#read({ ...body,
+      transactionId: body.historyTransactionId }, positions, stateProfile,
+    redo ? 'before-redo' : 'before-undo');
+    if (!same(current, expectedCurrent)) throw redo ?
+      fail('REDO_CONFLICT', 'EXTERNAL_EDIT_CONFLICT', 'readback') :
+      fail('READBACK_MISMATCH', 'PAYLOAD_CHANGED', 'readback');
+    const direction = redo ? 'REDO' : 'UNDO';
     const historyOperation = { contractVersion: ADAPTER, worldRef: body.worldRef,
       originTransactionId: body.historyTransactionId,
-      transactionId: body.transactionId, direction: 'UNDO',
+      transactionId: body.transactionId, direction,
       affectedObjectRefs: [body.objectRef],
       originVerifiedReceiptDigest: origin.history.receiptDigest,
       originBeforeImageDigest: origin.history.beforeImageDigest,
       originBeforeStateReadbackDigest: hash('readback', origin.before),
       originAfterReadbackDigest: origin.history.expectedAfterReadbackDigest,
-      expectedCurrentStateDigest: hash('readback', beforeUndo),
-      targetStateDigest: hash('readback', origin.before),
+      expectedCurrentStateDigest: hash('readback', current),
+      targetStateDigest: hash('readback', target),
       expectedHistoryRevision: body.expectedHistoryRevision,
       expectedWorldRevision: body.expectedWorldRevision,
       expectedObjectRevisions: body.expectedObjectRevisions,
       guarantee: 'RECOVERABLE_VERIFIED', localContext: body.localContext };
     const historyOperationDigest = hash('history-operation', historyOperation);
-    await this.store.commit(state => {
-      if (state.pending[body.transactionId] || state.transactions[body.transactionId])
+    await this.store.commit(next => {
+      if (next.pending[body.transactionId] || next.transactions[body.transactionId])
         throw fail('TRANSACTION_CONFLICT');
-      state.pending[body.transactionId] = { body, originTransactionId: body.historyTransactionId,
-        before: beforeUndo, expected: origin.before, phase: 'RESERVED' };
+      next.pending[body.transactionId] = { body, direction,
+        originTransactionId: body.historyTransactionId,
+        before: current, expected: target, phase: 'RESERVED' };
     });
     let prepared;
     try {
       prepared = await this.#adapter('PrepareHistoryTransaction', {
         ...historyOperation, sessionRef: body.sessionRef,
         requestId: `${body.requestId}:prepare-history`, historyOperationDigest });
-      await this.store.commit(state => {
-        state.pending[body.transactionId].prepared = prepared;
-        state.pending[body.transactionId].phase = 'PREPARED';
+      await this.store.commit(next => {
+        next.pending[body.transactionId].prepared = prepared;
+        next.pending[body.transactionId].phase = 'PREPARED';
       });
       const adapterReceipt = await this.#adapter('ApplyHistoryTransaction', {
         contractVersion: ADAPTER, sessionRef: body.sessionRef,
         requestId: `${body.requestId}:apply-history`, worldRef: body.worldRef,
         originTransactionId: body.historyTransactionId,
-        transactionId: body.transactionId, direction: 'UNDO',
+        transactionId: body.transactionId, direction,
         historyOperationDigest, expectedWorldRevision: body.expectedWorldRevision,
         expectedObjectRevisions: body.expectedObjectRevisions,
         preparedHistoryTransaction: prepared, localContext: body.localContext });
@@ -504,8 +592,9 @@ export class CanvasV5 {
           adapterReceipt.previousWorldRevision !== body.expectedWorldRevision ||
           adapterReceipt.transactionPayloadDigest !== prepared.transactionPayloadDigest)
         throw fail('TRANSACTION_MISMATCH', 'PAYLOAD_CHANGED');
-      await this.store.commit(state => { state.pending[body.transactionId].phase = 'APPLIED'; });
-      const actual = await this.#read(body, positions, stateProfile, 'after-undo');
+      await this.store.commit(next => { next.pending[body.transactionId].phase = 'APPLIED'; });
+      const actual = await this.#read(body, positions, stateProfile,
+        redo ? 'after-redo' : 'after-undo');
       const receipt = { ...adapterReceipt, contractVersion: WIRE,
         transactionId: body.transactionId, operationDigest: historyOperationDigest,
         transactionPayloadDigest: prepared.transactionPayloadDigest,
@@ -518,33 +607,39 @@ export class CanvasV5 {
         expectedAfterReadbackDigest: receipt.readbackDigest,
         receiptDigest: hash('receipt', receipt), historyRevision: rev('history'),
         status: 'VERIFIED' };
-      validateCommitReadback(receipt, origin.before, actual, history);
-      const response = validateResponse(WIRE, 'Undo', answer(body, receipt));
-      await this.store.commit(state => {
-        state.transactions[body.transactionId] = { receipt, history,
+      validateCommitReadback(receipt, target, actual, history);
+      const response = validateResponse(WIRE, operation, answer(body, receipt));
+      await this.store.commit(next => {
+        next.transactions[body.transactionId] = { receipt, history, direction,
           displayMetadata: { committedAt: new Date().toISOString(), mode: 'CELL',
             affectedCells: positions.length },
-          before: beforeUndo, after: actual, originTransactionId: body.historyTransactionId,
+          before: current, after: actual, originTransactionId: body.historyTransactionId,
           objectRef: body.objectRef, worldRef: body.worldRef };
-        state.history[body.objectRef].push(history);
-        state.objects[body.worldRef][body.objectRef].objectRevision = rev('object');
-        state.footprints[body.worldRef][body.objectRef].positions = [];
-        state.footprints[body.worldRef][body.objectRef].footprintRevision = rev('footprint');
-        state.worldRevisions[body.worldRef] = receipt.observedWorldRevision;
-        state.registryRevisions[body.worldRef] = rev('registry');
-        state.replay[replayKey] = { digest: admission.requestDigest, response };
-        delete state.pending[body.transactionId];
+        next.history[body.objectRef].push(history);
+        next.objects[body.worldRef][body.objectRef].objectRevision = rev('object');
+        // Redo restores the footprint the original verified transaction registered.
+        next.footprints[body.worldRef][body.objectRef].positions = redo ? positions : [];
+        next.footprints[body.worldRef][body.objectRef].footprintRevision = rev('footprint');
+        next.worldRevisions[body.worldRef] = receipt.observedWorldRevision;
+        next.registryRevisions[body.worldRef] = rev('registry');
+        next.replay[replayKey] = { digest: admission.requestDigest, response };
+        delete next.pending[body.transactionId];
       });
       return response;
     } catch (error) {
       if (!prepared) {
-        await this.store.commit(state => { delete state.pending[body.transactionId]; });
+        await this.store.commit(next => { delete next.pending[body.transactionId]; });
         throw error;
       }
       return this.#rollback({ ...body, operationDigest: historyOperationDigest,
-        guarantee: 'RECOVERABLE_VERIFIED' }, prepared, beforeUndo, positions,
-        stateProfile, replayKey, admission.requestDigest, error, 'Undo');
+        guarantee: 'RECOVERABLE_VERIFIED' }, prepared, current, positions,
+        stateProfile, replayKey, admission.requestDigest, error, operation);
     }
+  }
+  /** An Undo history row: cell Undo (direction UNDO) or whole-region Undo. */
+  #undoRow(row) {
+    const transaction = this.store.snapshot.transactions[row.transactionId];
+    return row.originTransactionId !== null && transaction?.direction !== 'REDO';
   }
   async #listConnections(body, operation = 'ListWorldConnections') {
     const { replayKey, prior, facts } = this.#facts(body, operation);
@@ -750,8 +845,9 @@ export class CanvasV5 {
     const result = { worldRef: body.worldRef, objectRef: body.objectRef,
       historyRevision: head.historyRevision,
       headTransactionId: head.transactionId, entries,
-      undoAvailable: head.originTransactionId === null,
-      redoAvailable: head.originTransactionId !== null };
+      undoAvailable: !this.#undoRow(head),
+      redoAvailable: this.#undoRow(head) &&
+        this.store.snapshot.transactions[head.originTransactionId]?.kind !== 'REGION' };
     const response = validateResponse(WIRE, 'HistoryQuery', answer(body, result));
     return this.#remember(replayKey, admission.requestDigest, response);
   }
@@ -810,7 +906,7 @@ export class CanvasV5 {
       if (operation === 'SelectWorldConnection') return await this.#select(body);
       if (operation === 'AnalyzeAffectedObjects') return await this.#analyze(body);
       if (operation === 'ApplyRecoverableCommit') return await this.#apply(body);
-      if (operation === 'Undo') return await this.#undo(body);
+      if (operation === 'Undo' || operation === 'Redo') return await this.#history(operation, body);
       if (operation === 'ListWorldConnections' || operation === 'ReadWorldSelectionContext')
         return await this.#listConnections(body, operation);
       if (operation === 'ListObjects') return await this.#listObjects(body);
