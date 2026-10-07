@@ -8,7 +8,7 @@ const { CanvasV5, CanvasStore, apply: applyCanvas } = await import(process.env.C
 import { openRuntime } from './support/cordis-runtime.mjs';
 const consumer = await import(process.env.CANVAS_CONSUMER_ENTRY ?? 'hanaworlds-contracts');
 import { readFile, writeFile } from 'node:fs/promises';
-import { digestValue, checkContractHandshake } from 'hanaworlds-contracts';
+import { digestValue, checkContractHandshake, contractHandshake } from 'hanaworlds-contracts';
 import { createHash } from 'node:crypto';
 import canonicalize from 'canonicalize';
 
@@ -537,7 +537,13 @@ test('host exposes durable Canvas facts as separate public ports', async () => {
     const advertised = ports.get('hanaworldsCanvasV5').contractHandshake;
     assert.equal(advertised.contracts, 'hanaworlds-contracts@0.5.0');
     assert.equal(ports.get('hanaworldsCanvasV5').status().version, '0.5.2');
-    assert.doesNotThrow(() => checkContractHandshake(advertised));
+    // The provider keeps its 0.5.0 exact identity. A separate 0.5.2 consumer
+    // must reject that exact identity; its cell admission uses ProtocolHandshake.
+    if (advertised.contracts === contractHandshake.contracts)
+      assert.doesNotThrow(() => checkContractHandshake(advertised));
+    else
+      assert.throws(() => checkContractHandshake(advertised),
+        error => error.code === 'UNSUPPORTED_VERSION');
     assert.throws(() => checkContractHandshake({ ...advertised,
       contracts: 'hanaworlds-contracts@0.4.2' }), error => error.code === 'UNSUPPORTED_VERSION');
   } finally { await rm(directory, { recursive: true, force: true }); }

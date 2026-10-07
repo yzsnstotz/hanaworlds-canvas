@@ -165,6 +165,11 @@ def main():
         print(json.dumps(receipt), flush=True)
     finally:
         (out / 'steps.json').write_text(json.dumps(steps, indent=2) + '\n')
+        for label in ['source', 'consumer', 'packed', 'old']:
+            for name in ['package.json', 'package-lock.json']:
+                input_file = work / label / name
+                if input_file.is_file():
+                    shutil.copyfile(input_file, out / (label + '-' + name))
         shutil.rmtree(work)
         assert not work.exists()
         (out / 'cleanup.json').write_text(json.dumps({'removedOwnScratch': str(work),
