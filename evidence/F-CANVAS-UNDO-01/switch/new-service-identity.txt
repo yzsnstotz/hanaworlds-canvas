@@ -1,0 +1,5 @@
+2026-10-07T15:35:32Z
+  PID  PPID STAT STARTED                      COMMAND
+36436     1 SN   Thu Oct  8 00:34:49 2026     /Users/yzliu/.local/state/fnm_multishells/34058_1791361431970/bin/node scripts/objects-web-server.mjs
+cwd=/Users/yzliu/.cache/hanaworlds-runs/F-CANVAS-UNDO-01/source HEAD=83e270c8ae298fae6ffdf2e93b30c0c2d61a288d
+node=v24.13.1
