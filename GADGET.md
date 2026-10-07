@@ -155,6 +155,8 @@ history metadata is owned by Canvas and is separate from Contracts wire rows.
 
 ## 本机对象与历史网页
 
-试用入口：http://127.0.0.1:47601/objects。由本origin自起只读开发服务；不依赖App安装、GUI锁或私有profile。网页复用对象/历史纯展示视图与既有Canvas公开readObjectsHistory，持有自己run下的真实CanvasStore。没有连接世界的会话时明确为空；示例数据只在浏览器展示、醒目标注，不写入真实记录。真实世界连接/写入/撤回不从此页执行；App内组合留整合卡。
+试用入口：http://127.0.0.1:47601/objects。由本origin自起只读开发服务；不依赖App安装、GUI锁或私有profile。网页复用对象/历史纯展示视图与既有Canvas公开readObjectsHistory，持有自己run下的真实CanvasStore。没有连接世界的会话时明确为空；示例记录从显式隔离的耐久存储读取、醒目标注，不写入真实世界记录。真实世界连接/写入/撤回不从此页执行；App内组合留整合卡。
 
-启动：Node24.13.1下 `npm run build:objects` 生成本卡run两项资源，再 `npm run dev:objects`。资源与本服务data位于本卡 `objects-web/`；停止服务使用正常SIGINT/SIGTERM，不清data。页面关闭/重开保留示例开关，服务重开重新读取本origin存储。API仅GET/HEAD，其他方法返回READ_ONLY；没有世界写入端点。
+启动：Node24.13.1下 `npm run build:objects` 生成本卡run两项资源，首次在全新隔离目录运行 `npm run prepare:objects-example`，再 `npm run dev:objects`。资源与本服务data位于本卡 `objects-web/`；停止服务使用正常SIGINT/SIGTERM，不清data。页面关闭/重开保留示例开关，服务重开重新读取本origin存储。API仅GET/HEAD，其他方法返回READ_ONLY；没有世界写入端点。
+
+本轮独立网页的示例不再使用客户端硬编码记录。`objects-web/isolated-example` 的记录经本插件公开会话选择、区域提交、逐格提交与区域Undo实际产生，环境/Adapter/输入为显式fixture，Canvas事务与耐久存储为真实运行时。准备命令仅允许全新目录，服务只读该目录且重开不重建记录。示例始终醒目标注，名称未保存时如实显示未命名；真实数据目录`objects-web/data`与其分离，不写真实世界。App面板及封存060tar不变。

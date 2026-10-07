@@ -10,7 +10,7 @@ function timeLabel(value) {
   if (value === null) return '未记录时间';
   return new Date(value).toLocaleString('zh-CN', { hour12: false });
 }
-export function ObjectsHistoryView({ view, sample, toggleSample, refresh, pending = false, error = null, emptyReason, footer = '这里仅供查看。建造或撤回请使用对应面板。' }) {
+export function ObjectsHistoryView({ view, sample, toggleSample, refresh, pending = false, error = null, emptyReason, allowSampleRefresh = false, sampleDescription = '这些对象与时间线仅用于展示，不来自当前世界，也不会写入世界。', footer = '这里仅供查看。建造或撤回请使用对应面板。' }) {
   const objects = view?.objects ?? [];
   const history = view?.history ?? [];
   return h('section', { className: 'hw-canvas-display', 'aria-label': '对象与历史（Canvas）' },
@@ -21,9 +21,9 @@ export function ObjectsHistoryView({ view, sample, toggleSample, refresh, pendin
         h('button', { type: 'button', role: 'switch', 'aria-checked': sample,
           className: sample ? 'hw-canvas-example active' : 'hw-canvas-example', onClick: toggleSample },
         sample ? '关闭示例数据' : '查看示例数据'),
-        h('button', { type: 'button', onClick: refresh, disabled: sample || pending }, pending ? '正在读取…' : '刷新'))),
+        h('button', { type: 'button', onClick: refresh, disabled: sample && !allowSampleRefresh || pending }, pending ? '正在读取…' : '刷新'))),
     sample && h('div', { className: 'hw-canvas-fixture', role: 'status' },
-      h('strong', null, '示例数据'), h('span', null, '这些对象与时间线仅用于展示，不来自当前世界，也不会写入世界。')),
+      h('strong', null, '示例数据'), h('span', null, sampleDescription)),
     !sample && h('div', { className: 'hw-canvas-source' }, '当前世界 · 只读'),
     error && h('p', { role: 'alert', className: 'hw-canvas-error' }, '读取失败：', error),
     pending && !view && h('p', { role: 'status' }, '正在读取 Canvas 的对象与历史…'),

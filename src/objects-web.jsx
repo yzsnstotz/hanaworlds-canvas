@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ObjectsHistoryView } from './display-view.mjs';
-import { displayFixture } from './display-fixture.mjs';
-const SAMPLE_KEY = 'hanaworlds.canvas.objects-web.sample.v1';
+const SAMPLE_KEY = 'hanaworlds.canvas.objects-web.sample.v2';
 const SESSION_KEY = 'hanaworlds.canvas.objects-web.session.v1';
 async function get(path) {
   const response = await fetch(path);
@@ -11,7 +10,7 @@ async function get(path) {
   return value;
 }
 function App() {
-  const [sample, setSample] = useState(() => localStorage.getItem(SAMPLE_KEY) === 'true');
+  const [sample, setSample] = useState(() => localStorage.getItem(SAMPLE_KEY) !== 'false');
   const [session, setSession] = useState(() => localStorage.getItem(SESSION_KEY) ?? '');
   const [sessions, setSessions] = useState([]);
   const [view, setView] = useState(null);
@@ -19,10 +18,12 @@ function App() {
   const [pending, setPending] = useState(false);
   const [revision, setRevision] = useState(0);
   useEffect(() => {
-    if (sample) return;
     let active = true;
     setView(null); setError(null); setPending(true);
-    Promise.all([get('/api/sessions'), get(`/api/objects${session ? '?session=' + encodeURIComponent(session) : ''}`)])
+    (sample ? get('/api/example').then(result => {
+      if (result.source !== 'ISOLATED_DURABLE_FIXTURE') throw new Error('示例来源无法确认');
+      return [[], result];
+    }) : Promise.all([get('/api/sessions'), get(`/api/objects${session ? '?session=' + encodeURIComponent(session) : ''}`)]))
       .then(([list, result]) => { if (active) { setSessions(list); setView(result); } },
         failure => { if (active) setError(failure.message); })
       .finally(() => { if (active) setPending(false); });
@@ -35,12 +36,13 @@ function App() {
     <aside className="canvas-web-nav"><a className="canvas-web-brand" href="/objects"><span className="canvas-web-mark">▦</span><span>HanaWorlds<small>CANVAS</small></span></a>
       <div className="canvas-web-nav-caption">世界档案</div><a href="/objects" className="canvas-web-nav-item" aria-current="page">对象与历史 <span>↗</span></a>
       <p className="canvas-web-nav-note">每一件作品，<br/>都有留下的痕迹。</p><span className="canvas-web-readonly">仅供查看</span></aside>
-    <main><div className="canvas-web-topline"><span>HanaWorlds / Canvas</span><span className="canvas-web-mode">{sample ? '正在查看示例' : '真实记录'}</span></div>
-      <div className="canvas-web-session"><label htmlFor="canvas-session">当前会话</label><select id="canvas-session" value={session} disabled={sample || !sessions.length}
+    <main><div className="canvas-web-topline"><span>HanaWorlds / Canvas</span><span className="canvas-web-mode">{sample ? '示例记录 · 隔离环境' : '真实记录'}</span></div>
+      <div className="canvas-web-session"><label htmlFor="canvas-session">{sample ? '示例会话' : '当前会话'}</label><select id="canvas-session" value={sample ? '' : session} disabled={sample || !sessions.length}
         onChange={event => { localStorage.setItem(SESSION_KEY, event.target.value); setSession(event.target.value); }}>
-        <option value="">{sessions.length ? '请选择会话' : '尚无连接世界的会话'}</option>{sessions.map(id => <option key={id} value={id}>{id}</option>)}
+        <option value="">{sample ? '隔离示例世界' : sessions.length ? '请选择会话' : '尚无连接世界的会话'}</option>{sessions.map(id => <option key={id} value={id}>{id}</option>)}
       </select></div>
-      <ObjectsHistoryView view={sample ? displayFixture : view} sample={sample} pending={!sample && pending} error={sample ? null : error}
+      <ObjectsHistoryView view={view} sample={sample} pending={pending} error={error} allowSampleRefresh
+        sampleDescription="这些记录来自隔离示例环境，经 Canvas 提交后保存；不来自真实世界，也不会写入真实世界。名称未保存的对象如实显示为未命名。"
         emptyReason={emptyReason} footer="这个页面只供查看；不会建造、修改或撤回世界中的内容。"
         toggleSample={() => { localStorage.setItem(SAMPLE_KEY, String(!sample)); setSample(!sample); }} refresh={() => setRevision(x => x + 1)} />
     </main></div>;

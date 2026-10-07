@@ -19,3 +19,12 @@ test('old history discloses missing metadata and unbound worlds explain why they
   const empty = renderToStaticMarkup(React.createElement(ObjectsHistoryView, { view: { state: 'NO_WORLD', objects: [], history: [] }, sample: false }));
   assert.ok(empty.includes('当前会话还没有绑定世界'));
 });
+
+test('durable isolated sample explains its source and allows read refresh', () => {
+  const html = renderToStaticMarkup(React.createElement(ObjectsHistoryView, {
+    view: displayFixture, sample: true, allowSampleRefresh: true,
+    sampleDescription: '记录来自隔离示例环境，经 Canvas 提交后保存；不来自真实世界。',
+  }));
+  assert.ok(html.includes('经 Canvas 提交后保存'));
+  assert.ok(!html.includes('disabled=""'), 'durable sample refresh is a read, not a disabled static illustration');
+});

@@ -66,7 +66,9 @@
     "test:display:gateway": "node --test test/display-remote.test.mjs",
     "build:objects": "node scripts/build-objects-web.mjs",
     "dev:objects": "node scripts/objects-web-server.mjs",
-    "test:objects": "node --test test/objects-web.test.mjs"
+    "test:objects": "node --test test/objects-web.test.mjs",
+    "prepare:objects-example": "node scripts/objects-example.mjs",
+    "test:objects-example": "node --test test/objects-example.test.mjs"
   },
   "dependencies": {
     "canonicalize": "5.1.0",

@@ -9,10 +9,12 @@ export const objectsRunRoot = join(homedir(), '.cache', 'hanaworlds-runs', 'F-CA
 const html = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>对象与历史 · Canvas</title><link rel="stylesheet" href="/assets/objects.css"></head><body><div id="root"></div><script src="/assets/objects.js" defer></script></body></html>`;
 
 /** Independent Canvas-owned read surface; no Adapter, world writes, or App profile. */
-export async function createObjectsWebServer({ storeDirectory, assetsDirectory }) {
+export async function createObjectsWebServer({ storeDirectory, assetsDirectory, sampleStoreDirectory }) {
   // Capture assets before accepting traffic; a missing build is a startup error.
   const [js, css] = await Promise.all(['objects.js', 'objects.css'].map(name => readFile(join(assetsDirectory, name))));
   const canvas = new CanvasV5({ store: await CanvasStore.open(storeDirectory) });
+  if (sampleStoreDirectory) await readFile(join(sampleStoreDirectory, 'canvas-v5.json'));
+  const example = sampleStoreDirectory ? new CanvasV5({ store: await CanvasStore.open(sampleStoreDirectory) }) : null;
   const reply = (res, status, value, contentType = 'application/json; charset=utf-8', head = false) => {
     res.writeHead(status, { 'Content-Type': contentType, 'Cache-Control': 'no-store',
       'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; object-src 'none'; frame-ancestors 'none'" });
@@ -29,6 +31,11 @@ export async function createObjectsWebServer({ storeDirectory, assetsDirectory }
       if (url.pathname === '/objects') return reply(res, 200, html, 'text/html; charset=utf-8', head);
       if (url.pathname === '/assets/objects.js') return reply(res, 200, js, 'text/javascript; charset=utf-8', head);
       if (url.pathname === '/assets/objects.css') return reply(res, 200, css, 'text/css; charset=utf-8', head);
+      if (url.pathname === '/api/example') {
+        if (!example) return reply(res, 503, { error: 'EXAMPLE_NOT_PREPARED' }, undefined, head);
+        return reply(res, 200, { source: 'ISOLATED_DURABLE_FIXTURE',
+          ...await example.readObjectsHistory('objects-history-fixture-session') }, undefined, head);
+      }
       if (url.pathname === '/api/sessions') {
         await canvas.store.busy;
         return reply(res, 200, Object.keys(canvas.store.snapshot.sessions).sort(), undefined, head);
@@ -46,7 +53,7 @@ export async function createObjectsWebServer({ storeDirectory, assetsDirectory }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  const server = await createObjectsWebServer({ storeDirectory: join(objectsRunRoot, 'data'), assetsDirectory: join(objectsRunRoot, 'assets') });
+  const server = await createObjectsWebServer({ storeDirectory: join(objectsRunRoot, 'data'), assetsDirectory: join(objectsRunRoot, 'assets'), sampleStoreDirectory: join(objectsRunRoot, 'isolated-example') });
   server.on('error', error => { console.error(`Canvas objects service: ${error.code ?? error.message}`); process.exitCode = 1; });
   server.listen(47601, '127.0.0.1', () => console.log('Canvas objects ready: http://127.0.0.1:47601/objects'));
   const stop = () => server.close(error => { if (error) { console.error(error.message); process.exitCode = 1; } });
