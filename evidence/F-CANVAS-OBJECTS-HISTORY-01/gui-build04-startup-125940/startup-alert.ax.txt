@@ -1,0 +1,18 @@
+Window: "", App: HanaWorlds.
+0 dialog Description: alert, Secondary Actions: Raise
+	1 image HanaWorlds critical alert
+	2 text The application could not start or stopped unexpectedly. web boot: 1 entry did not activate
+@hanaworlds/contract-inspector: failed
+Diagnostic report: /Users/yzliu/Library/Logs/HanaWorlds/crash-2026-10-07T12-59-40-772Z-web-boot.log
+
+If application files are missing or damaged, close the application and reinstall it. Your tasks are stored separately.
+	3 button Restart, ID: action-button--998
+	4 button Disable third-party plugins, back up profile patch, and restart, ID: action-button--997
+	5 button Exit, ID: action-button--999
+6 menu bar
+	7 HanaWorlds
+	8 File
+	9 Edit
+	10 Window
+
+The focused UI element is 0 dialog Description: alert, Secondary Actions: Raise
