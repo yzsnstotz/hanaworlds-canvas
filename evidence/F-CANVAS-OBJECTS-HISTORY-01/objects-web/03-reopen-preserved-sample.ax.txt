@@ -1,0 +1,75 @@
+Browser tab: 2, Title: "对象与历史 · Canvas", URL: "http://127.0.0.1:47601/objects".
+0 AXWebArea 对象与历史 · Canvas, URL: 127.0.0.1:47601/objects
+	1 container root
+		2 container
+			3 link Description: ▦ HanaWorlds CANVAS, Value: 127.0.0.1:47601/objects
+			4 text 世界档案
+			5 link Description: 对象与历史 ↗, Value: 127.0.0.1:47601/objects
+			6 text 每一件作品，
+			7 text 都有留下的痕迹。 仅供查看
+		8 container
+			9 text HanaWorlds / Canvas 正在查看示例 当前会话
+			10 pop up button (disabled, collapsed, settable) 当前会话, Value: 尚无连接世界的会话, ID: canvas-session, Secondary Actions: Expand
+				11 menu
+					12 (disabled) 尚无连接世界的会话
+			13 container 对象与历史（Canvas）
+				14 container
+					15 text CANVAS · 世界记录
+					16 heading 对象与历史, Value: 1
+						17 text 对象与历史
+					18 text 看看世界里的作品，以及每一次已提交的改动。
+					19 switch 关闭示例数据, Value: 1
+					20 button (disabled) 刷新
+				21 container
+					22 text 示例数据 这些对象与时间线仅用于展示，不来自当前世界，也不会写入世界。
+				23 container 世界里的对象
+					24 heading 世界里的对象, Value: 2, ID: hw-canvas-objects-title
+						25 text 世界里的对象
+					26 text 2 个对象
+					27 content list
+						28 container
+							29 heading 林边小屋, Value: 3
+								30 text 林边小屋
+							31 definition list
+								32 container 位置
+									33 text 位置
+								34 text (12, 4, 8)
+								35 container 占地大小
+									36 text 占地大小
+								37 text 8 × 6 × 8 格
+								38 container 实际占用
+									39 text 实际占用
+								40 text 384 格
+						41 container
+							42 heading 石头小径, Value: 3
+								43 text 石头小径
+							44 definition list
+								45 container 位置
+									46 text 位置
+								47 text 当前无占地（已撤回）
+								48 container 占地大小
+									49 text 占地大小
+								50 text 0 格
+								51 container 实际占用
+									52 text 实际占用
+								53 text 0 格
+				54 container 改动时间线
+					55 heading 改动时间线, Value: 2, ID: hw-canvas-history-title
+						56 text 改动时间线
+					57 text 3 笔记录
+					58 content list
+						59 container
+							60 heading 林边小屋, Value: 3
+								61 text 林边小屋
+							62 text 已提交 2026/10/7 17:00:00 批量区域  ·  影响 384 格
+						63 container
+							64 heading 石头小径, Value: 3
+								65 text 石头小径
+							66 text 已撤回 2026/10/7 17:02:00 逐格  ·  影响 24 格
+						67 container
+							68 heading 石头小径, Value: 3
+								69 text 石头小径
+							70 text 已撤回 2026/10/7 17:03:00 逐格  ·  影响 24 格
+				71 text 这个页面只供查看；不会建造、修改或撤回世界中的内容。
+
+The focused UI element is 0 AXWebArea 对象与历史 · Canvas, URL: 127.0.0.1:47601/objects

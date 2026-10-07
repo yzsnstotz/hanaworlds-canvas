@@ -1,0 +1,38 @@
+Browser tab: 2, Title: "对象与历史 · Canvas", URL: "http://127.0.0.1:47601/objects".
+0 AXWebArea 对象与历史 · Canvas, URL: 127.0.0.1:47601/objects
+	1 container root
+		2 container
+			3 link Description: ▦ HanaWorlds CANVAS, Value: 127.0.0.1:47601/objects
+			4 text 世界档案
+			5 link Description: 对象与历史 ↗, Value: 127.0.0.1:47601/objects
+			6 text 每一件作品，
+			7 text 都有留下的痕迹。 仅供查看
+		8 container
+			9 text HanaWorlds / Canvas 真实记录 当前会话
+			10 pop up button (disabled, collapsed, settable) 当前会话, Value: 尚无连接世界的会话, ID: canvas-session, Secondary Actions: Expand
+				11 menu
+					12 (disabled) 尚无连接世界的会话
+			13 container 对象与历史（Canvas）
+				14 container
+					15 text CANVAS · 世界记录
+					16 heading 对象与历史, Value: 1
+						17 text 对象与历史
+					18 text 看看世界里的作品，以及每一次已提交的改动。
+					19 switch 查看示例数据, Value: 0
+					20 button 刷新
+				72 text 当前世界 · 只读
+				77 container
+					78 text 这里还没有记录 当前还没有连接世界的会话，所以没有真实对象与历史。你可以先查看示例数据，了解完整的记录样子。
+				23 container 世界里的对象
+					24 heading 世界里的对象, Value: 2, ID: hw-canvas-objects-title
+						25 text 世界里的对象
+					26 text 0 个对象
+					75 text 暂无对象。
+				54 container 改动时间线
+					55 heading 改动时间线, Value: 2, ID: hw-canvas-history-title
+						56 text 改动时间线
+					57 text 0 笔记录
+					76 text 暂无历史。只有完成提交的改动会出现在这里。
+				71 text 这个页面只供查看；不会建造、修改或撤回世界中的内容。
+
+The focused UI element is 20 button 刷新
