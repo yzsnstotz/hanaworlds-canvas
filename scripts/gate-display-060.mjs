@@ -38,8 +38,11 @@ const linkSdk = base => {
 };
 let success = false;
 try {
-  const archive = execFileSync('git', ['archive', commit], { cwd: root });
-  execFileSync('tar', ['-x', '-C', source], { input: archive });
+  const archivePath = join(scratch, 'source.tar');
+  execFileSync('git', ['archive', '--output', archivePath, commit, 'package.json',
+    'package-lock.json', 'src', 'types', 'lib', 'test', 'scripts', 'fixtures', 'examples',
+    'LICENSE', 'LICENSES', 'NOTICE', 'README.md', 'GADGET.md', 'cordis.patch.yml'], { cwd: root });
+  execFileSync('tar', ['-xf', archivePath, '-C', source]);
   check('source-ci', 'npm', ['ci', '--ignore-scripts', '--no-audit', '--no-fund', '--cache', join(scratch, 'cache')]);
   linkSdk(source);
   check('source-build', 'npm', ['run', 'build']);
