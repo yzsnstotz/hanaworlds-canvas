@@ -17,7 +17,7 @@ mkdirSync(scratch);
 const source = join(scratch, 'source'); const packed = join(scratch, 'packed');
 mkdirSync(source); mkdirSync(packed);
 const sha = data => createHash('sha256').update(data).digest('hex');
-const env = { ...process.env, PATH: `${resolve(process.execPath, '..')}:${process.env.PATH}`, TMPDIR: join(scratch, 'tmp') };
+const env = { ...process.env, PATH: `${resolve(process.execPath, '..')}:${process.env.PATH}`, TMPDIR: join(scratch, 'tmp'), npm_config_cache: join(scratch, 'cache') };
 mkdirSync(env.TMPDIR);
 const checks = [];
 const check = (name, binary, args, cwd = source, extraEnv = {}) => {
