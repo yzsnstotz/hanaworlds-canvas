@@ -1,4 +1,4 @@
-# HanaWorlds Canvas 0.5.2 local world component
+# HanaWorlds Canvas 0.5.3 local world component
 
 The package exposes `hanaworldsCanvasV5` and consumes the public
 `hanaworldsWorldAdapterV6` port. It uses the Contracts 0.5.0 root export from
@@ -127,3 +127,18 @@ Adapter only loads, reads and writes mapblock chunks and reports per-chunk facts
   image is snapshotted too, and `RESTORE` must read back the origin before
   summary; a failed Undo restores the pre-Undo image. Cell `Undo` refuses a
   region transaction; the cell BUILD/Undo path is unchanged.
+
+
+## NativeFacts method input (0.5.3 public supplement)
+
+The actual Host injection `hanaworldsLuantiNativeFacts.readScopedState` is called
+with `(connectionRef, positions)` only and returns the complete raw object
+`{ worldRef, stateProfile, cells }`. It is not a ScopedCells array or
+ScopedWorldBinding/request/response envelope. Constructor typing is
+`nativeFacts?: NativeFactsPort` with the same complete method/return definition.
+README's NativeFacts section lists every required field, current source/mapping,
+normal raw fixture/schema/provenance, and legal public Contracts subtype checks.
+The package exports the full fixed fixture and consumer example; both are
+explicit SOURCE/FIXTURE and must not supply facts for an actual Luanti world.
+Canvas's current world/profile/positions/KNOWN checks and transactions are
+unchanged; only this new public input is verified by gate-nativefacts-053.

@@ -1,5 +1,7 @@
 import type { ContractHandshake, OperationMap, ProtocolHandshake, RegionSnapshotContent,
   RegionSnapshotRef, RegionSummary } from 'hanaworlds-contracts';
+import type { NativeFactsPort } from './native-facts.js';
+export type { NativeFactsPort, NativeFactsScopedState } from './native-facts.js';
 
 /** Public declaration only: canvas major 5/minor 0, no published per-cell tokens.
  * Read this property on the real hanaworldsCanvasV5 service supplied by apply(ctx).
@@ -23,7 +25,7 @@ export class CanvasStore {
 }
 export class CanvasV5 implements CanvasV5ProtocolSource {
   constructor(options: { store: CanvasStore | null; adapter?: any;
-    nativeFacts?: any; adapterId?: string });
+    nativeFacts?: NativeFactsPort; adapterId?: string });
   store: CanvasStore | null;
   ready: Promise<void>;
   storageState: string;

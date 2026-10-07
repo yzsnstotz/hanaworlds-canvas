@@ -19,7 +19,7 @@ import { canonicalJSON, checkProtocolCompatibility, comparePosition, digestValue
 export const REGION_WIRE = 'canvas-region/v1';
 export const REGION_ADAPTER = 'world-adapter-region/v1';
 const ADAPTER = 'world-adapter/v6';
-const PACKAGE_VERSION = '0.5.2';
+const PACKAGE_VERSION = '0.5.3';
 export const CANVAS_REGION_CAPABILITIES = Object.freeze(regionCapabilities
   .filter(c => c.owner === 'hanaworlds-canvas').map(c => c.id).sort());
 export const ADAPTER_REGION_REQUIREMENT = protocolRequirement(REGION_ADAPTER,

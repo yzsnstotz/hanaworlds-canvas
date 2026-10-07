@@ -132,6 +132,9 @@ test('build commits only after complete readback and stores one durable history 
     let regionInspection;
     let inspectedObjectRef;
     let inspectedObjectRevision;
+    const publicPort = process.env.CANVAS_NATIVEFACTS_NORMAL_ONLY ?
+      await (await import('hanaworlds-canvas/examples/native-facts-consumer.mjs'))
+        .createFixtureNativeFactsPort(consumer) : null;
     const nativeFacts = { async readScopedState(connectionRef, positions) {
       scopedFactReads++;
       assert.equal(connectionRef, connected.connectionRef);
@@ -139,8 +142,15 @@ test('build commits only after complete readback and stores one durable history 
       lastOpaqueDigest = createHash('sha256')
           .update('HanaWorlds|contracts@0.4.0|adapter-scoped-cell/v1\n')
           .update(canonicalize({ profile: stateProfile, record })).digest('hex');
-      return { worldRef, stateProfile, cells: [{ position,
+      const expected = { worldRef, stateProfile, cells: [{ position,
         availability: 'KNOWN', stateDigest: lastOpaqueDigest }] };
+      if (!publicPort) return expected;
+      const raw = await publicPort.readScopedState(connectionRef, positions);
+      assert.deepEqual(raw, expected);
+      if (process.env.CANVAS_RUNTIME_EVIDENCE)
+        await writeFile(join(process.env.CANVAS_RUNTIME_EVIDENCE, 'native-facts-original-call.json'),
+          JSON.stringify({ method: 'readScopedState', arguments: [connectionRef, positions], rawReturn: raw }, null, 2), { mode: 0o600 });
+      return raw;
     } };
     const calls = [];
     const adapter = { async call(operation, request) {
@@ -422,6 +432,16 @@ test('build commits only after complete readback and stores one durable history 
     await saveState('cell-after-same-transaction-undo.json');
     const afterUndo = await CanvasStore.open(directory);
     assert.equal(afterUndo.snapshot.history[objectRef].at(-1).originTransactionId, 'build-1');
+    if (process.env.CANVAS_NATIVEFACTS_NORMAL_ONLY) {
+      assert.equal(writes, 2);
+      console.log(JSON.stringify({ runtime: 'REAL_CORDIS_CANVAS_AND_FS_STORE',
+        external: 'PUBLIC_NATIVE_FACTS_ADAPTER_AND_WORLD_FIXTURE', consumerVersion: consumer.version,
+        publicFixtureConsumed: true, publicReadback: publicReadback.result.status,
+        reopenedReadback: reopenedReadback.result.status, undo: undo.result.status,
+        originalTransaction: 'build-1', undoTransaction: 'undo-1', writes, scopedFactReads,
+        originalHistoryAssociation: afterUndo.snapshot.history[objectRef].at(-1).originTransactionId }));
+      return;
+    }
     const staleReadback = await canvas.call('Readback', readbackRequest);
     assert.equal(staleReadback.error?.code, 'STALE_REVISION');
     const staleObject = await canvas.call('InspectObject', inspectObjectRequest);
@@ -536,7 +556,7 @@ test('host exposes durable Canvas facts as separate public ports', async () => {
     assert.equal(ports.has('hanaworldsLuantiInspectionContext'), false);
     const advertised = ports.get('hanaworldsCanvasV5').contractHandshake;
     assert.equal(advertised.contracts, 'hanaworlds-contracts@0.5.0');
-    assert.equal(ports.get('hanaworldsCanvasV5').status().version, '0.5.2');
+    assert.equal(ports.get('hanaworldsCanvasV5').status().version, '0.5.3');
     // The provider keeps its 0.5.0 exact identity. A separate 0.5.2 consumer
     // must reject that exact identity; its cell admission uses ProtocolHandshake.
     if (advertised.contracts === contractHandshake.contracts)
