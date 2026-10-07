@@ -1,0 +1,3 @@
+307cee628e261cf46606ef3d8eaca31337034769e0b1ee986d0aef03dbb54f5d  ./canvas-v5.json
+99e0261584feb837dd4cf91081f8b8f7c1aa01d2fa7f6f9786d4efbf628f37c7  ./fixture-world.json
+7978e39d9b5add7533abaee6bca2b227d1fa9b068bc2c2226c5fb6b0fe08b8d2  ./production-receipt.json

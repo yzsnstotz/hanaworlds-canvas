@@ -1,0 +1,633 @@
+{
+  "classification": "REAL_RUNTIME + FIXTURE",
+  "sessionRef": "undo-fixture-session",
+  "worldRef": "undo-fixture-world",
+  "storeDirectory": "/Users/yzliu/.cache/hanaworlds-runs/F-CANVAS-UNDO-01/undo-web/isolated-example",
+  "inputs": "Adapter/world/Brush inputs are explicit fixtures in an isolated durable world file; no real world connection",
+  "records": "Public Canvas selection and two per-cell analysis/commits; no direct Store record insertion",
+  "trace": [
+    {
+      "operation": "ReadWorldSelectionContext",
+      "request": {
+        "contractVersion": "canvas/v5",
+        "sessionRef": "undo-fixture-session",
+        "worldRef": "undo-fixture-world",
+        "requestId": "undo-fixture-context"
+      },
+      "response": {
+        "contractVersion": "canvas/v5",
+        "requestId": "undo-fixture-context",
+        "result": {
+          "sessionRef": "undo-fixture-session",
+          "worldRef": "undo-fixture-world",
+          "inventory": {
+            "capabilityRevision": "undo-fixture-cap-1",
+            "connections": [
+              {
+                "adapterId": "hanaworlds-world-adapter",
+                "connectionRef": "undo-fixture-connection",
+                "worldRef": "undo-fixture-world",
+                "displayName": "隔离示例世界（撤回与重做）",
+                "capabilityRevision": "undo-fixture-cap-1",
+                "payloadVersion": "local-world/v1",
+                "readiness": "READY",
+                "connectionIncarnationRef": "undo-fixture-incarnation"
+              }
+            ]
+          },
+          "selection": {
+            "status": "UNBOUND",
+            "sessionRef": "undo-fixture-session",
+            "sessionRevision": "session-0"
+          }
+        },
+        "error": null
+      }
+    },
+    {
+      "operation": "SelectWorldConnection",
+      "request": {
+        "contractVersion": "canvas/v5",
+        "sessionRef": "undo-fixture-session",
+        "worldRef": "undo-fixture-world",
+        "requestId": "undo-fixture-select",
+        "connectionRef": "undo-fixture-connection",
+        "connectionIncarnationRef": "undo-fixture-incarnation",
+        "expectedRevision": "session-0",
+        "expectedContext": null
+      },
+      "response": {
+        "contractVersion": "canvas/v5",
+        "requestId": "undo-fixture-select",
+        "result": {
+          "currentSession": "undo-fixture-session",
+          "activeWorldRef": "undo-fixture-world",
+          "orderedSelectedObjectRefs": [],
+          "sessionRevision": "session-a47437d2-cb69-4452-9e90-3287c0793318",
+          "selectionRevision": "selection-843fb19a-4aa7-4988-95f5-b3e5d727e4e9",
+          "localContext": {
+            "connectionRef": "undo-fixture-connection",
+            "connectionIncarnationRef": "undo-fixture-incarnation",
+            "worldRef": "undo-fixture-world",
+            "selectionRevision": "selection-843fb19a-4aa7-4988-95f5-b3e5d727e4e9"
+          }
+        },
+        "error": null
+      }
+    },
+    {
+      "operation": "ListObjects",
+      "request": {
+        "contractVersion": "canvas/v5",
+        "sessionRef": "undo-fixture-session",
+        "worldRef": "undo-fixture-world",
+        "requestId": "undo-fixture-cell-1-objects",
+        "localContext": {
+          "connectionRef": "undo-fixture-connection",
+          "connectionIncarnationRef": "undo-fixture-incarnation",
+          "worldRef": "undo-fixture-world",
+          "selectionRevision": "selection-843fb19a-4aa7-4988-95f5-b3e5d727e4e9"
+        },
+        "expectedRevision": null
+      },
+      "response": {
+        "contractVersion": "canvas/v5",
+        "requestId": "undo-fixture-cell-1-objects",
+        "result": {
+          "worldRef": "undo-fixture-world",
+          "registryRevision": "registry-0",
+          "objects": []
+        },
+        "error": null
+      }
+    },
+    {
+      "operation": "AnalyzeAffectedObjects",
+      "request": {
+        "contractVersion": "canvas/v5",
+        "sessionRef": "undo-fixture-session",
+        "worldRef": "undo-fixture-world",
+        "requestId": "undo-fixture-cell-1-analysis",
+        "transactionId": "undo-fixture-cell-1",
+        "operations": {
+          "contractVersion": "operations/v3",
+          "buildDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "compilerRevision": "undo-fixture-brush-cell-1",
+          "compilationConfigDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "worldRef": "undo-fixture-world",
+          "frameDigest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "catalogueDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "targetFactsDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "effects": [
+            {
+              "position": [
+                4,
+                2,
+                4
+              ],
+              "nodeName": "fixture:stone",
+              "param2": 0
+            },
+            {
+              "position": [
+                5,
+                2,
+                4
+              ],
+              "nodeName": "fixture:stone",
+              "param2": 0
+            }
+          ]
+        },
+        "operationDigest": "55892d223643cf635375323bcdd59e4e1df34c2262692d8450e59a2284afdb59",
+        "expectedRevision": "world-0",
+        "expectedRegistryRevision": "registry-0",
+        "expectedSelectionRevision": "selection-843fb19a-4aa7-4988-95f5-b3e5d727e4e9",
+        "localContext": {
+          "connectionRef": "undo-fixture-connection",
+          "connectionIncarnationRef": "undo-fixture-incarnation",
+          "worldRef": "undo-fixture-world",
+          "selectionRevision": "selection-843fb19a-4aa7-4988-95f5-b3e5d727e4e9"
+        }
+      },
+      "response": {
+        "contractVersion": "canvas/v5",
+        "requestId": "undo-fixture-cell-1-analysis",
+        "result": {
+          "contractVersion": "canvas/v5",
+          "worldRef": "undo-fixture-world",
+          "worldRevision": "world-0",
+          "registryRevision": "registry-0",
+          "selectionRevision": "selection-843fb19a-4aa7-4988-95f5-b3e5d727e4e9",
+          "operationDigest": "55892d223643cf635375323bcdd59e4e1df34c2262692d8450e59a2284afdb59",
+          "orderedSelectedRefs": [],
+          "affectedObjectRefs": []
+        },
+        "error": null
+      }
+    },
+    {
+      "operation": "ApplyRecoverableCommit",
+      "request": {
+        "contractVersion": "canvas/v5",
+        "sessionRef": "undo-fixture-session",
+        "worldRef": "undo-fixture-world",
+        "requestId": "undo-fixture-cell-1",
+        "transactionId": "undo-fixture-cell-1",
+        "operations": {
+          "contractVersion": "operations/v3",
+          "buildDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "compilerRevision": "undo-fixture-brush-cell-1",
+          "compilationConfigDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "worldRef": "undo-fixture-world",
+          "frameDigest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "catalogueDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "targetFactsDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "effects": [
+            {
+              "position": [
+                4,
+                2,
+                4
+              ],
+              "nodeName": "fixture:stone",
+              "param2": 0
+            },
+            {
+              "position": [
+                5,
+                2,
+                4
+              ],
+              "nodeName": "fixture:stone",
+              "param2": 0
+            }
+          ]
+        },
+        "operationDigest": "55892d223643cf635375323bcdd59e4e1df34c2262692d8450e59a2284afdb59",
+        "analysisDigest": "e9ad0e61485a3c3bdbc13acc1acc314b90c314c7663dc60b6c19df7426e3a4bb",
+        "decisionRevision": null,
+        "expectedWorldRevision": "world-0",
+        "expectedObjectRevisions": {},
+        "guarantee": "RECOVERABLE_VERIFIED",
+        "regionInspectionBinding": null,
+        "localContext": {
+          "connectionRef": "undo-fixture-connection",
+          "connectionIncarnationRef": "undo-fixture-incarnation",
+          "worldRef": "undo-fixture-world",
+          "selectionRevision": "selection-843fb19a-4aa7-4988-95f5-b3e5d727e4e9"
+        }
+      },
+      "response": {
+        "contractVersion": "canvas/v5",
+        "requestId": "undo-fixture-cell-1",
+        "result": {
+          "contractVersion": "canvas/v5",
+          "transactionId": "undo-fixture-cell-1",
+          "operationDigest": "55892d223643cf635375323bcdd59e4e1df34c2262692d8450e59a2284afdb59",
+          "transactionPayloadDigest": "e946c136c0aaf4aebd2b50558c94290cd9535cd8f3c7874ab72af14d80487afc",
+          "status": "VERIFIED",
+          "previousWorldRevision": "world-0",
+          "observedWorldRevision": "undo-fixture-world-1",
+          "readbackDigest": "08296c535700ac55d56b7787ec63783f71c042422e0f8c12351c97a9713f3a6c",
+          "restoreStatus": "NOT_REQUIRED",
+          "error": null,
+          "localContext": {
+            "connectionRef": "undo-fixture-connection",
+            "connectionIncarnationRef": "undo-fixture-incarnation",
+            "worldRef": "undo-fixture-world",
+            "selectionRevision": "selection-843fb19a-4aa7-4988-95f5-b3e5d727e4e9"
+          }
+        },
+        "error": null
+      }
+    },
+    {
+      "operation": "ListObjects",
+      "request": {
+        "contractVersion": "canvas/v5",
+        "sessionRef": "undo-fixture-session",
+        "worldRef": "undo-fixture-world",
+        "requestId": "undo-fixture-cell-2-objects",
+        "localContext": {
+          "connectionRef": "undo-fixture-connection",
+          "connectionIncarnationRef": "undo-fixture-incarnation",
+          "worldRef": "undo-fixture-world",
+          "selectionRevision": "selection-843fb19a-4aa7-4988-95f5-b3e5d727e4e9"
+        },
+        "expectedRevision": null
+      },
+      "response": {
+        "contractVersion": "canvas/v5",
+        "requestId": "undo-fixture-cell-2-objects",
+        "result": {
+          "worldRef": "undo-fixture-world",
+          "registryRevision": "registry-73711c2c-212f-4b34-b659-167d726dd5cb",
+          "objects": [
+            {
+              "worldRef": "undo-fixture-world",
+              "objectRef": "object-0acc264a-1718-4f0d-8993-2ea7e76acc86",
+              "objectRevision": "object-d387f178-bdb1-490c-a936-53061120ca32",
+              "displayName": null,
+              "nameRevision": null,
+              "creationSequence": 0,
+              "status": "READY"
+            }
+          ]
+        },
+        "error": null
+      }
+    },
+    {
+      "operation": "AnalyzeAffectedObjects",
+      "request": {
+        "contractVersion": "canvas/v5",
+        "sessionRef": "undo-fixture-session",
+        "worldRef": "undo-fixture-world",
+        "requestId": "undo-fixture-cell-2-analysis",
+        "transactionId": "undo-fixture-cell-2",
+        "operations": {
+          "contractVersion": "operations/v3",
+          "buildDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "compilerRevision": "undo-fixture-brush-cell-1",
+          "compilationConfigDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "worldRef": "undo-fixture-world",
+          "frameDigest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "catalogueDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "targetFactsDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "effects": [
+            {
+              "position": [
+                8,
+                2,
+                8
+              ],
+              "nodeName": "fixture:brick",
+              "param2": 0
+            },
+            {
+              "position": [
+                9,
+                2,
+                8
+              ],
+              "nodeName": "fixture:brick",
+              "param2": 0
+            },
+            {
+              "position": [
+                10,
+                2,
+                8
+              ],
+              "nodeName": "fixture:brick",
+              "param2": 0
+            }
+          ]
+        },
+        "operationDigest": "5eef61ca35bb86270a22d2109387aac81855a64f8e18f373128c8289d86cc963",
+        "expectedRevision": "undo-fixture-world-1",
+        "expectedRegistryRevision": "registry-73711c2c-212f-4b34-b659-167d726dd5cb",
+        "expectedSelectionRevision": "selection-843fb19a-4aa7-4988-95f5-b3e5d727e4e9",
+        "localContext": {
+          "connectionRef": "undo-fixture-connection",
+          "connectionIncarnationRef": "undo-fixture-incarnation",
+          "worldRef": "undo-fixture-world",
+          "selectionRevision": "selection-843fb19a-4aa7-4988-95f5-b3e5d727e4e9"
+        }
+      },
+      "response": {
+        "contractVersion": "canvas/v5",
+        "requestId": "undo-fixture-cell-2-analysis",
+        "result": {
+          "contractVersion": "canvas/v5",
+          "worldRef": "undo-fixture-world",
+          "worldRevision": "undo-fixture-world-1",
+          "registryRevision": "registry-73711c2c-212f-4b34-b659-167d726dd5cb",
+          "selectionRevision": "selection-843fb19a-4aa7-4988-95f5-b3e5d727e4e9",
+          "operationDigest": "5eef61ca35bb86270a22d2109387aac81855a64f8e18f373128c8289d86cc963",
+          "orderedSelectedRefs": [],
+          "affectedObjectRefs": []
+        },
+        "error": null
+      }
+    },
+    {
+      "operation": "ApplyRecoverableCommit",
+      "request": {
+        "contractVersion": "canvas/v5",
+        "sessionRef": "undo-fixture-session",
+        "worldRef": "undo-fixture-world",
+        "requestId": "undo-fixture-cell-2",
+        "transactionId": "undo-fixture-cell-2",
+        "operations": {
+          "contractVersion": "operations/v3",
+          "buildDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "compilerRevision": "undo-fixture-brush-cell-1",
+          "compilationConfigDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "worldRef": "undo-fixture-world",
+          "frameDigest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "catalogueDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "targetFactsDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "effects": [
+            {
+              "position": [
+                8,
+                2,
+                8
+              ],
+              "nodeName": "fixture:brick",
+              "param2": 0
+            },
+            {
+              "position": [
+                9,
+                2,
+                8
+              ],
+              "nodeName": "fixture:brick",
+              "param2": 0
+            },
+            {
+              "position": [
+                10,
+                2,
+                8
+              ],
+              "nodeName": "fixture:brick",
+              "param2": 0
+            }
+          ]
+        },
+        "operationDigest": "5eef61ca35bb86270a22d2109387aac81855a64f8e18f373128c8289d86cc963",
+        "analysisDigest": "a89f233d635f359d19511bcf820b28ac8e7a56ed0039a3f2dee3b858fa4947ad",
+        "decisionRevision": null,
+        "expectedWorldRevision": "undo-fixture-world-1",
+        "expectedObjectRevisions": {},
+        "guarantee": "RECOVERABLE_VERIFIED",
+        "regionInspectionBinding": null,
+        "localContext": {
+          "connectionRef": "undo-fixture-connection",
+          "connectionIncarnationRef": "undo-fixture-incarnation",
+          "worldRef": "undo-fixture-world",
+          "selectionRevision": "selection-843fb19a-4aa7-4988-95f5-b3e5d727e4e9"
+        }
+      },
+      "response": {
+        "contractVersion": "canvas/v5",
+        "requestId": "undo-fixture-cell-2",
+        "result": {
+          "contractVersion": "canvas/v5",
+          "transactionId": "undo-fixture-cell-2",
+          "operationDigest": "5eef61ca35bb86270a22d2109387aac81855a64f8e18f373128c8289d86cc963",
+          "transactionPayloadDigest": "d4fcd92ed60d95eff7c02380c08f036ba860e7fa77734197c6a8408684a7ab98",
+          "status": "VERIFIED",
+          "previousWorldRevision": "undo-fixture-world-1",
+          "observedWorldRevision": "undo-fixture-world-2",
+          "readbackDigest": "ab7a9e51bcfbafc6f8dac76fbad7b029a6e6a24e676631870aae43e9aaa9dc06",
+          "restoreStatus": "NOT_REQUIRED",
+          "error": null,
+          "localContext": {
+            "connectionRef": "undo-fixture-connection",
+            "connectionIncarnationRef": "undo-fixture-incarnation",
+            "worldRef": "undo-fixture-world",
+            "selectionRevision": "selection-843fb19a-4aa7-4988-95f5-b3e5d727e4e9"
+          }
+        },
+        "error": null
+      }
+    }
+  ],
+  "adapterCalls": [
+    {
+      "port": "world-adapter/v6",
+      "operation": "DiscoverConnections",
+      "transactionId": null
+    },
+    {
+      "port": "world-adapter/v6",
+      "operation": "ReadLocalConnection",
+      "transactionId": null
+    },
+    {
+      "port": "world-adapter/v6",
+      "operation": "DiscoverConnections",
+      "transactionId": null
+    },
+    {
+      "port": "world-adapter/v6",
+      "operation": "ReadLocalConnection",
+      "transactionId": null
+    },
+    {
+      "port": "world-adapter/v6",
+      "operation": "ReadLocalConnection",
+      "transactionId": null
+    },
+    {
+      "port": "world-adapter/v6",
+      "operation": "ReadLocalConnection",
+      "transactionId": null
+    },
+    {
+      "port": "world-adapter/v6",
+      "operation": "PrepareRecoverableTransaction",
+      "transactionId": "undo-fixture-cell-1"
+    },
+    {
+      "port": "world-adapter/v6",
+      "operation": "Readback",
+      "transactionId": "undo-fixture-cell-1"
+    },
+    {
+      "port": "world-adapter/v6",
+      "operation": "ApplyCompiledTransaction",
+      "transactionId": "undo-fixture-cell-1"
+    },
+    {
+      "port": "world-adapter/v6",
+      "operation": "Readback",
+      "transactionId": "undo-fixture-cell-1"
+    },
+    {
+      "port": "world-adapter/v6",
+      "operation": "ReadLocalConnection",
+      "transactionId": null
+    },
+    {
+      "port": "world-adapter/v6",
+      "operation": "ReadLocalConnection",
+      "transactionId": null
+    },
+    {
+      "port": "world-adapter/v6",
+      "operation": "ReadLocalConnection",
+      "transactionId": null
+    },
+    {
+      "port": "world-adapter/v6",
+      "operation": "PrepareRecoverableTransaction",
+      "transactionId": "undo-fixture-cell-2"
+    },
+    {
+      "port": "world-adapter/v6",
+      "operation": "Readback",
+      "transactionId": "undo-fixture-cell-2"
+    },
+    {
+      "port": "world-adapter/v6",
+      "operation": "ApplyCompiledTransaction",
+      "transactionId": "undo-fixture-cell-2"
+    },
+    {
+      "port": "world-adapter/v6",
+      "operation": "Readback",
+      "transactionId": "undo-fixture-cell-2"
+    }
+  ],
+  "actions": {
+    "state": "READY",
+    "worldRef": "undo-fixture-world",
+    "worldRevision": "undo-fixture-world-2",
+    "localContext": {
+      "connectionRef": "undo-fixture-connection",
+      "connectionIncarnationRef": "undo-fixture-incarnation",
+      "worldRef": "undo-fixture-world",
+      "selectionRevision": "selection-843fb19a-4aa7-4988-95f5-b3e5d727e4e9"
+    },
+    "objects": [
+      {
+        "objectRef": "object-0acc264a-1718-4f0d-8993-2ea7e76acc86",
+        "mode": "CELL",
+        "originTransactionId": "undo-fixture-cell-1",
+        "applied": true,
+        "footprint": [
+          [
+            4,
+            2,
+            4
+          ],
+          [
+            5,
+            2,
+            4
+          ]
+        ],
+        "cells": [
+          [
+            4,
+            2,
+            4
+          ],
+          [
+            5,
+            2,
+            4
+          ]
+        ],
+        "undo": {
+          "available": false,
+          "reason": "WORLD_CHANGED_SINCE"
+        },
+        "redo": {
+          "available": false,
+          "reason": "NOTHING_TO_REDO"
+        }
+      },
+      {
+        "objectRef": "object-7dd5e27c-7c6d-4c92-b2de-4a2a75d13b49",
+        "mode": "CELL",
+        "originTransactionId": "undo-fixture-cell-2",
+        "applied": true,
+        "footprint": [
+          [
+            8,
+            2,
+            8
+          ],
+          [
+            9,
+            2,
+            8
+          ],
+          [
+            10,
+            2,
+            8
+          ]
+        ],
+        "cells": [
+          [
+            8,
+            2,
+            8
+          ],
+          [
+            9,
+            2,
+            8
+          ],
+          [
+            10,
+            2,
+            8
+          ]
+        ],
+        "undo": {
+          "available": true,
+          "operation": "Undo",
+          "historyTransactionId": "undo-fixture-cell-2",
+          "expectedHistoryRevision": "history-fba05e7d-1370-46d4-bd98-3b5b8256bbc4",
+          "expectedWorldRevision": "undo-fixture-world-2",
+          "expectedObjectRevisions": {
+            "object-7dd5e27c-7c6d-4c92-b2de-4a2a75d13b49": "object-ccfbab12-a456-4917-b24b-fa691a21692e"
+          }
+        },
+        "redo": {
+          "available": false,
+          "reason": "NOTHING_TO_REDO"
+        }
+      }
+    ]
+  }
+}
