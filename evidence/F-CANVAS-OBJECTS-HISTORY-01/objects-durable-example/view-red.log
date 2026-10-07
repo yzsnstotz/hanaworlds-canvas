@@ -1,0 +1,30 @@
+✖ durable isolated sample explains its source and allows read refresh (31.615958ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 83.344292
+
+✖ failing tests:
+
+test at test/display-view.test.mjs:23:1
+✖ durable isolated sample explains its source and allows read refresh (31.615958ms)
+  AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+  
+    assert.ok(html.includes('经 Canvas 提交后保存'))
+  
+      at TestContext.<anonymous> (file:///Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/source/test/display-view.test.mjs:28:10)
+      at Test.runInAsyncScope (node:async_hooks:214:14)
+      at Test.run (node:internal/test_runner/test:1103:25)
+      at Test.start (node:internal/test_runner/test:1000:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:358:17) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }

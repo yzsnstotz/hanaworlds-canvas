@@ -1,0 +1,12 @@
+✔ sample UI labels its origin and renders the requested data with read-only controls (11.5715ms)
+✔ old history discloses missing metadata and unbound worlds explain why they are empty (0.529375ms)
+✔ durable isolated sample explains its source and allows read refresh (0.342042ms)
+✔ web example reads public-transaction-produced durable records unchanged after reopening (206.563083ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 276.053917
