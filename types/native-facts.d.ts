@@ -9,5 +9,5 @@ export interface NativeFactsScopedState {
   readonly cells: ScopedCells;
 }
 export interface NativeFactsPort {
-  readScopedState(connectionRef: Ref, positions: Positions): Promise<NativeFactsScopedState>;
+  readScopedState(connectionRef: Ref, positions: Positions): NativeFactsScopedState | Promise<NativeFactsScopedState>;
 }

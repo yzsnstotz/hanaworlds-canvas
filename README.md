@@ -66,7 +66,7 @@ Contracts type. In `apply(ctx)`, the Host supplies `hanaworldsLuantiNativeFacts`
 Direct constructor consumers supply `nativeFacts: NativeFactsPort`.
 
 ```ts
-readScopedState(connectionRef: Ref, positions: Positions): Promise<NativeFactsScopedState>
+readScopedState(connectionRef: Ref, positions: Positions): NativeFactsScopedState | Promise<NativeFactsScopedState>
 // Complete raw return, not an array or a transaction/request/response envelope:
 interface NativeFactsScopedState {
   worldRef: Ref;
@@ -75,6 +75,7 @@ interface NativeFactsScopedState {
 }
 ```
 
+Canvas awaits either a raw object or a Promise of it; the fixed normal example is async.
 There is no third argument. `connectionRef` comes from the current Canvas
 selection's `localContext.connectionRef`; `positions` comes from compiled
 operation effects, retaining the complete ordered position set. `worldRef`,
