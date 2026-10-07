@@ -64,7 +64,8 @@ test('shared host keeps /objects read-only and runs /undo actions only for same-
     assert.equal((await fetch(base + '/api/objects', { method: 'POST', body: '{}' })).status, 405);
     const view = await (await fetch(base + '/api/undo')).json();
     assert.equal(view.source, 'ISOLATED_DURABLE_FIXTURE');
-    const cell = view.entries.find(entry => entry.mode === 'CELL');
+    const cell = view.entries.find(entry => entry.undo.available);
+    assert.equal(view.entries.filter(entry => entry.undo.available).length, 1, 'only the latest change is offered');
     const post = (action, body, headers = { Origin: base, 'Content-Type': 'application/json' }) =>
       fetch(`${base}/api/undo/${action}`, { method: 'POST', headers, body: JSON.stringify(body) });
     assert.equal((await post('undo', { objectRef: cell.objectRef }, { Origin: 'http://evil.example', 'Content-Type': 'application/json' })).status, 403);
@@ -72,19 +73,19 @@ test('shared host keeps /objects read-only and runs /undo actions only for same-
     assert.equal((await post('undo', { objectRef: cell.objectRef, extra: 1 })).status, 400);
     assert.equal((await fetch(base + '/api/undo/delete', { method: 'POST' })).status, 405);
     assert.equal((await fetch(base + '/api/undo')).status, 200);
-    assert.equal((await (await fetch(base + '/api/undo')).json()).entries.find(e => e.mode === 'CELL').state, 'APPLIED', 'refused requests change nothing');
+    assert.equal((await (await fetch(base + '/api/undo')).json()).entries.find(e => e.objectRef === cell.objectRef).state, 'APPLIED', 'refused requests change nothing');
     const undone = await post('undo', { objectRef: cell.objectRef });
     assert.equal(undone.status, 200);
     const undoneBody = await undone.json();
     assert.equal(undoneBody.status, 'VERIFIED');
     assert.equal(undoneBody.request, undefined);
-    assert.equal(undoneBody.view.entries.find(e => e.mode === 'CELL').state, 'UNDONE');
+    assert.equal(undoneBody.view.entries.find(e => e.objectRef === cell.objectRef).state, 'UNDONE');
     const again = await post('undo', { objectRef: cell.objectRef });
     assert.equal(again.status, 409);
     assert.equal((await again.json()).error.code, 'NOTHING_TO_UNDO');
     const redone = await (await post('redo', { objectRef: cell.objectRef })).json();
     assert.equal(redone.status, 'VERIFIED');
-    assert.ok(redone.view.entries.find(e => e.mode === 'CELL').cells.every(c => c.nodeName === 'fixture:brick'));
+    assert.ok(redone.view.entries.find(e => e.objectRef === cell.objectRef).cells.every(c => c.nodeName === 'fixture:brick'));
   } finally {
     if (server) await new Promise(resolve => server.close(resolve));
     await rm(scratch, { recursive: true, force: true });

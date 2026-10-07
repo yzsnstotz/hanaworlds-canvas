@@ -5,6 +5,8 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createUndoExample } from '../scripts/undo-example.mjs';
 import { openUndoHost, undoWorldFile } from '../scripts/undo-host.mjs';
+import { CanvasRegionV1 } from '../src/index.mjs';
+import { digestValue, encodeRegionBlock, regionChunksOfBox } from 'hanaworlds-contracts';
 
 const nodes = entry => entry.cells.map(cell => cell.nodeName);
 const writes = host => host.world.calls.filter(call =>
@@ -20,7 +22,11 @@ test('page actions undo and redo a cell entry through public Canvas transactions
     let view = await host.readView();
     assert.equal(view.source, 'ISOLATED_DURABLE_FIXTURE');
     assert.deepEqual(view.entries.map(entry => [entry.mode, entry.state, entry.cells.length]),
-      [['REGION', 'APPLIED', 4], ['CELL', 'APPLIED', 3]]);
+      [['CELL', 'APPLIED', 2], ['CELL', 'APPLIED', 3]]);
+    // The older entry is not the latest world change: named, not offered.
+    assert.deepEqual([view.entries[0].undo, view.entries[0].redo],
+      [{ available: false, reason: 'WORLD_CHANGED_SINCE' }, { available: false, reason: 'NOTHING_TO_REDO' }]);
+    assert.equal((await host.perform(view.entries[0].objectRef, 'undo')).error.code, 'WORLD_CHANGED_SINCE');
     const cell = view.entries[1];
     assert.deepEqual(nodes(cell), ['fixture:brick', 'fixture:brick', 'fixture:brick']);
     assert.equal(cell.undo.available, true);
@@ -72,14 +78,20 @@ test('page actions undo and redo a cell entry through public Canvas transactions
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
-test('region entries undo as a whole, region Redo is named unavailable, and failures write nothing', async () => {
+test('every offered Undo has a same-entry Redo; region and stale entries are named and refused without writing', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'canvas-undo-region-'));
   try {
     await createUndoExample(directory);
     let host = await openUndoHost(directory);
     let view = await host.readView();
-    const regionRef = view.entries[0].objectRef, cellRef = view.entries[1].objectRef;
-    // An external edit in the fixture world: Redo must refuse without writing.
+    const cellRef = view.entries[1].objectRef;
+    // Property over the example: whatever Canvas offers as Undo can be redone on the same entry.
+    for (const entry of view.entries.filter(row => row.undo.available)) {
+      assert.equal((await host.perform(entry.objectRef, 'undo')).status, 'VERIFIED');
+      const after = (await host.readView()).entries.find(row => row.objectRef === entry.objectRef);
+      assert.equal(after.redo.available, true, `${entry.label} must be redoable after its Undo`);
+      assert.equal((await host.perform(entry.objectRef, 'redo')).status, 'VERIFIED');
+    }
     const undone = await host.perform(cellRef, 'undo');
     assert.equal(undone.status, 'VERIFIED');
     // Canvas itself refuses to Undo an Undo row (that would clear a footprint twice).
@@ -89,12 +101,13 @@ test('region entries undo as a whole, region Redo is named unavailable, and fail
       expectedWorldRevision: host.canvas.store.snapshot.transactions[undone.transactionId].receipt.observedWorldRevision,
       expectedObjectRevisions: { [cellRef]: host.canvas.store.snapshot.objects['undo-fixture-world'][cellRef].objectRevision } });
     assert.equal(undoOfUndo.error?.code, 'UNDO_CONFLICT');
+    // An external edit in the fixture world: Redo must refuse without writing.
     const file = undoWorldFile(directory);
     const world = JSON.parse(await readFile(file, 'utf8'));
     world.nodes['9,2,8'] = { position: [9, 2, 8], nodeName: 'fixture:external', param1: 0, param2: 0, metadata: {}, inventory: {}, timer: null };
     await writeFile(file, JSON.stringify(world), { mode: 0o600 });
     host = await openUndoHost(directory);
-    const before = writes(host);
+    let before = writes(host);
     const refused = await host.perform(cellRef, 'redo');
     assert.equal(refused.error?.code, 'REDO_CONFLICT');
     assert.equal(writes(host), before);
@@ -102,16 +115,35 @@ test('region entries undo as a whole, region Redo is named unavailable, and fail
     assert.equal(view.entries[1].state, 'UNDONE');
     assert.deepEqual(nodes(view.entries[1]), ['air', 'fixture:external', 'air']);
     assert.deepEqual(Object.keys(host.canvas.store.snapshot.pending), []);
+    // Remove the external edit again; the same entry redoes normally.
+    delete world.nodes['9,2,8'];
+    await writeFile(file, JSON.stringify(world), { mode: 0o600 });
+    host = await openUndoHost(directory);
+    assert.equal((await host.perform(cellRef, 'redo')).status, 'VERIFIED');
 
-    const regionUndo = await host.perform(regionRef, 'undo');
-    assert.deepEqual([regionUndo.operation, regionUndo.status, regionUndo.error], ['UndoRegionCommit', 'VERIFIED', null]);
+    // A region entry in the same isolated world (made here, never in the example): canvas-region/v1
+    // has no Redo, so Canvas names its Undo instead of offering a move it could not reverse.
+    const region = new CanvasRegionV1(host.canvas, host.world.regionAdapter);
+    const localContext = host.canvas.store.snapshot.sessions['undo-fixture-session'].localContext;
+    const origin = [20, 2, 20], size = [2, 1, 2];
+    const block = encodeRegionBlock({ origin, size, palette: [{ nodeName: 'fixture:stone', param2: 0 }],
+      indices: new Int32Array(size.reduce((a, b) => a * b, 1)) });
+    const chunks = regionChunksOfBox({ min: origin, max: origin.map((o, a) => o + size[a] - 1) });
+    const operations = { contractVersion: 'region-operations/v1', buildDigest: 'b'.repeat(64), compilerRevision: 'test-region-1',
+      worldRef: 'undo-fixture-world', catalogueDigest: 'c'.repeat(64), chunkEdge: 16, chunks: [{ chunkPos: chunks[0].chunkPos, block }] };
+    const committed = await region.call('ApplyRegionCommit', { contractVersion: 'canvas-region/v1', sessionRef: 'undo-fixture-session',
+      worldRef: 'undo-fixture-world', localContext, guarantee: 'RECOVERABLE_VERIFIED', requestId: 'test-region',
+      transactionId: 'test-region', operations, operationDigest: digestValue('region-operations', operations).sha256 });
+    assert.equal(committed.error, null);
     view = await host.readView();
-    assert.equal(view.entries[0].state, 'UNDONE');
-    assert.ok(nodes(view.entries[0]).every(name => name === 'air'));
-    assert.deepEqual(view.entries[0].redo, { available: false, reason: 'REGION_REDO_NOT_IN_PROTOCOL' });
-    assert.deepEqual(await host.perform(regionRef, 'redo'), { error: { code: 'REGION_REDO_NOT_IN_PROTOCOL' } });
-    // The cell entry's Undo is now older than the latest world change; Canvas says so.
-    assert.deepEqual(view.entries[1].redo, { available: false, reason: 'WORLD_CHANGED_SINCE' });
+    const regionEntry = view.entries.find(entry => entry.mode === 'REGION');
+    assert.deepEqual([regionEntry.undo, regionEntry.redo],
+      [{ available: false, reason: 'REGION_UNDO_HAS_NO_REDO' }, { available: false, reason: 'NOTHING_TO_REDO' }]);
+    before = writes(host);
+    assert.deepEqual(await host.perform(regionEntry.objectRef, 'undo'), { error: { code: 'REGION_UNDO_HAS_NO_REDO' } });
+    assert.equal(writes(host), before);
+    // The cell entry is no longer the latest world change; Canvas says so for both moves.
+    assert.deepEqual(view.entries.find(entry => entry.objectRef === cellRef).undo, { available: false, reason: 'WORLD_CHANGED_SINCE' });
     assert.deepEqual(await host.perform('missing-object', 'undo'), { error: { code: 'OBJECT_NOT_FOUND' } });
     assert.deepEqual(await host.perform(cellRef, 'delete'), { error: { code: 'UNKNOWN_ACTION' } });
   } finally { await rm(directory, { recursive: true, force: true }); }

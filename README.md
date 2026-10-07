@@ -225,8 +225,8 @@ npm run dev:objects          # binds 127.0.0.1:47601; `-- --port N` only for pre
 `/objects` still reads the F-CANVAS-OBJECTS-HISTORY-01 stores and never writes.
 `/undo` acts only on `undo-web/isolated-example`: a durable CanvasStore plus an
 explicit fixture world file (`fixture-world.json`) standing in for the world and
-its Adapter. The one-time producer makes one region commit and one per-cell
-commit through Canvas's public operations and refuses an existing directory.
+its Adapter. The one-time producer makes two per-cell commits through Canvas's
+public canvas/v5 operations (no region example) and refuses an existing directory.
 
 Canvas now implements the canvas/v5 **Redo** operation defined by Contracts
 (previously `CAPABILITY_UNAVAILABLE`). Undo and Redo share one history
@@ -238,8 +238,9 @@ whose Undo is the head and restores its footprint; an Undo row itself cannot be
 undone. `CanvasV5.readHistoryActions(sessionRef)` publishes, per object, the
 exact public operation and revisions for Undo/Redo or a named reason:
 `NOTHING_TO_UNDO`, `NOTHING_TO_REDO`, `WORLD_CHANGED_SINCE` (Canvas only moves
-the latest world change), `TRANSACTION_PENDING`, and
-`REGION_REDO_NOT_IN_PROTOCOL` — canvas-region/v1 defines whole-region Undo but
-no region Redo. A page click posts only `{objectRef}` from the same origin; the
+the latest world change), `TRANSACTION_PENDING`, `REGION_UNDO_HAS_NO_REDO` and
+`REGION_REDO_NOT_IN_PROTOCOL`. Every Undo it offers has a Redo for the same
+entry; canvas-region/v1 defines whole-region Undo but no region Redo, so region
+Undo is named rather than offered (UndoRegionCommit itself is unchanged). A page click posts only `{objectRef}` from the same origin; the
 host executes what Canvas published and returns the read-back view.
 `readObjectsHistory` keeps its published `COMMITTED | UNDONE` statuses.

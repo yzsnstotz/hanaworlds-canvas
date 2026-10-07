@@ -4,7 +4,8 @@ const SELECTED_KEY = 'hanaworlds.canvas.undo-web.selected.v1';
 const reasons = {
   NOTHING_TO_UNDO: '这笔改动当前已撤回，没有可撤回的内容。',
   NOTHING_TO_REDO: '这笔改动目前没有被撤回，不需要重做。',
-  REGION_REDO_NOT_IN_PROTOCOL: '批量区域改动只能整笔撤回：Canvas 区域协议（canvas-region/v1）没有「重做」操作。',
+  REGION_REDO_NOT_IN_PROTOCOL: '批量区域改动没有「重做」操作，撤回后无法恢复。',
+  REGION_UNDO_HAS_NO_REDO: '批量区域改动没有「重做」操作；为保证撤回后能恢复，这里不提供撤回。',
   WORLD_CHANGED_SINCE: '这笔改动之后，世界里又有了别的改动；Canvas 只对最近一次改动撤回或重做，避免覆盖后来的内容。',
   TRANSACTION_PENDING: '还有一笔事务正在处理，请稍后点击「刷新」。',
   REDO_CONFLICT: '这些格子已被别的改动修改，Canvas 拒绝覆盖；没有写入任何内容。',
@@ -75,6 +76,7 @@ function App() {
                 <strong>{row.label}</strong>
                 <span>{row.mode === 'REGION' ? '批量区域' : '逐格'} · 影响 {row.affectedCells ?? row.cells.length} 格</span>
                 <span className={row.state === 'UNDONE' ? 'hw-canvas-status undone' : 'hw-canvas-status'}>{row.state === 'UNDONE' ? '已撤回' : '已提交'}</span>
+                {!row.undo.available && !row.redo.available && <span className="undo-locked">不可操作</span>}
               </button></li>)}</ul>
           </section>
           <section className="hw-canvas-card" aria-labelledby="undo-detail-title">

@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { CanvasV5, CanvasStore, CanvasRegionV1 } from '../src/index.mjs';
+import { CanvasV5, CanvasStore } from '../src/index.mjs';
 import { openUndoFixtureWorld, undoSessionRef, undoWorldRef } from './undo-fixture-world.mjs';
 
 const digest = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -9,15 +9,14 @@ export const undoWorldFile = directory => join(directory, 'fixture-world.json');
 
 /**
  * Isolated /undo host. Canvas owns every decision and durable record; this host
- * only turns the page's click into the public operation Canvas itself published
- * in readHistoryActions, then reads the result back.
+ * only turns the page's click into the public canvas/v5 Undo or Redo Canvas itself
+ * published in readHistoryActions, then reads the result back.
  */
 export async function openUndoHost(directory, { world: preparedWorld } = {}) {
   // A missing example is a startup error; reads never create one.
   await readFile(join(directory, 'canvas-v5.json'));
   const world = preparedWorld ?? await openUndoFixtureWorld(undoWorldFile(directory));
   const canvas = new CanvasV5({ store: await CanvasStore.open(directory), adapter: world.adapter, nativeFacts: world.nativeFacts });
-  const region = new CanvasRegionV1(canvas, world.regionAdapter);
   world.readWorldRevision = () => canvas.readWorldRevision(undoWorldRef);
   let queue = Promise.resolve();
   async function readView() {
@@ -49,19 +48,14 @@ export async function openUndoHost(directory, { world: preparedWorld } = {}) {
       const step = object[action];
       if (!step.available) return { error: { code: step.reason } };
       const id = `undo-web-${action}-${randomUUID()}`;
-      const request = step.operation === 'UndoRegionCommit' ?
-        { contractVersion: 'canvas-region/v1', sessionRef: undoSessionRef,
-          worldRef: actions.worldRef, localContext: actions.localContext, requestId: id,
-          originTransactionId: step.originTransactionId, undoTransactionId: id,
-          expectedHistoryRevision: step.expectedHistoryRevision } :
-        { contractVersion: 'canvas/v5', sessionRef: undoSessionRef, requestId: id,
-          worldRef: actions.worldRef, objectRef, transactionId: id, historyTransactionId: step.historyTransactionId,
-          expectedHistoryRevision: step.expectedHistoryRevision, expectedWorldRevision: step.expectedWorldRevision,
-          expectedObjectRevisions: step.expectedObjectRevisions,
-          intentDigest: digest({ page: '/undo', action, objectRef }),
-          surfaceActionDigest: digest({ page: '/undo', action, objectRef, transactionId: id }),
-          localContext: actions.localContext };
-      const response = await (step.operation === 'UndoRegionCommit' ? region : canvas).call(step.operation, request);
+      const request = { contractVersion: 'canvas/v5', sessionRef: undoSessionRef, requestId: id,
+        worldRef: actions.worldRef, objectRef, transactionId: id, historyTransactionId: step.historyTransactionId,
+        expectedHistoryRevision: step.expectedHistoryRevision, expectedWorldRevision: step.expectedWorldRevision,
+        expectedObjectRevisions: step.expectedObjectRevisions,
+        intentDigest: digest({ page: '/undo', action, objectRef }),
+        surfaceActionDigest: digest({ page: '/undo', action, objectRef, transactionId: id }),
+        localContext: actions.localContext };
+      const response = await canvas.call(step.operation, request);
       await world.flush();
       return { operation: step.operation, transactionId: id, status: response.result?.status ?? null,
         error: response.error ?? null, request };
@@ -69,5 +63,5 @@ export async function openUndoHost(directory, { world: preparedWorld } = {}) {
     queue = run.catch(() => {});
     return run;
   }
-  return { canvas, region, world, readView, perform };
+  return { canvas, world, readView, perform };
 }

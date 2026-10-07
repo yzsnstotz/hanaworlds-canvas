@@ -155,7 +155,8 @@ export class CanvasV5 {
   /**
    * Plugin-owned read of what each object's history can do next. Canvas states the
    * public operation, the exact revisions it will check, or the reason it cannot run.
-   * It never executes anything; Undo/Redo/UndoRegionCommit re-validate on call.
+   * Every offered Undo has a Redo for the same entry; it never executes anything, and
+   * Undo/Redo re-validate on call.
    */
   async readHistoryActions(sessionRef) {
     await this.#durable();
@@ -178,11 +179,9 @@ export class CanvasV5 {
         const blocked = pending ? 'TRANSACTION_PENDING' : null;
         let undo, redo;
         if (region) {
-          undo = undone ? { available: false, reason: 'NOTHING_TO_UNDO' } :
-            blocked ? { available: false, reason: blocked } :
-            { available: true, operation: 'UndoRegionCommit', originTransactionId: head.transactionId,
-              expectedHistoryRevision: headTransaction.result.historyRevision };
-          // canvas-region/v1 publishes ApplyRegionCommit and UndoRegionCommit only.
+          // canvas-region/v1 publishes ApplyRegionCommit and UndoRegionCommit only. A move is
+          // offered only when the same entry can be moved back, so region Undo is named, not offered.
+          undo = { available: false, reason: undone ? 'NOTHING_TO_UNDO' : 'REGION_UNDO_HAS_NO_REDO' };
           redo = { available: false, reason: undone ? 'REGION_REDO_NOT_IN_PROTOCOL' : 'NOTHING_TO_REDO' };
         } else {
           const expected = { expectedHistoryRevision: head.historyRevision,
