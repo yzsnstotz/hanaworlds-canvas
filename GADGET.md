@@ -1,10 +1,19 @@
-# HanaWorlds Canvas 0.5.1 local world component
+# HanaWorlds Canvas 0.5.2 local world component
 
 The package exposes `hanaworldsCanvasV5` and consumes the public
 `hanaworldsWorldAdapterV6` port. It uses the Contracts 0.5.0 root export from
 source revision `c006a839a6e6c2c63d57a14b72e4e6b26fa717f1`. There is no
 account, grant, epoch, authorization, or protected region dependency in this
 local MVP protocol.
+
+For per-cell peer admission read `ctx.get('hanaworldsCanvasV5').protocolHandshake`
+(property, not method). It is Canvas's real `ProtocolHandshake`: canvas 5.0,
+capabilities=[] because Contracts publishes no per-cell Canvas token. Check it
+with `protocolRequirement('canvas/v5', [])` / `checkProtocolCompatibility`.
+The public types and implemented-operation list are in `types/index.d.ts` and
+README. Protocol declaration does not imply storage readiness or known world
+facts. Region handshake is unchanged and stays distinct; exact ContractHandshake
+and status text cannot establish per-cell protocol compatibility.
 
 The host provides `dshHomePath()` and one Canvas writer per profile. Canvas
 stores fresh schema 5 in `data/hanaworlds-canvas/canvas-v5.json` with fsynced

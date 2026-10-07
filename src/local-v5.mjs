@@ -9,12 +9,22 @@ import { admitRequest, validateRequest, validateResponse, validateBoundResponse,
   projectScopedPreparedTransaction, checkContractHandshake, contractHandshake,
   digestValue, requestDigest, publicError, validateExactEffects,
   validateRegionInspection } from 'hanaworlds-contracts';
-import { validateType } from 'hanaworlds-contracts';
+import { protocolRequirement, validateType } from 'hanaworlds-contracts';
 import { CanvasRegionV1 } from './region-v1.mjs';
 
 export { CanvasStore, CanvasRegionV1 };
 const WIRE = 'canvas/v5';
 const ADAPTER = 'world-adapter/v6';
+const PACKAGE_VERSION = '0.5.2';
+// The public wire defines canvas major 5, minor 0. Contracts publishes no
+// per-cell Canvas capability token; regional tokens describe the region port.
+const cellRequirement = protocolRequirement(WIRE, []);
+const cellProtocolHandshake = validateType('ProtocolHandshake', {
+  profileVersion: 'protocol-handshake/v1', component: 'hanaworlds-canvas',
+  protocols: [{ protocol: cellRequirement.protocol, major: cellRequirement.major,
+    minor: cellRequirement.minMinor }], capabilities: [...cellRequirement.capabilities],
+  provenance: { packageName: 'hanaworlds-canvas', packageVersion: PACKAGE_VERSION,
+    sourceRevision: null, artifactDigest: null } });
 // The one revision an unbound Session publishes (ReadWorldSelectionContext UNBOUND
 // sessionRevision); a first SelectWorldConnection names exactly this value.
 const UNBOUND_SESSION_REVISION = 'session-0';
@@ -45,7 +55,9 @@ export class CanvasV5 {
     this.storageState = store ? 'READY' : 'UNAVAILABLE';
   }
   get contractHandshake() { return structuredClone(contractHandshake); }
-  status() { return { component: 'hanaworlds-canvas', version: '0.5.1',
+  /** @returns {import('hanaworlds-contracts').ProtocolHandshake} */
+  get protocolHandshake() { return structuredClone(cellProtocolHandshake); }
+  status() { return { component: 'hanaworlds-canvas', version: PACKAGE_VERSION,
     canvasContract: WIRE, adapterContract: ADAPTER, storage: this.storageState,
     productReadiness: 'UNPROVEN' }; }
   current(sessionRef) { return this.store?.snapshot.sessions[sessionRef] ?? null; }

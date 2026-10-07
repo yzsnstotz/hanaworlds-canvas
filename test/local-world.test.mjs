@@ -3,8 +3,11 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { CanvasV5, CanvasStore, apply as applyCanvas } from '../src/index.mjs';
-import { readFile } from 'node:fs/promises';
+const { CanvasV5, CanvasStore, apply: applyCanvas } = await import(process.env.CANVAS_ENTRY ??
+  new URL('../src/index.mjs', import.meta.url).href);
+import { openRuntime } from './support/cordis-runtime.mjs';
+const consumer = await import(process.env.CANVAS_CONSUMER_ENTRY ?? 'hanaworlds-contracts');
+import { readFile, writeFile } from 'node:fs/promises';
 import { digestValue, checkContractHandshake } from 'hanaworlds-contracts';
 import { createHash } from 'node:crypto';
 import canonicalize from 'canonicalize';
@@ -104,7 +107,14 @@ test('build commits only after complete readback and stores one durable history 
   const fixture = JSON.parse(await readFile(new URL(import.meta.resolve(
     'hanaworlds-contracts/fixtures/main'))));
   const D = (kind, value) => digestValue(kind, value).sha256;
-  const directory = await mkdtemp(join(tmpdir(), 'canvas-build-'));
+  const profile = await mkdtemp(join(tmpdir(), 'canvas-build-'));
+  const directory = join(profile, 'data', 'hanaworlds-canvas');
+  const saveState = async name => {
+    if (process.env.CANVAS_RUNTIME_EVIDENCE)
+      await writeFile(join(process.env.CANVAS_RUNTIME_EVIDENCE, name),
+        await readFile(join(directory, 'canvas-v5.json')), { mode: 0o600 });
+  };
+  let runtime;
   try {
     const worldRef = fixture.request.worldRef;
     const connected = { ...connection, worldRef,
@@ -239,13 +249,20 @@ test('build commits only after complete readback and stores one durable history 
       }
       throw new Error(`unexpected adapter operation ${operation}`);
     } };
-    const canvas = new CanvasV5({ store: await CanvasStore.open(directory), adapter,
-      nativeFacts });
+    runtime = await openRuntime(profile, { adapter, nativeFacts });
+    let canvas = runtime.canvas;
+    assert.equal(canvas.status().storage, 'READY');
+    const requirement = consumer.protocolRequirement('canvas/v5', []);
+    assert.equal(consumer.checkProtocolCompatibility(canvas.protocolHandshake,
+      [requirement]).result, 'PROTOCOL_COMPATIBLE');
+    const unbound = await canvas.call('ReadWorldSelectionContext', {
+      contractVersion: 'canvas/v5', sessionRef, requestId: 'unbound-build', worldRef });
+    assert.equal(unbound.result.selection.status, 'UNBOUND');
     const selected = await canvas.call('SelectWorldConnection', {
       contractVersion: 'canvas/v5', sessionRef, requestId: 'select-build', worldRef,
       connectionRef: connected.connectionRef,
       connectionIncarnationRef: connected.connectionIncarnationRef,
-      expectedRevision: 'session-0', expectedContext: null });
+      expectedRevision: unbound.result.selection.sessionRevision, expectedContext: null });
     assert.equal(selected.error, null);
     const localContext = selected.result.localContext;
     const initialWorldRevision = await canvas.readWorldRevision(worldRef);
@@ -324,7 +341,18 @@ test('build commits only after complete readback and stores one durable history 
     const objectRevision = reopened.snapshot.objects[worldRef][objectRef].objectRevision;
     inspectedObjectRef = objectRef;
     inspectedObjectRevision = objectRevision;
-    const persistedCanvas = new CanvasV5({ store: reopened, adapter });
+    await saveState('cell-before-normal-reopen.json');
+    await runtime.dispose();
+    runtime = await openRuntime(profile, { adapter, nativeFacts });
+    canvas = runtime.canvas;
+    const persistedCanvas = canvas;
+    assert.equal(canvas.status().storage, 'READY');
+    assert.equal(consumer.checkProtocolCompatibility(canvas.protocolHandshake,
+      [requirement]).result, 'PROTOCOL_COMPATIBLE');
+    const reopenedReadback = await canvas.call('Readback', {
+      ...readbackRequest, requestId: 'readback-after-normal-reopen' });
+    assert.equal(reopenedReadback.error, null, JSON.stringify(reopenedReadback));
+    assert.deepEqual(reopenedReadback.result, completed.result);
     const footprints = await persistedCanvas.readFootprints(worldRef, [objectRef], {
       sessionRef, worldRef, localContext });
     assert.equal(footprints.current, true);
@@ -384,12 +412,14 @@ test('build commits only after complete readback and stores one durable history 
       expectedObjectRevisions: { [objectRef]: objectRevision },
       intentDigest: '7'.repeat(64), surfaceActionDigest: '8'.repeat(64), localContext };
     const undo = await canvas.call('Undo', undoRequest);
+    assert.equal(record.nodeName, 'air');
     assert.equal(undo.error, null, JSON.stringify({ undo, calls }));
     assert.equal(undo.result.status, 'VERIFIED');
     assert.equal(writes, 2);
     const undoReplay = await canvas.call('Undo', undoRequest);
     assert.equal(undoReplay.result.transactionId, 'undo-1');
     assert.equal(writes, 2);
+    await saveState('cell-after-same-transaction-undo.json');
     const afterUndo = await CanvasStore.open(directory);
     assert.equal(afterUndo.snapshot.history[objectRef].at(-1).originTransactionId, 'build-1');
     const staleReadback = await canvas.call('Readback', readbackRequest);
@@ -463,6 +493,7 @@ test('build commits only after complete readback and stores one durable history 
     assert.equal(failed.error, null, JSON.stringify({ failed, calls }));
     assert.equal(failed.result.status, 'ROLLED_BACK');
     assert.equal(restores, 1);
+    await saveState('cell-after-rollback.json');
     const afterRollback = await CanvasStore.open(directory);
     assert.equal(afterRollback.snapshot.transactions['build-2'].receipt.status, 'ROLLED_BACK');
     assert.equal(afterRollback.snapshot.history[objectRef].length, 2);
@@ -480,8 +511,13 @@ test('build commits only after complete readback and stores one durable history 
       selectedContext.selectionRevision);
     assert.deepEqual([...selectedView.result.selection.context.orderedSelectedObjectRefs],
       [objectRef]);
-    assert.equal(calls.filter(operation => operation === 'DiscoverConnections').length, 1);
-  } finally { await rm(directory, { recursive: true, force: true }); }
+    assert.equal(calls.filter(operation => operation === 'DiscoverConnections').length, 2);
+    console.log(JSON.stringify({ runtime: 'REAL_CORDIS_CANVAS_AND_FS_STORE',
+      external: 'ADAPTER_AND_WORLD_FIXTURE', consumerVersion: consumer.version,
+      publicReadback: publicReadback.result.status, reopenedReadback: reopenedReadback.result.status,
+      undo: undo.result.status, originalTransaction: 'build-1', undoTransaction: 'undo-1',
+      noDuplicateWrites: writes === 3, rollback: failed.result.status, restores }));
+  } finally { await runtime?.dispose(); await rm(profile, { recursive: true, force: true }); }
 });
 
 test('host exposes durable Canvas facts as separate public ports', async () => {
@@ -500,7 +536,7 @@ test('host exposes durable Canvas facts as separate public ports', async () => {
     assert.equal(ports.has('hanaworldsLuantiInspectionContext'), false);
     const advertised = ports.get('hanaworldsCanvasV5').contractHandshake;
     assert.equal(advertised.contracts, 'hanaworlds-contracts@0.5.0');
-    assert.equal(ports.get('hanaworldsCanvasV5').status().version, '0.5.1');
+    assert.equal(ports.get('hanaworldsCanvasV5').status().version, '0.5.2');
     assert.doesNotThrow(() => checkContractHandshake(advertised));
     assert.throws(() => checkContractHandshake({ ...advertised,
       contracts: 'hanaworlds-contracts@0.4.2' }), error => error.code === 'UNSUPPORTED_VERSION');
