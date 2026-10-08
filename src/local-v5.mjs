@@ -15,7 +15,7 @@ import { CanvasRegionV1 } from './region-v1.mjs';
 export { CanvasStore, CanvasRegionV1 };
 const WIRE = 'canvas/v5';
 const ADAPTER = 'world-adapter/v6';
-const PACKAGE_VERSION = '0.6.0';
+const PACKAGE_VERSION = '0.6.1';
 // The public wire defines canvas major 5, minor 0. Contracts publishes no
 // per-cell Canvas capability token; regional tokens describe the region port.
 const cellRequirement = protocolRequirement(WIRE, []);

@@ -566,7 +566,7 @@ test('host exposes durable Canvas facts as separate public ports', async () => {
     assert.equal(ports.has('hanaworldsLuantiInspectionContext'), false);
     const advertised = ports.get('hanaworldsCanvasV5').contractHandshake;
     assert.equal(advertised.contracts, 'hanaworlds-contracts@0.5.0');
-    assert.equal(ports.get('hanaworldsCanvasV5').status().version, '0.6.0');
+    assert.equal(ports.get('hanaworldsCanvasV5').status().version, '0.6.1');
     // The provider keeps its 0.5.0 exact identity. A separate 0.5.2 consumer
     // must reject that exact identity; its cell admission uses ProtocolHandshake.
     if (advertised.contracts === contractHandshake.contracts)

@@ -1,4 +1,4 @@
-# HanaWorlds Canvas 0.6.0 local world component
+# HanaWorlds Canvas 0.6.1 local world component
 
 The package exposes `hanaworldsCanvasV5` and consumes the public
 `hanaworldsWorldAdapterV6` port. It uses the Contracts 0.5.0 root export from
@@ -147,7 +147,8 @@ unchanged; only this new public input is verified by gate-nativefacts-053.
 
 The single Canvas Loader entry binds its display service when Typert is present, registering
 `hanaworldsCanvasDisplay.read` through the public DSH Typert registry and Gateway.
-The client mounts the same strict descriptor through `ctx.remote.$mount`.
+The client mounts the same strict descriptor through `ctx.remote.$mount`, then reads
+`remote.hanaworldsCanvasDisplay` only inside a fiber that injects it (0.6.1).
 The global sidebar/main slot id is `hanaworlds-canvas-objects-history`.
 No Desktop private transport or sibling plugin imports are used. All visible
 history metadata is owned by Canvas and is separate from Contracts wire rows.

@@ -37,8 +37,9 @@ function CanvasIcon() {
 }
 export const name = PANEL_ID;
 export const inject = ['slots', 'layout', 'sessions', 'remote'];
-export async function apply(ctx) {
-  await ctx.remote.$mount(displayClientContribution);
+// The mounted namespace is the traced child Service `remote.hanaworldsCanvasDisplay`; the panel
+// runs inside a fiber that injects it, as the public DSH Client Remote contract requires.
+function registerPanel(ctx) {
   const read = async sessionRef => {
     const result = await ctx.remote.hanaworldsCanvasDisplay.read(sessionRef);
     if (!result.ok) throw result.error;
@@ -57,4 +58,10 @@ export async function apply(ctx) {
   ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: PANEL_ID }, CanvasPanel));
   ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({ name: 'sidebar.panellist',
     id: PANEL_ID, order: 45, label: () => '对象与历史（Canvas）' }, CanvasIcon));
+}
+export async function apply(ctx) {
+  const disposeRemote = await ctx.remote.$mount(displayClientContribution);
+  const panel = ctx.inject(['remote.hanaworldsCanvasDisplay', 'slots', 'sessions'], registerPanel);
+  try { await panel; } catch (error) { await panel.dispose(); await disposeRemote(); throw error; }
+  return async () => { await panel.dispose(); await disposeRemote(); };
 }

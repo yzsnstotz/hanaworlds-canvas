@@ -1,6 +1,6 @@
 # HanaWorlds Canvas
 
-Stage 1 local world Canvas `0.6.0` component candidate, exposing `canvas/v5`
+Stage 1 local world Canvas `0.6.1` component candidate, exposing `canvas/v5`
 and consuming the public `world-adapter/v6` port. It owns current local world
 selection, object footprints, recoverable apply/readback, durable history and
 same-transaction Undo. `0.5.0` implements Contracts 0.5.0 `canvas-region/v1`: region commits over
@@ -134,6 +134,14 @@ rerun. Real peers, Luanti, UI, model, clean-machine and product gates remain ope
 The Canvas bundle provides its own sidebar entry **对象与历史（Canvas）** through
 DSH's public client slots. Its `hanaworldsCanvasDisplay.read(sessionRef)` Typert
 Remote returns the new Canvas-owned `readObjectsHistory` display projection.
+Since 0.6.1 the client follows the public DSH Client Remote contract: it mounts
+its descriptor with `ctx.remote.$mount()`, then registers the panel inside
+`ctx.inject(['remote.hanaworldsCanvasDisplay', 'slots', 'sessions'])`, because
+each mounted namespace is the traced child Service `remote.<namespace>`.
+0.6.0 read it from the outer fiber, which DSH rejects with `cannot get property
+"remote.hanaworldsCanvasDisplay" without inject`. `npm run test:display:gateway`
+runs the shipped `lib/client.js` against the official Client registry/Remote and
+Host Gateway over an explicit in-process FIXTURE carrier.
 The Host selects the world from the stored Session binding; the renderer cannot
 supply a world or transaction. No write method is exposed. The read waits for
 pending store commits, uses current public footprints and returns a cloned
