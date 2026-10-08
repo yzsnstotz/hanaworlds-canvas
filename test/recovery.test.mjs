@@ -11,6 +11,7 @@ import { contractHandshake, digestValue, validateBoundRequest,
   validateResponse } from '../vendor/contracts/dist/v4/index.mjs';
 import placement from '../vendor/contracts/fixtures/v4/candidate/placement-region-chain-v4.json' with { type: 'json' };
 import oracles from '../vendor/contracts/fixtures/v4/candidate/contract-v4-oracles.json' with { type: 'json' };
+import { g3CellHandshake } from './support/g3-adapter-handshake.mjs';
 
 const request = placement.validCases[0].materializedChain.applyRequest;
 const payload = { contractVersion: 'canvas/v2', transactionId: request.transactionId,
@@ -54,7 +55,7 @@ async function fixture(t, status = 'RECOVERY_PENDING') {
         sessionRef: body.sessionRef, authorizationRef: body.authorizationRef,
         domainOwner: 'hanaworlds-canvas' };
     } };
-  const adapter = { contractHandshake, async call(operation, body) {
+  const adapter = { contractHandshake, protocolHandshake: g3CellHandshake(), async call(operation, body) {
     validateBoundRequest('world-adapter/v4', operation, body);
     calls.push({ operation, body });
     if (outcome === 'UNKNOWN') throw Error('transport outcome unknown');

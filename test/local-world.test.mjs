@@ -12,6 +12,7 @@ import { digestValue, checkContractHandshake, contractHandshake } from 'hanaworl
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import canonicalize from 'canonicalize';
+import { g3CellHandshake } from './support/g3-adapter-handshake.mjs';
 
 const stateProfile = { profileVersion: 'state-profile/v2',
   nodeFields: ['nodeName', 'param1', 'param2'], metadataMode: 'exact',
@@ -27,7 +28,7 @@ test('actual connection readback binds the current local world durably', async (
   const directory = await mkdtemp(join(tmpdir(), 'canvas-local-'));
   try {
     const calls = [];
-    const adapter = { async call(operation, request) {
+    const adapter = { protocolHandshake: g3CellHandshake(), async call(operation, request) {
       calls.push(operation);
       if (operation === 'DiscoverConnections') return {
         contractVersion: 'world-adapter/v6', requestId: request.requestId,
@@ -154,7 +155,7 @@ test('build commits only after complete readback and stores one durable history 
       return raw;
     } };
     const calls = [];
-    const adapter = { async call(operation, request) {
+    const adapter = { protocolHandshake: g3CellHandshake(), async call(operation, request) {
       calls.push(operation);
       const respond = result => ({ contractVersion: 'world-adapter/v6',
         requestId: request.requestId, result, error: null });
@@ -572,7 +573,7 @@ test('host exposes durable Canvas facts as separate public ports', async () => {
     const entry = process.env.CANVAS_ENTRY ?? new URL('../src/index.mjs', import.meta.url).href;
     const running = createRequire(entry)('hanaworlds-contracts/package.json');
     assert.equal(advertised.contracts, `hanaworlds-contracts@${running.version}`);
-    assert.equal(ports.get('hanaworldsCanvasV5').status().version, '0.6.3');
+    assert.equal(ports.get('hanaworldsCanvasV5').status().version, '0.6.4');
     if (advertised.contracts === contractHandshake.contracts)
       assert.doesNotThrow(() => checkContractHandshake(advertised));
     else

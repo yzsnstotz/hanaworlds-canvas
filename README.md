@@ -1,6 +1,6 @@
 # HanaWorlds Canvas
 
-Stage 1 local world Canvas `0.6.3` component candidate, exposing `canvas/v5`
+Stage 1 local world Canvas `0.6.4` component candidate, exposing `canvas/v5`
 and consuming the public `world-adapter/v6` port. It owns current local world
 selection, object footprints, recoverable apply/readback, durable history and
 same-transaction Undo. `0.5.0` implements Contracts 0.5.0 `canvas-region/v1`: region commits over
@@ -159,7 +159,15 @@ requirement per wire (`ADAPTER_REGION_REQUIREMENT`, `ADAPTER_CELL_REQUIREMENT`),
 only that wire's ids at the Contracts-declared minor, and before any region read or
 write checks the region port's and the per-cell port's (`hanaworldsWorldAdapterV6`)
 `protocolHandshake`. Nothing is dropped: an Adapter id outside both wires stops Canvas at
-load. Per-cell BUILD/Undo admission is unchanged.
+load.
+
+### G3 write-before guard on the per-cell port (0.6.4)
+
+BUILD (`ApplyRecoverableCommit`), `Undo` and `Redo` now refuse before any reservation or
+mutating Adapter call unless the per-cell port (`hanaworldsWorldAdapterV6`) advertises a
+`protocolHandshake` that meets `ADAPTER_CELL_REQUIREMENT` (`world-adapter` 6 at the
+declared minor, `callback-free-write`, `write-path-state-facts`). The region path checks
+the same per-cell requirement plus `ADAPTER_REGION_REQUIREMENT` on the region port.
 
 ### Undo from the App panel (0.6.2)
 

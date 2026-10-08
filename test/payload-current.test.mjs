@@ -5,6 +5,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { contractHandshake } from 'hanaworlds-contracts/v4';
 import { CanvasStore, CanvasV4 } from '../src/index.mjs';
+import { g3CellHandshake } from './support/g3-adapter-handshake.mjs';
 
 const root = join(homedir(), '.cache', 'hanaworlds-runs',
   'S1-CANVAS-WORLD-CONTEXT-01', 'payload-current-20261006');
@@ -24,7 +25,7 @@ async function fixture(t, { descriptorVersion = '0.2.7',
   t.after(() => rm(directory, { recursive: true, force: true }));
   const store = await CanvasStore.open(directory);
   const calls = [];
-  const adapter = { contractHandshake, async call(operation, body) {
+  const adapter = { contractHandshake, protocolHandshake: g3CellHandshake(), async call(operation, body) {
     calls.push(operation);
     const descriptor = { adapterId: 'adapter', connectionRef: 'connection',
       worldRef: 'world', displayName: 'World', capabilityRevision,

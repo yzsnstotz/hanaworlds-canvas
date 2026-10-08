@@ -1,0 +1,218 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { digestValue, encodeRegionBlock, regionChunksOfBox } from 'hanaworlds-contracts';
+import { CanvasV5, CanvasStore, CanvasRegionV1, ADAPTER_CELL_REQUIREMENT,
+  ADAPTER_REGION_REQUIREMENT } from '../src/index.mjs';
+import { openUndoFixtureWorld, undoConnection, undoSessionRef,
+  undoWorldRef } from '../scripts/undo-fixture-world.mjs';
+import { undoWorldFile } from '../scripts/undo-host.mjs';
+import { g3CellHandshake } from './support/g3-adapter-handshake.mjs';
+
+/*
+ * G3 write-before guard on the per-cell port (world-adapter/v6) for BUILD, Undo and
+ * Redo, and on both ports for a region write. FIXTURE: the isolated undo fixture
+ * world and its two port handshakes stand in for the Adapter; Canvas, its durable
+ * Store and the public canvas/v5 / canvas-region/v1 calls are the real component.
+ * "Before any write" is checked as: no mutating Adapter call (Prepare/Apply/Restore,
+ * WriteRegion) during the refused call, only the named read-only admission reads,
+ * no pending row, unchanged history, and the fixture world file bytes unchanged.
+ */
+const MUTATING = new Set(['PrepareRecoverableTransaction', 'ApplyCompiledTransaction',
+  'RestoreTransaction', 'PrepareHistoryTransaction', 'ApplyHistoryTransaction', 'WriteRegion']);
+// Canvas's current-world admission (#bound) reads the connection before the guard.
+const ADMISSION_READS = new Set(['ReadLocalConnection']);
+const D = (kind, value) => digestValue(kind, value).sha256;
+const base = { contractVersion: 'canvas/v5', sessionRef: undoSessionRef, worldRef: undoWorldRef };
+const g3 = ADAPTER_CELL_REQUIREMENT.capabilities.length > 0;
+
+async function boot(directory) {
+  const store = await CanvasStore.open(directory);
+  const world = await openUndoFixtureWorld(undoWorldFile(directory), { create: true });
+  const canvas = new CanvasV5({ store, adapter: world.adapter, nativeFacts: world.nativeFacts });
+  world.readWorldRevision = () => canvas.readWorldRevision(undoWorldRef);
+  const ok = async (operation, body) => {
+    const response = await canvas.call(operation, body);
+    assert.equal(response.error, null, `${operation}: ${JSON.stringify(response.error)}`);
+    return response.result;
+  };
+  const context = await ok('ReadWorldSelectionContext', { ...base, requestId: 'g3-context' });
+  const selected = await ok('SelectWorldConnection', { ...base, requestId: 'g3-select',
+    connectionRef: undoConnection.connectionRef,
+    connectionIncarnationRef: undoConnection.connectionIncarnationRef,
+    expectedRevision: context.selection.sessionRevision, expectedContext: null });
+  return { canvas, world, ok, localContext: selected.localContext,
+    selectionRevision: selected.selectionRevision, file: undoWorldFile(directory) };
+}
+/** Analyze (read-only) then the public BUILD request; the caller sends it. */
+async function buildRequest(env, transactionId, positions) {
+  const operations = { contractVersion: 'operations/v3', buildDigest: 'b'.repeat(64),
+    compilerRevision: 'g3-fixture-brush-1', compilationConfigDigest: 'a'.repeat(64),
+    worldRef: undoWorldRef, frameDigest: 'f'.repeat(64), catalogueDigest: 'c'.repeat(64),
+    targetFactsDigest: 'd'.repeat(64),
+    effects: positions.map(position => ({ position, nodeName: 'fixture:brick', param2: 0 })) };
+  const operationDigest = D('operations', operations);
+  const worldRevision = await env.canvas.readWorldRevision(undoWorldRef);
+  const listed = await env.ok('ListObjects', { ...base, requestId: `${transactionId}-objects`,
+    localContext: env.localContext, expectedRevision: null });
+  const analyzed = await env.ok('AnalyzeAffectedObjects', { ...base,
+    requestId: `${transactionId}-analysis`, transactionId, operations, operationDigest,
+    expectedRevision: worldRevision, expectedRegistryRevision: listed.registryRevision,
+    expectedSelectionRevision: env.selectionRevision, localContext: env.localContext });
+  return { ...base, requestId: transactionId, transactionId, operations, operationDigest,
+    analysisDigest: D('affected-analysis', analyzed), decisionRevision: null,
+    expectedWorldRevision: worldRevision, expectedObjectRevisions: {},
+    guarantee: 'RECOVERABLE_VERIFIED', regionInspectionBinding: null,
+    localContext: env.localContext };
+}
+async function historyRequest(env, operation, id) {
+  const actions = await env.canvas.readHistoryActions(undoSessionRef);
+  const object = actions.objects.at(-1);
+  const step = object[operation === 'Undo' ? 'undo' : 'redo'];
+  assert.equal(step.available, true, JSON.stringify(step));
+  return { ...base, requestId: id, worldRef: actions.worldRef, objectRef: object.objectRef,
+    transactionId: id, historyTransactionId: step.historyTransactionId,
+    expectedHistoryRevision: step.expectedHistoryRevision,
+    expectedWorldRevision: step.expectedWorldRevision,
+    expectedObjectRevisions: step.expectedObjectRevisions,
+    intentDigest: '1'.repeat(64), surfaceActionDigest: '2'.repeat(64),
+    localContext: actions.localContext };
+}
+/** Sends `request` with the per-cell port advertising `handshake`; proves nothing was written. */
+async function refusedBeforeWrite(env, operation, request, handshake, code, send) {
+  await env.world.flush();
+  const port = env.canvas.adapter;
+  const calls = env.world.calls.length;
+  const bytes = await readFile(env.file);
+  const history = structuredClone(env.canvas.store.snapshot.history);
+  env.canvas.adapter = { ...port, protocolHandshake: handshake };
+  let response;
+  try { response = await (send ?? (body => env.canvas.call(operation, body)))(request); }
+  finally { env.canvas.adapter = port; }
+  await env.world.flush();
+  assert.equal(response.error?.code, code, `${operation}: ${JSON.stringify(response.error)}`);
+  assert.equal(response.error.mutationState, 'NONE');
+  assert.equal(response.error.phase, 'decode');
+  const reached = env.world.calls.slice(calls).map(call => call.operation);
+  assert.deepEqual(reached.filter(name => MUTATING.has(name)), [], `${operation} wrote`);
+  assert.deepEqual(reached.filter(name => !ADMISSION_READS.has(name)), [],
+    `${operation} reached the Adapter beyond admission reads: ${reached}`);
+  assert.deepEqual(Object.keys(env.canvas.store.snapshot.pending), []);
+  assert.deepEqual(env.canvas.store.snapshot.history, history);
+  assert.ok(bytes.equals(await readFile(env.file)), `${operation} changed the world`);
+}
+const regionAsCell = { ...g3CellHandshake(), protocols: [{ protocol: 'world-adapter-region',
+  major: 1, minor: 1 }], capabilities: [...ADAPTER_REGION_REQUIREMENT.capabilities] };
+const refusals = () => [
+  ['no per-cell handshake', undefined, 'UNSUPPORTED_VERSION'],
+  ['wrong major', g3CellHandshake({ major: 5 }), 'UNSUPPORTED_VERSION'],
+  ['region handshake on the per-cell port', regionAsCell, 'UNSUPPORTED_VERSION'],
+  ...(g3 ? [
+    ['minor below the declared minor', g3CellHandshake({ minor: 0 }), 'UNSUPPORTED_VERSION'],
+    ['missing callback-free-write', g3CellHandshake({ capabilities:
+      ['world-adapter/v6:write-path-state-facts'] }), 'CAPABILITY_UNAVAILABLE'],
+    ['missing write-path-state-facts', g3CellHandshake({ capabilities:
+      ['world-adapter/v6:callback-free-write'] }), 'CAPABILITY_UNAVAILABLE'],
+    ['region callback-free-write in place of the v6 one', g3CellHandshake({ capabilities:
+      ['world-adapter-region/v1:callback-free-write', 'world-adapter/v6:write-path-state-facts'] }),
+    'CAPABILITY_UNAVAILABLE'],
+  ] : []),
+];
+
+test('per-cell requirement is world-adapter/v6 at the declared minor with the G3 write-path ids',
+  () => {
+    assert.equal(ADAPTER_CELL_REQUIREMENT.protocol, 'world-adapter');
+    assert.equal(ADAPTER_CELL_REQUIREMENT.major, 6);
+    assert.deepEqual(ADAPTER_CELL_REQUIREMENT.capabilities.filter(c =>
+      !c.startsWith('world-adapter/v6:')), []);
+    if (g3) {
+      assert.equal(ADAPTER_CELL_REQUIREMENT.minMinor, 1);
+      assert.deepEqual(ADAPTER_CELL_REQUIREMENT.capabilities, ['world-adapter/v6:callback-free-write',
+        'world-adapter/v6:write-path-state-facts']);
+    }
+  });
+
+test('BUILD, Undo and Redo refuse an incompatible per-cell port before any Adapter write; a G3 port writes',
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'canvas-g3-cell-'));
+    try {
+      const env = await boot(directory);
+      // BUILD: every refusal before reservation / Prepare / Apply.
+      const build = await buildRequest(env, 'g3-build-1', [[8, 2, 8], [9, 2, 8]]);
+      for (const [label, handshake, code] of refusals()) {
+        await refusedBeforeWrite(env, 'ApplyRecoverableCommit',
+          { ...build, requestId: `g3-build-1-${label}` }, handshake, code);
+      }
+      // A higher minor and extra ids are accepted (provenance never decides).
+      env.canvas.adapter = { ...env.canvas.adapter, protocolHandshake: g3CellHandshake({ minor: 4,
+        capabilities: ['world-adapter/v6:callback-free-write', 'world-adapter/v6:future-id',
+          'world-adapter/v6:write-path-state-facts'] }) };
+      const built = await env.canvas.call('ApplyRecoverableCommit', build);
+      assert.equal(built.error, null, JSON.stringify(built.error));
+      assert.equal(built.result.status, 'VERIFIED');
+      assert.deepEqual(env.world.readCells([[8, 2, 8], [9, 2, 8]]).map(c => c.nodeName),
+        ['fixture:brick', 'fixture:brick']);
+
+      // Undo, then Redo: the same guard, same refusals, then the real move.
+      for (const operation of ['Undo', 'Redo']) {
+        const request = await historyRequest(env, operation, `g3-${operation}`);
+        for (const [label, handshake, code] of refusals())
+          await refusedBeforeWrite(env, operation, { ...request, requestId: `g3-${operation}-${label}` },
+            handshake, code);
+        const moved = await env.canvas.call(operation, request);
+        assert.equal(moved.error, null, JSON.stringify(moved.error));
+        assert.equal(moved.result.status, 'VERIFIED');
+        assert.deepEqual(env.world.readCells([[8, 2, 8], [9, 2, 8]]).map(c => c.nodeName),
+          operation === 'Undo' ? ['air', 'air'] : ['fixture:brick', 'fixture:brick']);
+      }
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+
+test('a region write needs both ports compatible and is refused before any region read or write',
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'canvas-g3-region-'));
+    try {
+      const env = await boot(directory);
+      const region = new CanvasRegionV1(env.canvas, env.world.regionAdapter);
+      const origin = [16, 2, 16], size = [2, 1, 1];
+      const palette = [{ nodeName: 'fixture:stone', param2: 0 }];
+      const chunks = regionChunksOfBox({ min: origin, max: origin.map((o, a) => o + size[a] - 1) })
+        .map(({ chunkPos, box }) => ({ chunkPos, block: encodeRegionBlock({ origin: box.min,
+          size: box.max.map((v, a) => v - box.min[a] + 1), palette,
+          indices: Int32Array.from({ length: 2 }, () => 0) }) }));
+      const operations = { contractVersion: 'region-operations/v1', buildDigest: 'b'.repeat(64),
+        compilerRevision: 'g3-region-1', worldRef: undoWorldRef, catalogueDigest: 'c'.repeat(64),
+        chunkEdge: 16, chunks };
+      const request = { contractVersion: 'canvas-region/v1', sessionRef: undoSessionRef,
+        worldRef: undoWorldRef, localContext: env.localContext, guarantee: 'RECOVERABLE_VERIFIED',
+        requestId: 'g3-region', transactionId: 'g3-region', operations,
+        operationDigest: D('region-operations', operations) };
+      const send = body => region.call('ApplyRegionCommit', body);
+      for (const [label, handshake, code] of refusals())
+        await refusedBeforeWrite(env, 'ApplyRegionCommit', { ...request, requestId: `g3-region-${label}` },
+          handshake, code, send);
+      // Region port: missing handshake or a pre-G3 region handshake, with a G3 per-cell port.
+      const regionPort = env.world.regionAdapter;
+      const preG3 = { ...regionPort.protocolHandshake, protocols: [{ protocol: 'world-adapter-region',
+        major: 1, minor: 0 }], capabilities: regionPort.protocolHandshake.capabilities
+        .filter(c => !c.endsWith('callback-free-write')) };
+      const sendWith = port => body => new CanvasRegionV1(env.canvas, port).call('ApplyRegionCommit', body);
+      await refusedBeforeWrite(env, 'ApplyRegionCommit', { ...request, requestId: 'g3-region-none' },
+        env.canvas.adapter.protocolHandshake, 'UNSUPPORTED_VERSION',
+        sendWith({ ...regionPort, protocolHandshake: undefined }));
+      if (g3) await refusedBeforeWrite(env, 'ApplyRegionCommit', { ...request, requestId: 'g3-region-pre' },
+        env.canvas.adapter.protocolHandshake, 'UNSUPPORTED_VERSION', sendWith({ ...regionPort,
+          protocolHandshake: preG3 }));
+      if (g3) await refusedBeforeWrite(env, 'ApplyRegionCommit', { ...request, requestId: 'g3-region-cap' },
+        env.canvas.adapter.protocolHandshake, 'CAPABILITY_UNAVAILABLE', sendWith({ ...regionPort,
+          protocolHandshake: { ...preG3, protocols: [{ protocol: 'world-adapter-region', major: 1,
+            minor: 1 }] } }));
+      const committed = await send(request);
+      assert.equal(committed.error, null, JSON.stringify(committed.error));
+      assert.equal(committed.result.status, 'VERIFIED');
+      assert.deepEqual(env.world.readCells([[16, 2, 16], [17, 2, 16]]).map(c => c.nodeName),
+        ['fixture:stone', 'fixture:stone']);
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });

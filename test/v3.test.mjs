@@ -9,6 +9,7 @@ import oracle from '../vendor/contracts/fixtures/v3/candidate/contract-v3-oracle
 import eventOracle from '../vendor/contracts/fixtures/v3/candidate/canvas-events-v3.json' with { type: 'json' };
 import { canonicalJSON, digestValue, validateResponse,
   validateCanvasEvent } from '../vendor/contracts/dist/v3/index.mjs';
+import { g3CellHandshake } from './support/g3-adapter-handshake.mjs';
 
 test('Canvas exposes the approved v3 public port', () => {
   assert.equal(typeof canvas.CanvasV3, 'function');
@@ -192,7 +193,7 @@ test('v3 Apply rejects a recursive unknown field before authorization and Adapte
   let adapted = 0;
   const service = new canvas.CanvasV3({ store: await canvas.CanvasStore.open(directory),
     authority: { async verify() { verified++; return { current: true }; } },
-    adapter: { async call() { adapted++; return null; } } });
+    adapter: { protocolHandshake: g3CellHandshake(), async call() { adapted++; return null; } } });
   const valid = oracle.cases.find(row => row.id === 'B-VALID-CANVAS-PREPARE').request;
   const invalid = { ...valid, operations: { ...valid.operations,
     effects: [{ ...valid.operations.effects[0], hidden: true }] } };
@@ -264,7 +265,7 @@ test('v3 world selection binds an Adapter 0.1.1 payload through the public v3 po
   const directory = await mkdtemp(join(tmpdir(), 'canvas-v3-bind-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const calls = [];
-  const adapter = { async call(operation, body) {
+  const adapter = { protocolHandshake: g3CellHandshake(), async call(operation, body) {
     calls.push(operation);
     const descriptor = { adapterId: 'adapter', connectionRef: 'connection',
       worldRef: 'world', displayName: 'World', capabilityRevision: 'cap-1',
@@ -308,7 +309,7 @@ test('v3 connection and world events follow durable changes and recheck the new 
       worldRef: 'world-a', recoveryGuarantee: 'RECOVERABLE_VERIFIED' };
   });
   const worlds = { 'connection-b': 'world-a', 'connection-c': 'world-b' };
-  const adapter = { async call(operation, body) {
+  const adapter = { protocolHandshake: g3CellHandshake(), async call(operation, body) {
     const worldRef = worlds[body.connectionRef];
     const descriptor = { adapterId: 'adapter', connectionRef: body.connectionRef,
       worldRef, displayName: worldRef, capabilityRevision: 'cap-1',
@@ -385,7 +386,7 @@ test('v3 changed authorized Adapter inventory emits only after a prior observed 
       orderedSelectedObjectRefs: [], sessionRevision: '1', selectionRevision: '0' };
   });
   let capabilityRevision = 'cap-1';
-  const adapter = { async call(operation, body) {
+  const adapter = { protocolHandshake: g3CellHandshake(), async call(operation, body) {
     assert.equal(operation, 'DiscoverConnections');
     const result = { capabilityRevision, connections: [{ adapterId: 'adapter',
       connectionRef: 'connection', worldRef: 'world', displayName: 'World',
@@ -517,7 +518,7 @@ test('v3 Apply durably reserves its transaction before trusted Adapter Prepare',
       positions: [[0, 0, 0]] } };
   });
   const observed = [];
-  const adapter = { async call(operation, body) {
+  const adapter = { protocolHandshake: g3CellHandshake(), async call(operation, body) {
     observed.push({ operation, body, pending: store.snapshot.pending[request.transactionId] });
     return { contractVersion: 'world-adapter/v3', requestId: body.requestId,
       result: null, error: { code: 'CAPABILITY_UNAVAILABLE', phase: 'validate',
@@ -574,7 +575,7 @@ for (const [status, expectedOperation] of [
   });
   const calls = [];
   let queryOutcome = 'UNKNOWN';
-  const adapter = { async call(operation, body) {
+  const adapter = { protocolHandshake: g3CellHandshake(), async call(operation, body) {
     calls.push(operation);
     if (status === 'APPLYING' && queryOutcome === 'ROLLED_BACK') {
       const result = { contractVersion: 'canvas/v2', transactionId: request.transactionId,
@@ -876,7 +877,7 @@ test('v3 Apply resumes an uncertain write by query and readback without writing 
       param2: 0, metadata: {}, inventory: {}, timer: null }], stateProfile };
   const readbackDigest = digestValue('readback', projection).sha256;
   const operations = [];
-  const adapter = { async call(operation, body) {
+  const adapter = { protocolHandshake: g3CellHandshake(), async call(operation, body) {
     operations.push(operation);
     if (operation === 'ApplyCompiledTransaction') throw new Error('transport lost after write');
     const result = operation === 'PrepareRecoverableTransaction' ? prepared :
@@ -960,7 +961,7 @@ test('v3 creating Apply generates one stable object ref and registers its histor
   const misplaced = { ...projection,
     records: [{ ...projection.records[0], position: [1, 0, 0] }] };
   let readbackCalls = 0;
-  const adapter = { async call(operation, body) {
+  const adapter = { protocolHandshake: g3CellHandshake(), async call(operation, body) {
     if (operation === 'Readback') readbackCalls++;
     const result = operation === 'PrepareRecoverableTransaction' ? prepared :
       operation === 'ApplyCompiledTransaction' ? pendingReceipt :

@@ -9,6 +9,7 @@ import canonicalize from 'canonicalize';
 import { CodePointSetData } from 'icu';
 import { createHash } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
+import { g3CellHandshake } from './support/g3-adapter-handshake.mjs';
 const contracts = process.env.HANAWORLDS_CONTRACTS_DIST ?
   await import(pathToFileURL(process.env.HANAWORLDS_CONTRACTS_DIST).href) : null;
 const digest = (kind, value) => createHash('sha256').update(
@@ -22,7 +23,7 @@ async function fixture(t) {
   t.after(() => rm(dir, { recursive: true, force: true }));
   const store = await CanvasStore.open(dir);
   const calls = [];
-  const adapter = { async call(operation, body) {
+  const adapter = { protocolHandshake: g3CellHandshake(), async call(operation, body) {
     calls.push({ operation, body });
     if (operation === 'DiscoverConnections' || operation === 'ListWorlds') return {
       result: { capabilityRevision: 'inventory-1', connections: [{ adapterId: 'adapter',

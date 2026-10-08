@@ -9,6 +9,7 @@ import { CanvasStore, CanvasV4 } from '../src/index.mjs';
 import { contractHandshake, digestValue, validateResponse } from
   '../vendor/contracts/dist/v4/index.mjs';
 import oracles from '../vendor/contracts/fixtures/v4/candidate/contract-v4-oracles.json' with { type: 'json' };
+import { g3CellHandshake } from './support/g3-adapter-handshake.mjs';
 
 const source = oracles.cases.find(row => row.id === 'A-VALID-AUTHOR-LINKED-UNDO').request;
 const undo = { contractVersion: 'canvas/v4', actorRef: source.actorRef,
@@ -72,7 +73,7 @@ async function fixture(t, status = 'HISTORY_RECOVERY_PENDING') {
       serviceRecoveryRef: body.serviceRecoveryRef,
       domainOwner: 'hanaworlds-workshop', allowedActions: [operation] };
   } };
-  const adapter = { contractHandshake, async call(operation, body) {
+  const adapter = { contractHandshake, protocolHandshake: g3CellHandshake(), async call(operation, body) {
     calls.push({ operation, body });
     if (adapterOutcome === 'UNKNOWN') throw Error('world result unknown');
     return { contractVersion: 'world-adapter/v4', requestId: body.requestId,

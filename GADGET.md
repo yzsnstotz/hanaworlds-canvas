@@ -1,4 +1,4 @@
-# HanaWorlds Canvas 0.6.2 local world component
+# HanaWorlds Canvas 0.6.4 local world component
 
 The package exposes `hanaworldsCanvasV5` and consumes the public
 `hanaworldsWorldAdapterV6` port. It uses the Contracts 0.5.0 root export from
@@ -10,6 +10,19 @@ For per-cell peer admission read `ctx.get('hanaworldsCanvasV5').protocolHandshak
 (property, not method). It is Canvas's real `ProtocolHandshake`: canvas 5.0,
 capabilities=[] because Contracts publishes no per-cell Canvas token. Check it
 with `protocolRequirement('canvas/v5', [])` / `checkProtocolCompatibility`.
+
+G3 write-before guard (0.6.4): before a BUILD (`ApplyRecoverableCommit`), `Undo`
+or `Redo` reserves anything or calls a mutating Adapter operation, Canvas checks
+the per-cell Adapter port's `protocolHandshake` (Host service
+`hanaworldsWorldAdapterV6`, property) with `checkProtocolCompatibility` against
+`ADAPTER_CELL_REQUIREMENT`: `world-adapter` major 6 at the Contracts-declared
+minor with `world-adapter/v6:callback-free-write` and
+`world-adapter/v6:write-path-state-facts`. A missing handshake, another
+protocol or major, a lower minor or a missing id is refused with
+`UNSUPPORTED_VERSION` or `CAPABILITY_UNAVAILABLE` (`phase: decode`,
+`mutationState: NONE`); only Canvas's read-only current-world admission read
+(`ReadLocalConnection`) precedes it. An exact replay of a completed request
+still returns its stored result.
 The public types and implemented-operation list are in `types/index.d.ts` and
 README. Protocol declaration does not imply storage readiness or known world
 facts. Region handshake is unchanged and stays distinct; exact ContractHandshake

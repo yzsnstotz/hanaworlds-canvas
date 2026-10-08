@@ -9,13 +9,13 @@ import { admitRequest, validateRequest, validateResponse, validateBoundResponse,
   projectScopedPreparedTransaction, checkContractHandshake, contractHandshake,
   digestValue, requestDigest, publicError, validateExactEffects,
   validateRegionInspection } from 'hanaworlds-contracts';
-import { protocolRequirement, validateType } from 'hanaworlds-contracts';
-import { CanvasRegionV1 } from './region-v1.mjs';
+import { checkProtocolCompatibility, protocolRequirement, validateType } from 'hanaworlds-contracts';
+import { CanvasRegionV1, ADAPTER_CELL_REQUIREMENT } from './region-v1.mjs';
 
 export { CanvasStore, CanvasRegionV1 };
 const WIRE = 'canvas/v5';
 const ADAPTER = 'world-adapter/v6';
-const PACKAGE_VERSION = '0.6.3';
+const PACKAGE_VERSION = '0.6.4';
 // The public wire defines canvas major 5, minor 0. Contracts publishes no
 // per-cell Canvas capability token; regional tokens describe the region port.
 const cellRequirement = protocolRequirement(WIRE, []);
@@ -67,6 +67,18 @@ export class CanvasV5 {
     canvasContract: WIRE, adapterContract: ADAPTER, storage: this.storageState,
     productReadiness: 'UNPROVEN' }; }
   current(sessionRef) { return this.store?.snapshot.sessions[sessionRef] ?? null; }
+  /**
+   * G3 write-before guard for the per-cell port: its ProtocolHandshake must name
+   * world-adapter major 6 at the Contracts-declared minor with every world-adapter/v6
+   * Adapter capability (callback-free-write, write-path-state-facts). Runs before any
+   * reservation or Adapter call of a BUILD, Undo, Redo or region write.
+   */
+  adapterCompatible() {
+    const advertised = this.adapter?.protocolHandshake;
+    if (!this.adapter?.call || advertised === undefined)
+      throw fail('UNSUPPORTED_VERSION', 'VERSION_UNSUPPORTED', 'decode');
+    return checkProtocolCompatibility(advertised, [ADAPTER_CELL_REQUIREMENT]);
+  }
   async #durable() {
     await this.ready;
     if (!this.store || this.store.unavailable) throw fail('CAPABILITY_UNAVAILABLE',
@@ -325,6 +337,7 @@ export class CanvasV5 {
   async #apply(body) {
     const { replayKey, prior, admission } = await this.#bound('ApplyRecoverableCommit', body);
     if (prior) return prior.response;
+    this.adapterCompatible();
     const analysis = this.store.snapshot.analyses[body.transactionId];
     if (!analysis || analysis.affectedObjectRefs.length ||
         analysis.worldRef !== body.worldRef || analysis.operationDigest !== body.operationDigest ||
@@ -511,6 +524,7 @@ export class CanvasV5 {
   async #history(operation, body) {
     const { replayKey, prior, admission } = await this.#bound(operation, body);
     if (prior) return prior.response;
+    this.adapterCompatible();
     const redo = operation === 'Redo';
     const state = this.store.snapshot;
     const origin = state.transactions[body.historyTransactionId];

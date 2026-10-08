@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { CanvasStore, CanvasV4 } from '../src/index.mjs';
 import placement from '../vendor/contracts/fixtures/v4/candidate/placement-region-chain-v4.json' with { type: 'json' };
 import { validateBoundRequest, validateResponse, contractHandshake } from '../vendor/contracts/dist/v4/index.mjs';
+import { g3CellHandshake } from './support/g3-adapter-handshake.mjs';
 
 const chain = placement.validCases[0].materializedChain;
 async function fixture(t, { adapter, currentWorldRevision = 'fixture-world-10',
@@ -215,7 +216,7 @@ test('v4 linked Undo binds the saved before-state digest and moves only the auth
   let loseApplyResponse = false;
   let preparedForQuery = null;
   let appliedForQuery = null;
-  const adapter = { contractHandshake, async call(operation, request) {
+  const adapter = { contractHandshake, protocolHandshake: g3CellHandshake(), async call(operation, request) {
     validateBoundRequest('world-adapter/v4', operation, request);
     calls.push({ operation, request });
     let result;

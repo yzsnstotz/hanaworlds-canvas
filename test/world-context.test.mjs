@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { CanvasStore, CanvasV4 } from '../src/index.mjs';
 import { checkCurrentBuildAuthorizationHandshake,
   checkWorldContextHandshake } from 'hanaworlds-contracts/v4';
+import { g3CellHandshake } from './support/g3-adapter-handshake.mjs';
 
 const root = join(homedir(), '.cache', 'hanaworlds-runs', 'S1-CANVAS-WORLD-CONTEXT-01');
 const readRequest = (overrides = {}) => ({ contractVersion: 'canvas/v4',
@@ -34,7 +35,7 @@ async function fixture(t) {
       grantStatus: current ? 'CURRENT' : 'REVOKED',
       currentWorldRevision: 'world-revision-1' };
   } };
-  const adapter = { contractHandshake: null, async call(operation, request) {
+  const adapter = { contractHandshake: null, protocolHandshake: g3CellHandshake(), async call(operation, request) {
     calls.push({ operation, request });
     const descriptors = [
       { adapterId: 'adapter', connectionRef: 'connection', worldRef: 'world',
