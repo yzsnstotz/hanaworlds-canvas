@@ -1,6 +1,6 @@
 # HanaWorlds Canvas
 
-Stage 1 local world Canvas `0.6.5` component candidate, exposing `canvas/v5`
+Stage 1 local world Canvas `0.6.6` component candidate, exposing `canvas/v5`
 and consuming the public `world-adapter/v6` port. It owns current local world
 selection, object footprints, recoverable apply/readback, durable history and
 same-transaction Undo. `0.5.0` implements Contracts 0.5.0 `canvas-region/v1`: region commits over
@@ -160,6 +160,26 @@ only that wire's ids at the Contracts-declared minor, and before any region read
 write checks the region port's and the per-cell port's (`hanaworldsWorldAdapterV6`)
 `protocolHandshake`. Nothing is dropped: an Adapter id outside both wires stops Canvas at
 load.
+
+### Session↔World selection: SwitchWorldConnection and per-world inventory (0.6.6)
+
+Canvas is the only Session↔World selection authority and the only producer of
+`selectionRevision` (canvas/v5 `ReadWorldSelectionContext` / `SelectWorldConnection` /
+`SwitchWorldConnection`). 0.6.6 implements the published `SwitchWorldConnection`, which
+the current runtime had left unimplemented: CAS on the published `selectionRevision` (the
+`SelectWorldConnection` convention) and on `expectedContext`, `fromWorldRef`/`worldRef` =
+the Session's current world, the target connection's actual readback and inventory row
+(same incarnation), and no unfinished transaction of this Session. `currentSession` is kept;
+another world clears the object selection, a same-world reconnect keeps it. Other Sessions
+are untouched. `ReadWorldSelectionContext` now returns only the requested world's inventory
+rows, as the contracts `WorldSelectionContext` rule requires (a multi-world Adapter
+inventory previously failed `SCHEMA_INVALID`).
+
+Typed selected-object snapshot over existing routes: `ReadWorldSelectionContext` (typed
+`CurrentContext`, 0..n `orderedSelectedObjectRefs`, revisions, `localContext` with the
+connection incarnation) → `ListObjects` with that `localContext` (Canvas re-checks Session,
+world, exact `localContext` and the live incarnation) → `ReadWorldSelectionContext` again;
+consistent only if the context is unchanged. No new operation.
 
 ### Released Contracts v0.5.3 (0.6.5)
 

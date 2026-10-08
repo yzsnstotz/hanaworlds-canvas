@@ -15,7 +15,7 @@ import { CanvasRegionV1, ADAPTER_CELL_REQUIREMENT } from './region-v1.mjs';
 export { CanvasStore, CanvasRegionV1 };
 const WIRE = 'canvas/v5';
 const ADAPTER = 'world-adapter/v6';
-const PACKAGE_VERSION = '0.6.5';
+const PACKAGE_VERSION = '0.6.6';
 // The public wire defines canvas major 5, minor 0. Contracts publishes no
 // per-cell Canvas capability token; regional tokens describe the region port.
 const cellRequirement = protocolRequirement(WIRE, []);
@@ -670,8 +670,12 @@ export class CanvasV5 {
     if (operation === 'ListWorldConnections' &&
         body.expectedCapabilityRevision !== inventory.capabilityRevision)
       throw fail('STALE_REVISION');
+    // WorldSelectionContext carries only the requested world's connections (contracts
+    // domain rule); the Adapter inventory may list several worlds.
     const result = operation === 'ReadWorldSelectionContext' ? {
-      sessionRef: body.sessionRef, worldRef: body.worldRef, inventory,
+      sessionRef: body.sessionRef, worldRef: body.worldRef,
+      inventory: { capabilityRevision: inventory.capabilityRevision,
+        connections: inventory.connections.filter(row => row.worldRef === body.worldRef) },
       selection: selection ? { status: 'BOUND', context: selection,
         connectionRef: selection.localContext.connectionRef } :
         { status: 'UNBOUND', sessionRef: body.sessionRef,
@@ -876,37 +880,91 @@ export class CanvasV5 {
       contractVersion: ADAPTER, sessionRef: body.sessionRef,
       requestId: `${body.requestId}:connection`, connectionRef: body.connectionRef });
     validateWorldSelection(body, facts, connection);
+    const inventory = await this.#inventoryFor(body, connection, body.worldRef);
+    const selectionRevision = rev('selection');
+    const current = { currentSession: body.sessionRef, activeWorldRef: body.worldRef,
+      orderedSelectedObjectRefs: [], sessionRevision: rev('session'),
+      selectionRevision, localContext: this.#context(connection, selectionRevision) };
+    const response = validateResponse(WIRE, 'SelectWorldConnection', answer(body, current));
+    await this.#commitSelection(body, previous, current, connection, inventory,
+      replayKey, admission, response);
+    return response;
+  }
+  /**
+   * canvas/v5 SwitchWorldConnection: the bound Session moves from its current world to
+   * `toWorldRef` over `toConnectionRef`. Canvas alone decides it: CAS on the published
+   * selectionRevision (the same convention as SelectWorldConnection) and on the current
+   * localContext (`expectedContext`), the target connection's actual readback and
+   * inventory row, and no unfinished transaction of this Session. currentSession is
+   * kept; a different world clears the object selection (canvasEventRules
+   * ActiveWorldChanged). Other Sessions' selections are untouched.
+   */
+  async #switch(body) {
+    const { replayKey, prior, facts } = this.#facts(body, 'SwitchWorldConnection');
+    const admission = validateCurrentRequest(WIRE, 'SwitchWorldConnection', body, facts);
+    if (prior) return prior.response;
+    const previous = this.current(body.sessionRef);
+    if (!previous) throw fail('WORLD_NOT_BOUND', 'SCOPE_DENIED');
+    if (previous.activeWorldRef !== body.fromWorldRef || body.worldRef !== body.fromWorldRef)
+      throw fail('CURRENT_WORLD_MISMATCH', 'SCOPE_DENIED');
+    if (body.expectedRevision !== previous.selectionRevision) throw fail('STALE_REVISION');
+    if (Object.values(this.store.snapshot.pending)
+      .some(row => row.body?.sessionRef === body.sessionRef))
+      throw fail('TRANSACTION_CONFLICT');
+    const connection = await this.#adapter('ReadLocalConnection', {
+      contractVersion: ADAPTER, sessionRef: body.sessionRef,
+      requestId: `${body.requestId}:connection`, connectionRef: body.toConnectionRef });
+    if (connection.connectionRef !== body.toConnectionRef ||
+        connection.worldRef !== body.toWorldRef ||
+        connection.capabilities.worldRef !== connection.worldRef)
+      throw fail('CURRENT_WORLD_MISMATCH', 'SCOPE_DENIED');
+    const inventory = await this.#inventoryFor(body, connection, body.toWorldRef);
+    const selectionRevision = rev('selection');
+    const sameWorld = body.toWorldRef === body.fromWorldRef;
+    const current = { currentSession: body.sessionRef, activeWorldRef: body.toWorldRef,
+      orderedSelectedObjectRefs: sameWorld ? [...previous.orderedSelectedObjectRefs] : [],
+      sessionRevision: rev('session'), selectionRevision,
+      localContext: this.#context(connection, selectionRevision) };
+    const response = validateResponse(WIRE, 'SwitchWorldConnection', answer(body, current));
+    await this.#commitSelection(body, previous, current, connection, inventory,
+      replayKey, admission, response);
+    return response;
+  }
+  #context(connection, selectionRevision) {
+    return { connectionRef: connection.connectionRef,
+      connectionIncarnationRef: connection.connectionIncarnationRef,
+      worldRef: connection.worldRef, selectionRevision };
+  }
+  /** The Adapter's inventory row must match the connection readback exactly. */
+  async #inventoryFor(body, connection, worldRef) {
     const inventory = await this.#adapter('DiscoverConnections', {
       contractVersion: ADAPTER, sessionRef: body.sessionRef,
       requestId: `${body.requestId}:discover`, adapterId: this.adapterId });
-    const descriptor = inventory.connections.find(row => row.connectionRef === body.connectionRef);
-    if (!descriptor || descriptor.worldRef !== body.worldRef ||
+    const descriptor = inventory.connections.find(row =>
+      row.connectionRef === connection.connectionRef);
+    if (!descriptor || descriptor.worldRef !== worldRef ||
         descriptor.connectionIncarnationRef !== connection.connectionIncarnationRef ||
         descriptor.payloadVersion !== connection.payloadVersion ||
         descriptor.capabilityRevision !== connection.capabilities.capabilityRevision)
       throw fail('CURRENT_WORLD_MISMATCH', 'SCOPE_DENIED');
-    const selectionRevision = rev('selection');
-    const context = { connectionRef: connection.connectionRef,
-      connectionIncarnationRef: connection.connectionIncarnationRef,
-      worldRef: connection.worldRef, selectionRevision };
-    const current = { currentSession: body.sessionRef, activeWorldRef: body.worldRef,
-      orderedSelectedObjectRefs: [], sessionRevision: rev('session'),
-      selectionRevision, localContext: context };
-    const response = validateResponse(WIRE, 'SelectWorldConnection', answer(body, current));
+    return inventory;
+  }
+  async #commitSelection(body, previous, current, connection, inventory, replayKey,
+    admission, response) {
+    const worldRef = current.activeWorldRef;
     await this.store.commit(state => {
       if (state.sessions[body.sessionRef]?.selectionRevision !== previous?.selectionRevision)
         throw fail('STALE_REVISION');
       state.sessions[body.sessionRef] = current;
       state.connections[body.sessionRef] = connection;
       state.connectionInventories[body.sessionRef] = inventory;
-      state.worldRevisions[body.worldRef] ??= 'world-0';
-      state.placementSettings[body.worldRef] ??= {
+      state.worldRevisions[worldRef] ??= 'world-0';
+      state.placementSettings[worldRef] ??= {
         frontGapCells: 2, forwardSearchCells: 16,
         lateralSearchCells: 8, verticalSearchCells: 4,
         settingsRevision: 'placement-0' };
       state.replay[replayKey] = { digest: admission.requestDigest, response };
     });
-    return response;
   }
   async call(operation, raw) {
     let body;
@@ -917,6 +975,7 @@ export class CanvasV5 {
       if (!this.store || this.store.unavailable) throw fail('CAPABILITY_UNAVAILABLE',
         'REQUIRED_FACT_UNKNOWN');
       if (operation === 'SelectWorldConnection') return await this.#select(body);
+      if (operation === 'SwitchWorldConnection') return await this.#switch(body);
       if (operation === 'AnalyzeAffectedObjects') return await this.#analyze(body);
       if (operation === 'ApplyRecoverableCommit') return await this.#apply(body);
       if (operation === 'Undo' || operation === 'Redo') return await this.#history(operation, body);

@@ -1,4 +1,4 @@
-# HanaWorlds Canvas 0.6.5 local world component
+# HanaWorlds Canvas 0.6.6 local world component
 
 The package exposes `hanaworldsCanvasV5` and consumes the public
 `hanaworldsWorldAdapterV6` port. It uses the root export of the released
@@ -11,6 +11,16 @@ For per-cell peer admission read `ctx.get('hanaworldsCanvasV5').protocolHandshak
 (property, not method). It is Canvas's real `ProtocolHandshake`: canvas 5.0,
 capabilities=[] because Contracts publishes no per-cell Canvas token. Check it
 with `protocolRequirement('canvas/v5', [])` / `checkProtocolCompatibility`.
+
+Session↔World selection (0.6.6): Canvas alone decides it and alone generates
+`selectionRevision`. `SwitchWorldConnection` moves one bound Session to another
+connection/world (CAS on `selectionRevision` and `expectedContext`; target readback and
+inventory row must agree; refused while the Session has an unfinished transaction);
+`currentSession` is kept, a different world clears the object selection. Another
+Session's selection never changes. `ReadWorldSelectionContext.inventory` lists only the
+requested world's connections. An exact duplicate of a completed Select/Switch is refused
+by name (the contracts `validateCurrentRequest` checks `expectedContext` first) and never
+applies twice.
 
 G3 write-before guard (0.6.4): before a BUILD (`ApplyRecoverableCommit`), `Undo`
 or `Redo` reserves anything or calls a mutating Adapter operation, Canvas checks
