@@ -1,4 +1,4 @@
-# HanaWorlds Canvas 0.6.8 local world component
+# HanaWorlds Canvas 0.6.9 local world component
 
 The package exposes `hanaworldsCanvasV5` and consumes the public
 `hanaworldsWorldAdapterV6` port. It uses the root export of the released
@@ -15,8 +15,9 @@ with `protocolRequirement('canvas/v5', [])` / `checkProtocolCompatibility`.
 Session-world seam (0.6.7, active only when the installed Contracts declare canvas/v5
 minor 1, i.e. the 0.5.4 candidate; on 0.5.3 nothing below applies):
 - G-S: before Select/Switch, and for an UNBOUND read, Canvas reads `ReadSessionIdentity`
-  on the Host service `hanaworldsSessionV3` (Canvas's consumption name; no port → fail
-  closed `CAPABILITY_UNAVAILABLE`). `SESSION_NOT_FOUND` is refused. `sessionRevision`
+  on Workshop's public service `hanaworldsWorkshopV3` (the same WorkshopV3 instance Workshop
+  0.4.12 provides; read per call, so a disposed provider fails closed
+  `CAPABILITY_UNAVAILABLE`; no other key or alias is tried). `SESSION_NOT_FOUND` is refused. `sessionRevision`
   (CurrentContext and UNBOUND) is Workshop's revision; an UNBOUND Select expects it.
 - G-U `UnselectWorldConnection`: CAS on `selectionRevision` and `expectedContext`; not the
   current world → `WORLD_NOT_BOUND`; returns `activeWorldRef`/`localContext` null.

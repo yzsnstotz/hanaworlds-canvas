@@ -24,7 +24,7 @@ const SESSION = 'session/v3';
 const canvasProtocol = contractProtocols.find(row => row.protocol === 'canvas');
 if (!canvasProtocol) throw new Error('CANVAS_PROTOCOL_UNDECLARED');
 const SEAM = canvasProtocol.minor >= 1;
-const PACKAGE_VERSION = '0.6.8';
+const PACKAGE_VERSION = '0.6.9';
 // The public wire defines canvas major 5, minor 0. Contracts publishes no
 // per-cell Canvas capability token; regional tokens describe the region port.
 const cellRequirement = protocolRequirement(WIRE, []);
@@ -1218,9 +1218,11 @@ export function apply(ctx) {
     adapter: {
       get protocolHandshake() { return ctx.get?.('hanaworldsWorldAdapterV6')?.protocolHandshake; },
       call: (...args) => ctx.get?.('hanaworldsWorldAdapterV6')?.call(...args) },
-    // Canvas's consumption point for Workshop's session/v3 port; absent → fail closed.
+    // Workshop's published session/v3 provider (public service key hanaworldsWorkshopV3,
+    // one WorkshopV3 instance; Workshop 0.4.12 4547f3cf). Read on every call, so a disposed
+    // provider is absent → fail closed. No other key is tried.
     sessions: { call: (...args) => {
-      const port = ctx.get?.('hanaworldsSessionV3');
+      const port = ctx.get?.('hanaworldsWorkshopV3');
       if (typeof port?.call !== 'function') throw fail('CAPABILITY_UNAVAILABLE', 'REQUIRED_FACT_UNKNOWN');
       return port.call(...args);
     } },

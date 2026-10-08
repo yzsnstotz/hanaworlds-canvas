@@ -1,6 +1,6 @@
 # HanaWorlds Canvas
 
-Stage 1 local world Canvas `0.6.8` component candidate, exposing `canvas/v5`
+Stage 1 local world Canvas `0.6.9` component candidate, exposing `canvas/v5`
 and consuming the public `world-adapter/v6` port. It owns current local world
 selection, object footprints, recoverable apply/readback, durable history and
 same-transaction Undo. `0.5.0` implements Contracts 0.5.0 `canvas-region/v1`: region commits over
@@ -173,7 +173,7 @@ the released-v0.5.3 line stays on `codex/f-canvas-contract-adapt-01`.
 
 With Contracts declaring canvas/v5 minor 1 (`hanaworlds-contracts@0.5.4-rc.1`), Canvas
 implements its side of session-world-seam/v1: G-S identity read before Select/Switch
-(Host service `hanaworldsSessionV3`, fail closed without it), G-U
+(Workshop's public service `hanaworldsWorkshopV3`, fail closed without it), G-U
 `UnselectWorldConnection`, G-L `RetireSessionSelection`, G-D `ListWorldSelections` /
 `ReserveWorldRetirement` / `ReleaseWorldRetirement`. The committed dependency stays the
 released v0.5.3 until v0.5.4 is published; on it Canvas behaves exactly as 0.6.6. See

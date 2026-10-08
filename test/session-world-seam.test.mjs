@@ -322,3 +322,48 @@ test('C2: connection state of a BOUND selection is derived from the Adapter inve
     assert.equal((await f.call('ListObjects', { sessionRef: f.S1, worldRef: f.A, expectedRevision: null,
       localContext: selection.context.localContext })).error?.code, 'CURRENT_WORLD_MISMATCH');
   });
+
+/*
+ * Public assembly: Workshop 0.4.12 (4547f3cf) registers one WorkshopV3 instance as
+ * hanaworldsWorkshop and hanaworldsWorkshopV3 (public summary, SOURCE); it registers no
+ * hanaworldsSessionV3. Canvas's apply() consumes exactly hanaworldsWorkshopV3, per call.
+ * FIXTURE: the provider here is the fixture session/v3 port inside a real Cordis plugin
+ * fiber; real Loader/Host mapping is NOT_RUN.
+ */
+test('apply() consumes Workshop’s public hanaworldsWorkshopV3; other keys and a disposed provider fail closed',
+  { skip: !SEAM && 'Contracts without session-world-seam/v1' }, async t => {
+    const { Context } = await import('cordis');
+    const canvasModule = await import('../src/index.mjs');
+    const read = async canvas => canvas.call('ReadWorldSelectionContext', { contractVersion: 'canvas/v5',
+      sessionRef: 'fixture-session-S1', requestId: `r-${Math.random()}`, worldRef: 'fixture-world-A' });
+    const assemble = async key => {
+      const directory = await mkdtemp(join(tmpdir(), 'canvas-seam-assembly-'));
+      t.after(() => rm(directory, { recursive: true, force: true }));
+      const ctx = new Context();
+      ctx.provide('dshHomePath', (...parts) => join(directory, ...parts));
+      ctx.provide('hanaworldsWorldAdapterV6', seamAdapter());
+      const port = seamSessions();
+      const workshop = ctx.plugin({ name: 'fixture-workshop', apply: c => { if (key) c.provide(key, port); } });
+      await workshop;
+      const fiber = ctx.plugin(canvasModule.default);
+      await fiber;
+      const canvas = ctx.get('hanaworldsCanvasV5');
+      await canvas.ready;
+      t.after(async () => { await fiber.dispose(); await ctx.fiber.dispose(); });
+      return { canvas, port, workshop };
+    };
+    const live = await assemble('hanaworldsWorkshopV3');
+    const ok = await read(live.canvas);
+    assert.equal(ok.error, null, JSON.stringify(ok.error));
+    assert.equal(ok.result.selection.sessionRevision,
+      fixture.sessionDirectory.read.response.result.sessionRevision);
+    assert.deepEqual(live.port.calls, ['ReadSessionIdentity']);
+    for (const key of ['hanaworldsSessionV3', 'hanaworldsWorkshop', null]) {
+      const other = await assemble(key);
+      assert.equal((await read(other.canvas)).error?.code, 'CAPABILITY_UNAVAILABLE', String(key));
+      assert.deepEqual(other.port.calls, [], `${key} must not be consumed`);
+    }
+    // The provider belongs to Workshop's plugin fiber: after its dispose Canvas fails closed.
+    await live.workshop.dispose();
+    assert.equal((await read(live.canvas)).error?.code, 'CAPABILITY_UNAVAILABLE');
+  });

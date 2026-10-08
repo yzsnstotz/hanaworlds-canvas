@@ -13,7 +13,7 @@ export async function openRuntime(profile, { adapter, nativeFacts,
   ctx.provide('dshHomePath', (...parts) => join(profile, ...parts));
   if (adapter) ctx.provide('hanaworldsWorldAdapterV6', adapter);
   if (nativeFacts) ctx.provide('hanaworldsLuantiNativeFacts', nativeFacts);
-  if (sessions) ctx.provide('hanaworldsSessionV3', sessions);
+  if (sessions) ctx.provide('hanaworldsWorkshopV3', sessions);
   const fiber = ctx.plugin(canvasModule.default);
   await fiber;
   const canvas = ctx.get('hanaworldsCanvasV5');
