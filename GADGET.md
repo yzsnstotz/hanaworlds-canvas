@@ -1,4 +1,4 @@
-# HanaWorlds Canvas 0.6.7 local world component
+# HanaWorlds Canvas 0.6.8 local world component
 
 The package exposes `hanaworldsCanvasV5` and consumes the public
 `hanaworldsWorldAdapterV6` port. It uses the root export of the released
