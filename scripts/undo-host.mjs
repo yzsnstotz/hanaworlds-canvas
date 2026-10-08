@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { CanvasV5, CanvasStore } from '../src/index.mjs';
 import { openUndoFixtureWorld, undoSessionRef, undoWorldRef } from './undo-fixture-world.mjs';
+import { fixtureSessions } from './fixture-sessions.mjs';
 
 const digest = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 export const undoWorldFile = directory => join(directory, 'fixture-world.json');
@@ -16,7 +17,8 @@ export async function openUndoHost(directory, { world: preparedWorld } = {}) {
   // A missing example is a startup error; reads never create one.
   await readFile(join(directory, 'canvas-v5.json'));
   const world = preparedWorld ?? await openUndoFixtureWorld(undoWorldFile(directory));
-  const canvas = new CanvasV5({ store: await CanvasStore.open(directory), adapter: world.adapter, nativeFacts: world.nativeFacts });
+  const canvas = new CanvasV5({ store: await CanvasStore.open(directory), adapter: world.adapter, nativeFacts: world.nativeFacts,
+    sessions: fixtureSessions() });
   world.readWorldRevision = () => canvas.readWorldRevision(undoWorldRef);
   let queue = Promise.resolve();
   async function readView() {

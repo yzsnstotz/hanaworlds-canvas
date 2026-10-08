@@ -13,6 +13,7 @@ import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import canonicalize from 'canonicalize';
 import { g3CellHandshake } from './support/g3-adapter-handshake.mjs';
+import { fixtureSessions } from '../scripts/fixture-sessions.mjs';
 
 const stateProfile = { profileVersion: 'state-profile/v2',
   nodeFields: ['nodeName', 'param1', 'param2'], metadataMode: 'exact',
@@ -43,7 +44,8 @@ test('actual connection readback binds the current local world durably', async (
         result: connection, error: null };
       throw new Error(`unexpected adapter operation ${operation}`);
     } };
-    const canvas = new CanvasV5({ store: await CanvasStore.open(directory), adapter });
+    const canvas = new CanvasV5({ store: await CanvasStore.open(directory), adapter,
+      sessions: fixtureSessions() });
     const selectionContext = await canvas.call('ReadWorldSelectionContext', {
       contractVersion: 'canvas/v5', sessionRef: 'session-1', requestId: 'context-1',
       worldRef: 'local-world' });
@@ -99,7 +101,8 @@ test('actual connection readback binds the current local world durably', async (
     assert.equal(staleContext.error?.code, 'CURRENT_WORLD_MISMATCH');
     assert.equal(canvas.current('session-1').selectionRevision,
       reselected.result.selectionRevision);
-    const reopened = new CanvasV5({ store: await CanvasStore.open(directory), adapter });
+    const reopened = new CanvasV5({ store: await CanvasStore.open(directory), adapter,
+      sessions: fixtureSessions() });
     assert.equal(JSON.stringify(reopened.current('session-1').localContext),
       JSON.stringify(reselected.result.localContext));
   } finally { await rm(directory, { recursive: true, force: true }); }
@@ -455,7 +458,7 @@ test('build commits only after complete readback and stores one durable history 
     assert.equal(staleReadback.error?.code, 'STALE_REVISION');
     const staleObject = await canvas.call('InspectObject', inspectObjectRequest);
     assert.equal(staleObject.error?.code, 'STALE_REVISION');
-    const undoneCanvas = new CanvasV5({ store: afterUndo, adapter });
+    const undoneCanvas = new CanvasV5({ store: afterUndo, adapter, sessions: fixtureSessions() });
     assert.equal(afterUndo.snapshot.transactions['undo-1'].displayMetadata.mode, 'CELL');
     assert.equal(afterUndo.snapshot.transactions['undo-1'].displayMetadata.affectedCells, 1);
     assert.ok(Date.parse(afterUndo.snapshot.transactions['undo-1'].displayMetadata.committedAt) >= Date.parse(afterUndo.snapshot.transactions['build-1'].displayMetadata.committedAt));
@@ -573,7 +576,7 @@ test('host exposes durable Canvas facts as separate public ports', async () => {
     const entry = process.env.CANVAS_ENTRY ?? new URL('../src/index.mjs', import.meta.url).href;
     const running = createRequire(entry)('hanaworlds-contracts/package.json');
     assert.equal(advertised.contracts, `hanaworlds-contracts@${running.version}`);
-    assert.equal(ports.get('hanaworldsCanvasV5').status().version, '0.6.6');
+    assert.equal(ports.get('hanaworldsCanvasV5').status().version, '0.6.7');
     if (advertised.contracts === contractHandshake.contracts)
       assert.doesNotThrow(() => checkContractHandshake(advertised));
     else

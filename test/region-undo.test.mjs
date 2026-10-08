@@ -10,6 +10,7 @@ import { canonicalJSON, checkProtocolCompatibility, comparePosition, contractHan
   validateRegionSnapshotContent } from 'hanaworlds-contracts';
 import { CanvasV5, CanvasStore, CanvasRegionV1, canvasProtocolHandshake,
   ADAPTER_REGION_REQUIREMENT, ADAPTER_CELL_REQUIREMENT, apply as applyCanvas } from '../src/index.mjs';
+import { fixtureSessions } from '../scripts/fixture-sessions.mjs';
 
 /*
  * FIXTURE: the Adapter below (world-adapter/v6 connection reads plus a
@@ -200,7 +201,8 @@ function picture(world) {
   return canonicalJSON(out);
 }
 async function boot(directory, world) {
-  const canvas = new CanvasV5({ store: await CanvasStore.open(directory), adapter: world.adapter });
+  const canvas = new CanvasV5({ store: await CanvasStore.open(directory), adapter: world.adapter,
+    sessions: fixtureSessions() });
   return { canvas, region: new CanvasRegionV1(canvas, world.region) };
 }
 async function select(canvas, selectedWorld = WORLD) {
@@ -494,7 +496,7 @@ test('protocol major + capabilities decide compatibility; patch and provenance d
         'PROTOCOL_COMPATIBLE');
       assert.throws(() => checkProtocolCompatibility(canvasProtocolHandshake,
         [protocolRequirement('canvas-region/v2')]), e => e.code === 'UNSUPPORTED_VERSION');
-      assert.equal(canvas.status().version, '0.6.6');
+      assert.equal(canvas.status().version, '0.6.7');
     } finally { await rm(directory, { recursive: true, force: true }); }
   });
 

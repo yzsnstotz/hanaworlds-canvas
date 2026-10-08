@@ -1,4 +1,4 @@
-# HanaWorlds Canvas 0.6.6 local world component
+# HanaWorlds Canvas 0.6.7 local world component
 
 The package exposes `hanaworldsCanvasV5` and consumes the public
 `hanaworldsWorldAdapterV6` port. It uses the root export of the released
@@ -11,6 +11,24 @@ For per-cell peer admission read `ctx.get('hanaworldsCanvasV5').protocolHandshak
 (property, not method). It is Canvas's real `ProtocolHandshake`: canvas 5.0,
 capabilities=[] because Contracts publishes no per-cell Canvas token. Check it
 with `protocolRequirement('canvas/v5', [])` / `checkProtocolCompatibility`.
+
+Session-world seam (0.6.7, active only when the installed Contracts declare canvas/v5
+minor 1, i.e. the 0.5.4 candidate; on 0.5.3 nothing below applies):
+- G-S: before Select/Switch, and for an UNBOUND read, Canvas reads `ReadSessionIdentity`
+  on the Host service `hanaworldsSessionV3` (Canvas's consumption name; no port → fail
+  closed `CAPABILITY_UNAVAILABLE`). `SESSION_NOT_FOUND` is refused. `sessionRevision`
+  (CurrentContext and UNBOUND) is Workshop's revision; an UNBOUND Select expects it.
+- G-U `UnselectWorldConnection`: CAS on `selectionRevision` and `expectedContext`; not the
+  current world → `WORLD_NOT_BOUND`; returns `activeWorldRef`/`localContext` null.
+- G-L `RetireSessionSelection`: called by Workshop only; clears the selection atomically,
+  irreversible, idempotent; the Session is then `SESSION_NOT_FOUND` to every Canvas
+  operation. Canvas never deletes a Session or reports one deleted. Refused while the
+  Session has an unfinished transaction.
+- G-D `ListWorldSelections` (derived from the one selection table), `ReserveWorldRetirement`
+  (`requireWorldRetirable`, CAS on `inventoryRevision`), `ReleaseWorldRetirement`
+  (`RETIRED` → `WORLD_NOT_FOUND`; `ABORTED` → selectable). Selecting a reserved world is
+  refused `TRANSACTION_CONFLICT`/`SCOPE_DENIED`, also re-checked inside the durable commit.
+- C1: a BOUND Session's read names its own current world even when `worldRef` differs.
 
 Session↔World selection (0.6.6): Canvas alone decides it and alone generates
 `selectionRevision`. `SwitchWorldConnection` moves one bound Session to another

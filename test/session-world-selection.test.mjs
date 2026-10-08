@@ -3,12 +3,13 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { canonicalJSON } from 'hanaworlds-contracts';
+import { canonicalJSON, contractProtocols } from 'hanaworlds-contracts';
 import { CanvasV5, CanvasStore } from '../src/index.mjs';
 import { g3CellHandshake } from './support/g3-adapter-handshake.mjs';
 import { createUndoExample } from '../scripts/undo-example.mjs';
 import { openUndoHost } from '../scripts/undo-host.mjs';
 import { undoSessionRef, undoWorldRef } from '../scripts/undo-fixture-world.mjs';
+import { fixtureSessions } from '../scripts/fixture-sessions.mjs';
 
 /*
  * Canvas is the only Session↔World selection authority (canvas/v5
@@ -18,6 +19,7 @@ import { undoSessionRef, undoWorldRef } from '../scripts/undo-fixture-world.mjs'
  * not the real Adapter and proves nothing about real multi-connection support.
  */
 // Store values are null-prototype objects; compare canonical JSON.
+const SEAM = contractProtocols.find(row => row.protocol === 'canvas').minor >= 1;
 const same = (a, b, message) => assert.equal(canonicalJSON(a), canonicalJSON(b), message);
 const stateProfile = { profileVersion: 'state-profile/v2',
   nodeFields: ['nodeName', 'param1', 'param2'], metadataMode: 'exact',
@@ -57,7 +59,8 @@ async function boot(t) {
   const directory = await mkdtemp(join(tmpdir(), 'canvas-session-world-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const adapter = fixtureAdapter();
-  const canvas = new CanvasV5({ store: await CanvasStore.open(directory), adapter });
+  const canvas = new CanvasV5({ store: await CanvasStore.open(directory), adapter,
+    sessions: fixtureSessions() });
   let n = 0;
   const call = (operation, sessionRef, body) => canvas.call(operation,
     { ...base(sessionRef), requestId: `${operation}-${++n}`, ...body });
@@ -99,7 +102,10 @@ test('owner A: S1 and S2 share A; S1 switches A→B→A while S2 stays on A, unc
     connectionIncarnationRef: 'open-b-1', worldRef: 'world-b',
     selectionRevision: toB.result.selectionRevision });
   assert.notEqual(toB.result.selectionRevision, s1.selectionRevision);
-  assert.notEqual(toB.result.sessionRevision, s1.sessionRevision);
+  // sessionRevision: Workshop's revision with the seam (unchanged by a switch); Canvas's own
+  // revision on Contracts 0.5.3.
+  if (SEAM) assert.equal(toB.result.sessionRevision, s1.sessionRevision);
+  else assert.notEqual(toB.result.sessionRevision, s1.sessionRevision);
   same((await f.read('S2', 'world-a')).context, s2);
   // ReadWorldSelectionContext carries only the requested world's inventory rows.
   const readB = await f.call('ReadWorldSelectionContext', 'S1', { worldRef: 'world-b' });

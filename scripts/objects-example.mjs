@@ -6,6 +6,7 @@ import canonicalize from 'canonicalize';
 import { digestValue, encodeRegionBlock, expandRegionBlock, regionChunksOfBox, comparePosition } from 'hanaworlds-contracts';
 import { CanvasV5, CanvasStore, CanvasRegionV1 } from '../src/index.mjs';
 import { objectsRunRoot } from './objects-web-server.mjs';
+import { fixtureSessions } from './fixture-sessions.mjs';
 
 export const exampleSessionRef = 'objects-history-fixture-session';
 const worldRef = 'objects-history-fixture-world';
@@ -135,7 +136,7 @@ export async function createObjectsExample(directory) {
   try { await readFile(join(directory,'canvas-v5.json')); throw new Error('EXAMPLE_ALREADY_EXISTS'); }
   catch (error) { if (error.code!=='ENOENT') throw error; }
   const env=fixtureEnvironment();
-  const canvas=new CanvasV5({store:await CanvasStore.open(directory),adapter:env.adapter,nativeFacts:env.nativeFacts});
+  const canvas=new CanvasV5({store:await CanvasStore.open(directory),adapter:env.adapter,nativeFacts:env.nativeFacts,sessions:fixtureSessions()});
   const region=new CanvasRegionV1(canvas,env.regionAdapter);
   env.readWorldRevision=()=>canvas.readWorldRevision(worldRef);
   const trace=[];

@@ -6,6 +6,7 @@ import { digestValue } from 'hanaworlds-contracts';
 import { CanvasV5, CanvasStore } from '../src/index.mjs';
 import { openUndoFixtureWorld, undoConnection, undoSessionRef, undoWorldRef } from './undo-fixture-world.mjs';
 import { undoWorldFile } from './undo-host.mjs';
+import { fixtureSessions } from './fixture-sessions.mjs';
 
 export const undoRunRoot = join(homedir(), '.cache', 'hanaworlds-runs', 'F-CANVAS-UNDO-01', 'undo-web');
 const D = (kind, value) => digestValue(kind, value).sha256;
@@ -20,7 +21,8 @@ export async function createUndoExample(directory) {
   catch (error) { if (error.code !== 'ENOENT') throw error; }
   const store = await CanvasStore.open(directory);
   const world = await openUndoFixtureWorld(undoWorldFile(directory), { create: true });
-  const canvas = new CanvasV5({ store, adapter: world.adapter, nativeFacts: world.nativeFacts });
+  const canvas = new CanvasV5({ store, adapter: world.adapter, nativeFacts: world.nativeFacts,
+    sessions: fixtureSessions() });
   world.readWorldRevision = () => canvas.readWorldRevision(undoWorldRef);
   const trace = [];
   const call = async (service, operation, body) => {

@@ -10,6 +10,7 @@ import { openUndoFixtureWorld, undoConnection, undoSessionRef,
   undoWorldRef } from '../scripts/undo-fixture-world.mjs';
 import { undoWorldFile } from '../scripts/undo-host.mjs';
 import { g3CellHandshake } from './support/g3-adapter-handshake.mjs';
+import { fixtureSessions } from '../scripts/fixture-sessions.mjs';
 
 /*
  * G3 write-before guard on the per-cell port (world-adapter/v6) for BUILD, Undo and
@@ -31,7 +32,8 @@ const g3 = ADAPTER_CELL_REQUIREMENT.capabilities.length > 0;
 async function boot(directory) {
   const store = await CanvasStore.open(directory);
   const world = await openUndoFixtureWorld(undoWorldFile(directory), { create: true });
-  const canvas = new CanvasV5({ store, adapter: world.adapter, nativeFacts: world.nativeFacts });
+  const canvas = new CanvasV5({ store, adapter: world.adapter, nativeFacts: world.nativeFacts,
+    sessions: fixtureSessions() });
   world.readWorldRevision = () => canvas.readWorldRevision(undoWorldRef);
   const ok = async (operation, body) => {
     const response = await canvas.call(operation, body);

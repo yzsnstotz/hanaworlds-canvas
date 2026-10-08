@@ -9,13 +9,22 @@ import { admitRequest, validateRequest, validateResponse, validateBoundResponse,
   projectScopedPreparedTransaction, checkContractHandshake, contractHandshake,
   digestValue, requestDigest, publicError, validateExactEffects,
   validateRegionInspection } from 'hanaworlds-contracts';
-import { checkProtocolCompatibility, protocolRequirement, validateType } from 'hanaworlds-contracts';
+import { checkProtocolCompatibility, contractProtocols, protocolRequirement,
+  validateType } from 'hanaworlds-contracts';
+import * as contractsSdk from 'hanaworlds-contracts';
 import { CanvasRegionV1, ADAPTER_CELL_REQUIREMENT } from './region-v1.mjs';
 
 export { CanvasStore, CanvasRegionV1 };
 const WIRE = 'canvas/v5';
 const ADAPTER = 'world-adapter/v6';
-const PACKAGE_VERSION = '0.6.6';
+const SESSION = 'session/v3';
+// session-world-seam/v1 (canvas/v5 minor 1, Contracts 0.5.4 candidate): the Session↔World
+// additions are active only when the installed Contracts declare them; on canvas/v5 minor 0
+// (Contracts 0.5.3) Canvas keeps its 0.5.3 behaviour exactly.
+const canvasProtocol = contractProtocols.find(row => row.protocol === 'canvas');
+if (!canvasProtocol) throw new Error('CANVAS_PROTOCOL_UNDECLARED');
+const SEAM = canvasProtocol.minor >= 1;
+const PACKAGE_VERSION = '0.6.7';
 // The public wire defines canvas major 5, minor 0. Contracts publishes no
 // per-cell Canvas capability token; regional tokens describe the region port.
 const cellRequirement = protocolRequirement(WIRE, []);
@@ -51,10 +60,14 @@ function answer(body, result, error = null) {
 
 /** Current local Canvas. Adapter is a public v6 port; it never decides history. */
 export class CanvasV5 {
-  constructor({ store, adapter, nativeFacts, adapterId = 'hanaworlds-world-adapter' }) {
+  constructor({ store, adapter, nativeFacts, sessions,
+    adapterId = 'hanaworlds-world-adapter' }) {
     checkContractHandshake(contractHandshake);
     this.store = store;
     this.adapter = adapter;
+    // Host-bound session/v3 port (Workshop). Its ReadSessionIdentity is the only evidence
+    // that a Session exists; Canvas never infers that from a Ref.
+    this.sessions = sessions;
     this.nativeFacts = nativeFacts;
     this.adapterId = adapterId;
     this.ready = Promise.resolve();
@@ -664,9 +677,11 @@ export class CanvasV5 {
       await this.#adapter('DiscoverConnections', {
         contractVersion: ADAPTER, sessionRef: body.sessionRef,
         requestId: `${body.requestId}:discover`, adapterId: this.adapterId });
-    if (!inventory || selection && operation === 'ReadWorldSelectionContext' &&
-        selection.activeWorldRef !== body.worldRef)
-      throw fail('CURRENT_WORLD_MISMATCH', 'SCOPE_DENIED');
+    // C1: ReadWorldSelectionContext.worldRef names whose inventory is returned; it never
+    // selects, and a BOUND Session may have another current world.
+    if (!inventory) throw fail('CURRENT_WORLD_MISMATCH', 'SCOPE_DENIED');
+    const identity = operation === 'ReadWorldSelectionContext' && !selection ?
+      await this.#identity(body) : null;
     if (operation === 'ListWorldConnections' &&
         body.expectedCapabilityRevision !== inventory.capabilityRevision)
       throw fail('STALE_REVISION');
@@ -679,7 +694,7 @@ export class CanvasV5 {
       selection: selection ? { status: 'BOUND', context: selection,
         connectionRef: selection.localContext.connectionRef } :
         { status: 'UNBOUND', sessionRef: body.sessionRef,
-          sessionRevision: UNBOUND_SESSION_REVISION }
+          sessionRevision: SEAM ? identity.sessionRevision : UNBOUND_SESSION_REVISION }
     } : inventory;
     const response = validateResponse(WIRE, operation, answer(body, result));
     if (operation === 'ReadWorldSelectionContext') return response;
@@ -843,7 +858,8 @@ export class CanvasV5 {
         throw fail('STALE_REVISION');
       current.orderedSelectedObjectRefs = [...body.objectRefs];
       current.selectionRevision = selectionRevision;
-      current.sessionRevision = rev('session');
+      // With the seam, sessionRevision is Workshop's revision; Canvas does not change it.
+      if (!SEAM) current.sessionRevision = rev('session');
       current.localContext.selectionRevision = selectionRevision;
       state.replay[replayKey] = { digest: admission.requestDigest, response };
     });
@@ -873,8 +889,12 @@ export class CanvasV5 {
     const admission = validateCurrentRequest(WIRE, 'SelectWorldConnection', body, facts);
     if (prior) return prior.response;
     const previous = this.current(body.sessionRef);
-    // Bound: the published selectionRevision. Unbound: the published UNBOUND sessionRevision.
-    if (body.expectedRevision !== (previous ? previous.selectionRevision : UNBOUND_SESSION_REVISION))
+    const identity = await this.#identity(body);
+    this.#worldOpen(this.store.snapshot, body.worldRef);
+    // Bound: the published selectionRevision. Unbound: the published UNBOUND sessionRevision
+    // (Workshop's SessionIdentity.sessionRevision with the seam, else Canvas's session-0).
+    const unbound = SEAM ? identity.sessionRevision : UNBOUND_SESSION_REVISION;
+    if (body.expectedRevision !== (previous ? previous.selectionRevision : unbound))
       throw fail('STALE_REVISION');
     const connection = await this.#adapter('ReadLocalConnection', {
       contractVersion: ADAPTER, sessionRef: body.sessionRef,
@@ -883,7 +903,8 @@ export class CanvasV5 {
     const inventory = await this.#inventoryFor(body, connection, body.worldRef);
     const selectionRevision = rev('selection');
     const current = { currentSession: body.sessionRef, activeWorldRef: body.worldRef,
-      orderedSelectedObjectRefs: [], sessionRevision: rev('session'),
+      orderedSelectedObjectRefs: [],
+      sessionRevision: SEAM ? identity.sessionRevision : rev('session'),
       selectionRevision, localContext: this.#context(connection, selectionRevision) };
     const response = validateResponse(WIRE, 'SelectWorldConnection', answer(body, current));
     await this.#commitSelection(body, previous, current, connection, inventory,
@@ -907,6 +928,8 @@ export class CanvasV5 {
     if (!previous) throw fail('WORLD_NOT_BOUND', 'SCOPE_DENIED');
     if (previous.activeWorldRef !== body.fromWorldRef || body.worldRef !== body.fromWorldRef)
       throw fail('CURRENT_WORLD_MISMATCH', 'SCOPE_DENIED');
+    const identity = await this.#identity(body);
+    this.#worldOpen(this.store.snapshot, body.toWorldRef);
     if (body.expectedRevision !== previous.selectionRevision) throw fail('STALE_REVISION');
     if (Object.values(this.store.snapshot.pending)
       .some(row => row.body?.sessionRef === body.sessionRef))
@@ -923,7 +946,7 @@ export class CanvasV5 {
     const sameWorld = body.toWorldRef === body.fromWorldRef;
     const current = { currentSession: body.sessionRef, activeWorldRef: body.toWorldRef,
       orderedSelectedObjectRefs: sameWorld ? [...previous.orderedSelectedObjectRefs] : [],
-      sessionRevision: rev('session'), selectionRevision,
+      sessionRevision: SEAM ? identity.sessionRevision : rev('session'), selectionRevision,
       localContext: this.#context(connection, selectionRevision) };
     const response = validateResponse(WIRE, 'SwitchWorldConnection', answer(body, current));
     await this.#commitSelection(body, previous, current, connection, inventory,
@@ -955,6 +978,12 @@ export class CanvasV5 {
     await this.store.commit(state => {
       if (state.sessions[body.sessionRef]?.selectionRevision !== previous?.selectionRevision)
         throw fail('STALE_REVISION');
+      // Serialized with ReserveWorldRetirement in the same durable commit order.
+      this.#worldOpen(state, worldRef);
+      if (previous?.activeWorldRef !== worldRef) {
+        if (previous) this.#bumpWorld(state, previous.activeWorldRef);
+        this.#bumpWorld(state, worldRef);
+      }
       state.sessions[body.sessionRef] = current;
       state.connections[body.sessionRef] = connection;
       state.connectionInventories[body.sessionRef] = inventory;
@@ -966,6 +995,155 @@ export class CanvasV5 {
       state.replay[replayKey] = { digest: admission.requestDigest, response };
     });
   }
+  /** G-S: the Session's identity from Workshop's Host-bound session/v3 port (seam only). */
+  async #identity(body) {
+    if (!SEAM) return null;
+    if (typeof this.sessions?.call !== 'function')
+      throw fail('CAPABILITY_UNAVAILABLE', 'REQUIRED_FACT_UNKNOWN');
+    const request = { contractVersion: SESSION, requestId: `${body.requestId}:session`,
+      sessionRef: body.sessionRef };
+    const response = await this.sessions.call('ReadSessionIdentity', request);
+    validateBoundResponse(SESSION, 'ReadSessionIdentity', request, response);
+    if (response.error) throw Object.assign(new Error(response.error.code),
+      { publicError: response.error });
+    if (response.result.sessionRef !== body.sessionRef) throw fail('SESSION_NOT_FOUND', 'SCOPE_DENIED');
+    return response.result;
+  }
+  #worldRow(state, worldRef) {
+    return state.worldSelections?.[worldRef] ??
+      { inventoryRevision: 'inventory-0', reservationRef: null, retired: false, lastRelease: null };
+  }
+  /** A retired world is unknown; a world under retirement reservation cannot be selected. */
+  #worldOpen(state, worldRef) {
+    const row = this.#worldRow(state, worldRef);
+    if (row.retired) throw fail('WORLD_NOT_FOUND', 'SCOPE_DENIED');
+    if (row.reservationRef !== null) throw fail('TRANSACTION_CONFLICT', 'SCOPE_DENIED');
+  }
+  #bumpWorld(state, worldRef) {
+    state.worldSelections ??= {};
+    state.worldSelections[worldRef] ??= { inventoryRevision: 'inventory-0',
+      reservationRef: null, retired: false, lastRelease: null };
+    state.worldSelections[worldRef].inventoryRevision = rev('inventory');
+  }
+  /** G-D: derived from the one selection table (sessions); no second association table. */
+  #worldInventory(state, worldRef) {
+    const row = this.#worldRow(state, worldRef);
+    return { worldRef, inventoryRevision: row.inventoryRevision,
+      sessionRefs: Object.keys(state.sessions)
+        .filter(sessionRef => state.sessions[sessionRef].activeWorldRef === worldRef).sort(),
+      retirementReservationRef: row.reservationRef };
+  }
+  async #listWorldSelections(body) {
+    const state = this.store.snapshot;
+    if (this.#worldRow(state, body.worldRef).retired) throw fail('WORLD_NOT_FOUND', 'SCOPE_DENIED');
+    return validateResponse(WIRE, 'ListWorldSelections',
+      answer(body, this.#worldInventory(state, body.worldRef)));
+  }
+  async #reserveWorld(body) {
+    const check = state => {
+      if (this.#worldRow(state, body.worldRef).retired) throw fail('WORLD_NOT_FOUND', 'SCOPE_DENIED');
+      const inventory = this.#worldInventory(state, body.worldRef);
+      contractsSdk.requireWorldRetirable(inventory);
+      if (inventory.inventoryRevision !== body.expectedInventoryRevision) throw fail('STALE_REVISION');
+      return inventory;
+    };
+    const inventory = check(this.store.snapshot);
+    const result = { worldRef: body.worldRef, reservationRef: rev('retirement'),
+      inventoryRevision: inventory.inventoryRevision };
+    const response = validateResponse(WIRE, 'ReserveWorldRetirement', answer(body, result));
+    await this.store.commit(state => {
+      check(state);
+      state.worldSelections ??= {};
+      state.worldSelections[body.worldRef] ??= { inventoryRevision: 'inventory-0',
+        reservationRef: null, retired: false, lastRelease: null };
+      state.worldSelections[body.worldRef].reservationRef = result.reservationRef;
+    });
+    return response;
+  }
+  async #releaseWorld(body) {
+    const row = this.#worldRow(this.store.snapshot, body.worldRef);
+    // An exact repeat of the release already applied returns that release, never a second one.
+    if (row.lastRelease?.reservationRef === body.reservationRef &&
+        row.lastRelease.outcome === body.outcome)
+      return validateResponse(WIRE, 'ReleaseWorldRetirement', answer(body, row.lastRelease));
+    if (row.retired) throw fail('WORLD_NOT_FOUND', 'SCOPE_DENIED');
+    if (row.reservationRef !== body.reservationRef) throw fail('STALE_REVISION');
+    const result = { worldRef: body.worldRef, reservationRef: body.reservationRef,
+      outcome: body.outcome, inventoryRevision: rev('inventory') };
+    const response = validateResponse(WIRE, 'ReleaseWorldRetirement', answer(body, result));
+    await this.store.commit(state => {
+      const current = state.worldSelections?.[body.worldRef];
+      if (!current || current.reservationRef !== body.reservationRef) throw fail('STALE_REVISION');
+      current.reservationRef = null;
+      current.retired = body.outcome === 'RETIRED';
+      current.inventoryRevision = result.inventoryRevision;
+      current.lastRelease = result;
+    });
+    return response;
+  }
+  /** G-U: the bound Session returns to UNBOUND; CAS on selectionRevision and expectedContext. */
+  async #unselect(body) {
+    const { replayKey, prior, facts } = this.#facts(body, 'UnselectWorldConnection');
+    const previous = this.current(body.sessionRef);
+    if (!prior && (!previous || previous.activeWorldRef !== body.worldRef))
+      throw fail('WORLD_NOT_BOUND', 'SCOPE_DENIED');
+    const admission = validateCurrentRequest(WIRE, 'UnselectWorldConnection', body, facts);
+    if (prior) return prior.response;
+    if (body.expectedRevision !== previous.selectionRevision) throw fail('STALE_REVISION');
+    if (Object.values(this.store.snapshot.pending)
+      .some(row => row.body?.sessionRef === body.sessionRef))
+      throw fail('TRANSACTION_CONFLICT');
+    const current = { currentSession: body.sessionRef, activeWorldRef: null,
+      orderedSelectedObjectRefs: [], sessionRevision: previous.sessionRevision,
+      selectionRevision: rev('selection'), localContext: null };
+    const response = validateResponse(WIRE, 'UnselectWorldConnection', answer(body, current));
+    await this.store.commit(state => {
+      if (state.sessions[body.sessionRef]?.selectionRevision !== previous.selectionRevision)
+        throw fail('STALE_REVISION');
+      delete state.sessions[body.sessionRef];
+      delete state.connections[body.sessionRef];
+      delete state.connectionInventories[body.sessionRef];
+      this.#bumpWorld(state, previous.activeWorldRef);
+      state.replay[replayKey] = { digest: admission.requestDigest, response };
+    });
+    return response;
+  }
+  /**
+   * G-L: Workshop calls this only after its provider confirmed persistent deletion support
+   * (requireSessionDeleteSupported), before deleting. Canvas atomically clears any selection
+   * and from then on answers SESSION_NOT_FOUND for this sessionRef. Irreversible. Canvas
+   * never deletes a Session and never reports one deleted.
+   */
+  async #retire(body) {
+    const { replayKey, prior, facts } = this.#facts(body, 'RetireSessionSelection');
+    const admission = validateCurrentRequest(WIRE, 'RetireSessionSelection', body, facts);
+    if (prior) return prior.response;
+    const retired = this.store.snapshot.retiredSessions?.[body.sessionRef];
+    // Already retired (e.g. Workshop retrying after a failed deletion): same retirement.
+    if (retired) return validateResponse(WIRE, 'RetireSessionSelection', answer(body,
+      { sessionRef: body.sessionRef, releasedWorldRef: null,
+        selectionRevision: retired.selectionRevision }));
+    if (Object.values(this.store.snapshot.pending)
+      .some(row => row.body?.sessionRef === body.sessionRef))
+      throw fail('TRANSACTION_CONFLICT');
+    const previous = this.current(body.sessionRef);
+    const result = { sessionRef: body.sessionRef,
+      releasedWorldRef: previous ? previous.activeWorldRef : null,
+      selectionRevision: rev('selection') };
+    const response = validateResponse(WIRE, 'RetireSessionSelection', answer(body, result));
+    await this.store.commit(state => {
+      if (state.sessions[body.sessionRef]?.selectionRevision !== previous?.selectionRevision ||
+          state.retiredSessions?.[body.sessionRef]) throw fail('STALE_REVISION');
+      delete state.sessions[body.sessionRef];
+      delete state.connections[body.sessionRef];
+      delete state.connectionInventories[body.sessionRef];
+      if (previous) this.#bumpWorld(state, previous.activeWorldRef);
+      state.retiredSessions ??= {};
+      state.retiredSessions[body.sessionRef] = { selectionRevision: result.selectionRevision };
+      state.replay[replayKey] = { digest: admission.requestDigest, response };
+    });
+    return response;
+  }
   async call(operation, raw) {
     let body;
     try {
@@ -974,7 +1152,16 @@ export class CanvasV5 {
       await this.ready;
       if (!this.store || this.store.unavailable) throw fail('CAPABILITY_UNAVAILABLE',
         'REQUIRED_FACT_UNKNOWN');
+      // G-L: a retired Session is unknown to every Canvas operation but its own retirement.
+      if (SEAM && body.sessionRef !== undefined && operation !== 'RetireSessionSelection' &&
+          this.store.snapshot.retiredSessions?.[body.sessionRef])
+        throw fail('SESSION_NOT_FOUND', 'SCOPE_DENIED');
       if (operation === 'SelectWorldConnection') return await this.#select(body);
+      if (operation === 'UnselectWorldConnection') return await this.#unselect(body);
+      if (operation === 'RetireSessionSelection') return await this.#retire(body);
+      if (operation === 'ListWorldSelections') return await this.#listWorldSelections(body);
+      if (operation === 'ReserveWorldRetirement') return await this.#reserveWorld(body);
+      if (operation === 'ReleaseWorldRetirement') return await this.#releaseWorld(body);
       if (operation === 'SwitchWorldConnection') return await this.#switch(body);
       if (operation === 'AnalyzeAffectedObjects') return await this.#analyze(body);
       if (operation === 'ApplyRecoverableCommit') return await this.#apply(body);
@@ -1031,6 +1218,12 @@ export function apply(ctx) {
     adapter: {
       get protocolHandshake() { return ctx.get?.('hanaworldsWorldAdapterV6')?.protocolHandshake; },
       call: (...args) => ctx.get?.('hanaworldsWorldAdapterV6')?.call(...args) },
+    // Canvas's consumption point for Workshop's session/v3 port; absent → fail closed.
+    sessions: { call: (...args) => {
+      const port = ctx.get?.('hanaworldsSessionV3');
+      if (typeof port?.call !== 'function') throw fail('CAPABILITY_UNAVAILABLE', 'REQUIRED_FACT_UNKNOWN');
+      return port.call(...args);
+    } },
     nativeFacts: { readScopedState: (...args) => {
       const current = ctx.get?.('hanaworldsLuantiNativeFacts');
       if (typeof current?.readScopedState !== 'function')
