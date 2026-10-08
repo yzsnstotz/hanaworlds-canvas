@@ -1,4 +1,4 @@
-# HanaWorlds Canvas 0.6.9 local world component
+# HanaWorlds Canvas 0.6.10 local world component
 
 The package exposes `hanaworldsCanvasV5` and consumes the public
 `hanaworldsWorldAdapterV6` port. It uses the root export of the released
@@ -8,7 +8,8 @@ account, grant, epoch, authorization, or protected region dependency in this
 local MVP protocol.
 
 For per-cell peer admission read `ctx.get('hanaworldsCanvasV5').protocolHandshake`
-(property, not method). It is Canvas's real `ProtocolHandshake`: canvas 5.0,
+(property, not method). It is Canvas's real `ProtocolHandshake`: canvas 5 at the
+minor the installed Contracts declare (5.0 on 0.5.3, 5.1 on 0.5.4),
 capabilities=[] because Contracts publishes no per-cell Canvas token. Check it
 with `protocolRequirement('canvas/v5', [])` / `checkProtocolCompatibility`.
 

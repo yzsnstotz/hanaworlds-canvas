@@ -24,14 +24,16 @@ const SESSION = 'session/v3';
 const canvasProtocol = contractProtocols.find(row => row.protocol === 'canvas');
 if (!canvasProtocol) throw new Error('CANVAS_PROTOCOL_UNDECLARED');
 const SEAM = canvasProtocol.minor >= 1;
-const PACKAGE_VERSION = '0.6.9';
+const PACKAGE_VERSION = '0.6.10';
 // The public wire defines canvas major 5, minor 0. Contracts publishes no
 // per-cell Canvas capability token; regional tokens describe the region port.
 const cellRequirement = protocolRequirement(WIRE, []);
 const cellProtocolHandshake = validateType('ProtocolHandshake', {
   profileVersion: 'protocol-handshake/v1', component: 'hanaworlds-canvas',
+  // The advertised minor is the one the installed Contracts declare for canvas/v5: Canvas
+  // implements every operation that minor adds (minor 1: the session-world seam).
   protocols: [{ protocol: cellRequirement.protocol, major: cellRequirement.major,
-    minor: cellRequirement.minMinor }], capabilities: [...cellRequirement.capabilities],
+    minor: canvasProtocol.minor }], capabilities: [...cellRequirement.capabilities],
   provenance: { packageName: 'hanaworlds-canvas', packageVersion: PACKAGE_VERSION,
     sourceRevision: null, artifactDigest: null } });
 // The one revision an unbound Session publishes (ReadWorldSelectionContext UNBOUND

@@ -20,7 +20,12 @@ test('real Cordis Canvas publicly advertises canvas/v5 and retains its region de
     const advertised = service.protocolHandshake;
     assert.ok(advertised, 'MISSING_PUBLIC_CANVAS_V5_PROTOCOL_HANDSHAKE');
     assert.equal(advertised.profileVersion, 'protocol-handshake/v1');
-    assert.deepEqual(advertised.protocols, [{ protocol: 'canvas', major: 5, minor: 0 }]);
+    // Canvas advertises the canvas/v5 minor the installed Contracts declare (5.0 on 0.5.3,
+    // 5.1 with the session-world seam on 0.5.4).
+    const declared = consumer.contractProtocols.find(row => row.protocol === 'canvas');
+    assert.deepEqual(advertised.protocols, [{ protocol: 'canvas', major: 5, minor: declared.minor }]);
+    assert.equal(checkProtocolCompatibility(advertised,
+      [protocolRequirement('canvas/v5', [], declared.minor)]).result, 'PROTOCOL_COMPATIBLE');
     assert.deepEqual(advertised.capabilities, []); // No published per-cell Canvas token exists.
     assert.equal(checkProtocolCompatibility(advertised, [cellRequirement]).result,
       'PROTOCOL_COMPATIBLE');

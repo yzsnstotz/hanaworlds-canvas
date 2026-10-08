@@ -1,6 +1,6 @@
 # HanaWorlds Canvas
 
-Stage 1 local world Canvas `0.6.9` component candidate, exposing `canvas/v5`
+Stage 1 local world Canvas `0.6.10` component candidate, exposing `canvas/v5`
 and consuming the public `world-adapter/v6` port. It owns current local world
 selection, object footprints, recoverable apply/readback, durable history and
 same-transaction Undo. `0.5.0` implements Contracts 0.5.0 `canvas-region/v1`: region commits over
@@ -160,6 +160,14 @@ only that wire's ids at the Contracts-declared minor, and before any region read
 write checks the region port's and the per-cell port's (`hanaworldsWorldAdapterV6`)
 `protocolHandshake`. Nothing is dropped: an Adapter id outside both wires stops Canvas at
 load.
+
+### Released Contracts v0.5.4 (0.6.10)
+
+Branch `codex/f-canvas-contract-adapt-01-v054`: the dependency resolves to the released tag
+`v0.5.4` commit `85687fc3811e4c8ee6e69410d46d8026e19d2c75` (codeload tarball, lockfile
+integrity); Canvas advertises `hanaworlds-contracts@0.5.4` and `canvas` 5.1 in its
+`protocolHandshake` (the minor is the one the installed Contracts declare; 0.6.9 always
+advertised 5.0). Otherwise identical to 0.6.9.
 
 ### Candidate pin: Contracts v0.5.4-rc.1 (0.6.8)
 
