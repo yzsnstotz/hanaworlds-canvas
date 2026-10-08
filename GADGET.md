@@ -1,4 +1,4 @@
-# HanaWorlds Canvas 0.6.1 local world component
+# HanaWorlds Canvas 0.6.2 local world component
 
 The package exposes `hanaworldsCanvasV5` and consumes the public
 `hanaworldsWorldAdapterV6` port. It uses the Contracts 0.5.0 root export from
@@ -152,6 +152,17 @@ The client mounts the same strict descriptor through `ctx.remote.$mount`, then r
 The global sidebar/main slot id is `hanaworlds-canvas-objects-history`.
 No Desktop private transport or sibling plugin imports are used. All visible
 history metadata is owned by Canvas and is separate from Contracts wire rows.
+
+Since 0.6.2 the same namespace also has `actions(sessionRef)` and
+`undo(sessionRef, objectRef, historyTransactionId)` (strict descriptors, mounted
+together). `actions` is Canvas's `readHistoryActions` reduced to Undo: per object,
+whether its latest entry can be undone now, or Canvas's named reason. `undo` is one
+canvas/v5 `Undo` of exactly the clicked entry. The Host builds the request only from
+what Canvas published for the Session's stored binding (world, revisions, localContext);
+the renderer cannot supply a world, revision or context. Canvas re-validates the history
+head, revisions and actual world cells, then commits the whole transaction or rolls it
+back. The App panel shows 撤回这笔 → 确认撤回 only on that entry and re-reads afterwards.
+Sample mode and the 47601 `/objects` page stay read-only. Redo stays out of the panel.
 
 
 ## 本机对象与历史网页

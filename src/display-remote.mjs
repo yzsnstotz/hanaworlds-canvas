@@ -21,6 +21,37 @@ export const displayDescriptor = {
       create: () => z.string().min(1).nullable() } }],
   result: { mode: 'strict', typeSymbol: 'hanaworlds-canvas#ObjectsHistoryDisplay', create: displaySchema },
 };
+const ref = (name, typeSymbol, nullable = false) => ({ name, wire: name, source: 'json',
+  codec: { mode: 'strict', typeSymbol, create: () => nullable ? z.string().min(1).nullable() : z.string().min(1) } });
+const undoStep = () => z.object({ available: z.boolean(), reason: z.string().nullable(),
+  historyTransactionId: z.string().nullable() });
+// Per object: whether its latest committed entry can be undone now, and if not, Canvas's named reason.
+const actionsSchema = () => z.object({
+  state: z.enum(['NO_SESSION', 'NO_WORLD', 'EMPTY', 'READY']), worldRef: z.string().nullable(),
+  objects: z.array(z.object({ objectRef: z.string(), mode: z.enum(['CELL', 'REGION']),
+    applied: z.boolean(), undo: undoStep() })),
+});
+export const actionsDescriptor = {
+  id: 'hanaworlds-canvas#hanaworldsCanvasDisplay/actions',
+  service: 'hanaworldsCanvasDisplay', namespace: 'hanaworldsCanvasDisplay', method: 'actions',
+  invocation: { kind: 'direct' },
+  parameters: [ref('sessionRef', 'hanaworlds-canvas#DisplaySessionRef', true)],
+  result: { mode: 'strict', typeSymbol: 'hanaworlds-canvas#HistoryActionsDisplay', create: actionsSchema },
+};
+// The renderer names only the row the person clicked. World, revisions, context and the
+// transaction itself are taken by the Host from Canvas's own durable Session binding.
+export const undoDescriptor = {
+  id: 'hanaworlds-canvas#hanaworldsCanvasDisplay/undo',
+  service: 'hanaworldsCanvasDisplay', namespace: 'hanaworldsCanvasDisplay', method: 'undo',
+  invocation: { kind: 'direct' },
+  parameters: [ref('sessionRef', 'hanaworlds-canvas#DisplaySessionRef'),
+    ref('objectRef', 'hanaworlds-canvas#DisplayObjectRef'),
+    ref('historyTransactionId', 'hanaworlds-canvas#DisplayTransactionRef')],
+  result: { mode: 'strict', typeSymbol: 'hanaworlds-canvas#DisplayUndoResult', create: () => z.object({
+    status: z.string(), transactionId: z.string(), originTransactionId: z.string(),
+    objectRef: z.string(), view: displaySchema() }) },
+};
+const descriptors = [displayDescriptor, actionsDescriptor, undoDescriptor];
 export const displayHostContribution = { package: 'hanaworlds-canvas-display', face: 'host',
-  schemas: [], invocations: [displayDescriptor], model: {} };
-export const displayClientContribution = { package: 'hanaworlds-canvas-display', descriptors: [displayDescriptor] };
+  schemas: [], invocations: descriptors, model: {} };
+export const displayClientContribution = { package: 'hanaworlds-canvas-display', descriptors };

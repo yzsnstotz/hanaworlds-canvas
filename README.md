@@ -1,6 +1,6 @@
 # HanaWorlds Canvas
 
-Stage 1 local world Canvas `0.6.1` component candidate, exposing `canvas/v5`
+Stage 1 local world Canvas `0.6.2` component candidate, exposing `canvas/v5`
 and consuming the public `world-adapter/v6` port. It owns current local world
 selection, object footprints, recoverable apply/readback, durable history and
 same-transaction Undo. `0.5.0` implements Contracts 0.5.0 `canvas-region/v1`: region commits over
@@ -143,10 +143,36 @@ each mounted namespace is the traced child Service `remote.<namespace>`.
 runs the shipped `lib/client.js` against the official Client registry/Remote and
 Host Gateway over an explicit in-process FIXTURE carrier.
 The Host selects the world from the stored Session binding; the renderer cannot
-supply a world or transaction. No write method is exposed. The read waits for
+supply a world or transaction. The read waits for
 pending store commits, uses current public footprints and returns a cloned
 projection without a store commit or replay. Global history order follows
 recorded commit times; old untimestamped rows keep their durable order.
+
+### Undo from the App panel (0.6.2)
+
+The panel's live mode (not the sample) offers **撤回这笔** on each object's latest
+entry when Canvas's own `readHistoryActions` offers it, and asks **确认撤回** first.
+Two more Typert methods on `hanaworldsCanvasDisplay`:
+
+- `actions(sessionRef)` → `{state, worldRef, objects:[{objectRef, mode, applied,
+  undo:{available, reason, historyTransactionId}}]}`. Read-only. Reasons are Canvas's:
+  `NOTHING_TO_UNDO`, `WORLD_CHANGED_SINCE`, `TRANSACTION_PENDING`, `REGION_UNDO_HAS_NO_REDO`.
+- `undo(sessionRef, objectRef, historyTransactionId)` → `{status:'VERIFIED',
+  transactionId, originTransactionId, objectRef, view}`. The renderer sends only the
+  clicked row. The Host re-reads `readHistoryActions` for the Session's stored binding,
+  refuses with `canvas/undo-rejected` (`details.reason`: Canvas's reason, `HISTORY_MOVED`
+  when the clicked row is no longer the latest entry, `OBJECT_NOT_FOUND`, `NO_WORLD`),
+  and otherwise sends one canvas/v5 `Undo` with exactly the published revisions and
+  localContext. Canvas re-checks the head, revisions and actual cells; a failure is
+  `canvas/undo-failed` with Canvas's code (e.g. `READBACK_MISMATCH`, `ROLLED_BACK`,
+  `RECOVERY_PENDING`) and writes nothing visible. `view` is Canvas's own read after commit.
+  Calls are serialised in the service; a repeated click finds `NOTHING_TO_UNDO`.
+
+This is Canvas's own transaction path and it does not call Workshop. An Undo made here
+is a Canvas history row like any other; how Workshop's `ReadCurrentUndoStatus` presents
+it afterwards is Workshop's public behaviour and is not tested here. Region entries stay named, not offered. Redo is not offered in the panel.
+`test/display-client-remote.test.mjs` runs the shipped `lib/client.js` through the
+official Client Remote and Host Gateway (FIXTURE carrier) against a FIXTURE world file.
 
 Successful per-cell BUILD/Undo and regional commit/Undo save `displayMetadata`
 in the same finalized durable transaction as history: `committedAt` is captured

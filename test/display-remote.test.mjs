@@ -39,3 +39,27 @@ test('the single Canvas package entry automatically registers display in a real 
     assert.deepEqual(result, { state: 'NO_SESSION', worldRef: null, objects: [], history: [] });
   } finally { await ctx.fiber.dispose(); await rm(profile, { recursive: true, force: true }); }
 });
+
+test('display namespace has exactly read/actions/undo, and undo accepts only the clicked row', async () => {
+  const ctx = new Context();
+  await ctx.plugin(TypertRegistry);
+  const calls = [];
+  ctx.provide('hanaworldsCanvasV5', {
+    async readObjectsHistory() { return { state: 'EMPTY', worldRef: 'world-1', objects: [], history: [] }; },
+    async readHistoryActions(sessionRef) { calls.push(['actions', sessionRef]); return { state: 'EMPTY', worldRef: 'world-1', objects: [] }; },
+    async call(...args) { calls.push(['call', ...args]); throw new Error('must not be called'); } });
+  const fiber = ctx.plugin(displayPlugin); await fiber;
+  const gateway = new TypertGatewayService(ctx, { websocketHeartbeatIntervalMs: 2000, streamInboxBytes: 262144 });
+  const invoke = (method, args) => gateway.invoke({ namespace: 'hanaworldsCanvasDisplay', method, args });
+  assert.deepEqual(await invoke('actions', { sessionRef: null }), { state: 'NO_SESSION', worldRef: null, objects: [] });
+  assert.deepEqual(await invoke('actions', { sessionRef: 's-1' }), { state: 'EMPTY', worldRef: 'world-1', objects: [] });
+  // Renderer-supplied world/revisions/context are rejected by the strict descriptor.
+  await assert.rejects(() => invoke('undo', { sessionRef: 's-1', objectRef: 'o', historyTransactionId: 't', worldRef: 'w' }));
+  await assert.rejects(() => invoke('undo', { sessionRef: 's-1', objectRef: 'o', historyTransactionId: 't', localContext: {} }));
+  await assert.rejects(() => invoke('undo', { sessionRef: null, objectRef: 'o', historyTransactionId: 't' }));
+  await assert.rejects(() => invoke('undo', { sessionRef: 's-1', objectRef: 'o', historyTransactionId: 't' }),
+    error => error.details?.reason === 'OBJECT_NOT_FOUND');
+  await assert.rejects(() => invoke('redo', { sessionRef: 's-1', objectRef: 'o', historyTransactionId: 't' }));
+  assert.equal(calls.filter(([kind]) => kind === 'call').length, 0);
+  await fiber.dispose(); await ctx.fiber.dispose();
+});

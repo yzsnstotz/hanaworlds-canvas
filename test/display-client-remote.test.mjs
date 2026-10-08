@@ -32,15 +32,27 @@ function loadClientBundle(source) {
   return factory(id => { if (id === 'react') return react; throw new Error(`unexpected require ${id}`); });
 }
 
-async function compose(seed) {
+async function compose(seed, { fixtureWorld = false } = {}) {
   const profile = await mkdtemp(join(tmpdir(), 'canvas-client-remote-'));
-  if (seed) await seed(join(profile, 'data', 'hanaworlds-canvas'));
+  const store = join(profile, 'data', 'hanaworlds-canvas');
+  if (seed) await seed(store);
   const host = new Context();
   await host.plugin(TypertRegistry);
   host.provide('dshHomePath', (...parts) => join(profile, ...parts));
+  // FIXTURE: the isolated example world file stands in for the Adapter and native facts.
+  let world = null;
+  if (fixtureWorld) {
+    const { openUndoFixtureWorld } = await import('../scripts/undo-fixture-world.mjs');
+    const { undoWorldFile } = await import('../scripts/undo-host.mjs');
+    world = await openUndoFixtureWorld(undoWorldFile(store));
+    host.provide('hanaworldsWorldAdapterV6', world.adapter);
+    host.provide('hanaworldsLuantiNativeFacts', world.nativeFacts);
+  }
   const { default: canvasPlugin } = await import(process.env.CANVAS_ENTRY ?? new URL('../src/index.mjs', import.meta.url).href);
   await host.plugin(canvasPlugin);
-  await host.get('hanaworldsCanvasV5').ready;
+  const canvas = host.get('hanaworldsCanvasV5');
+  await canvas.ready;
+  if (world) world.readWorldRevision = () => canvas.readWorldRevision('undo-fixture-world');
   const gateway = new TypertGatewayService(host, { websocketHeartbeatIntervalMs: 2000, streamInboxBytes: 262144 });
   const wire = [];
   const connection = { isLoopback: true, generation: { getSnapshot: () => undefined },
@@ -70,7 +82,7 @@ async function compose(seed) {
   await fiber;
   const close = async () => { await fiber.dispose(); await client.fiber.dispose(); await host.fiber.dispose();
     await rm(profile, { recursive: true, force: true }); };
-  return { gateway, wire, registered, close };
+  return { gateway, wire, registered, close, world, canvas };
 }
 
 test('shipped Canvas client reads hanaworldsCanvasDisplay through the public DSH Remote (FIXTURE carrier)', async () => {
@@ -115,4 +127,105 @@ test('populated isolated FIXTURE Store reads back READY objects/history through 
       await writeFile(process.env.CANVAS_CLIENT_READY_OUT, JSON.stringify({ fixture: true, artifact, sessionRef: undoSessionRef, read, wire }, null, 2));
     }
   } finally { await close(); }
+});
+
+const panel = (registered, sessionRef) => registered.find(entry => entry.meta.name === 'main')
+  .component({ useSessions: select => select({ byId: { [sessionRef]: { id: sessionRef, retainedBy: { mainView: 1 } } } }) });
+const historyWrites = world => world.calls.filter(call => /History/.test(call.operation)).length;
+const reasonOf = async promise => { try { await promise; } catch (error) { return error.details?.reason ?? error.code; } return 'RESOLVED'; };
+
+test('shipped client undoes exactly the clicked latest entry through canvas/v5 Undo (FIXTURE world)', async () => {
+  const { createUndoExample } = await import('../scripts/undo-example.mjs');
+  const { undoSessionRef } = await import('../scripts/undo-fixture-world.mjs');
+  const { gateway, wire, registered, close, world, canvas } = await compose(directory => createUndoExample(directory), { fixtureWorld: true });
+  try {
+    const element = panel(registered, undoSessionRef);
+    const actions = await element.props.readActions(undoSessionRef);
+    assert.equal(actions.state, 'READY');
+    const [first, second] = actions.objects;
+    assert.deepEqual(first.undo, { available: false, reason: 'WORLD_CHANGED_SINCE', historyTransactionId: null });
+    assert.deepEqual(second.undo, { available: true, reason: null, historyTransactionId: 'undo-fixture-cell-2' });
+    const writes0 = historyWrites(world);
+    // Not offered, and a row that is not the latest entry: named refusals, no world call.
+    assert.equal(await reasonOf(element.props.undo(undoSessionRef, first.objectRef, 'undo-fixture-cell-1')), 'WORLD_CHANGED_SINCE');
+    assert.equal(await reasonOf(element.props.undo(undoSessionRef, second.objectRef, 'undo-fixture-cell-1')), 'HISTORY_MOVED');
+    assert.equal(historyWrites(world), writes0);
+    const brick = [[8, 2, 8], [9, 2, 8], [10, 2, 8]];
+    assert.deepEqual(world.readCells(brick).map(cell => cell.nodeName), ['fixture:brick', 'fixture:brick', 'fixture:brick']);
+    const result = await element.props.undo(undoSessionRef, second.objectRef, 'undo-fixture-cell-2');
+    assert.equal(result.status, 'VERIFIED');
+    assert.equal(result.originTransactionId, 'undo-fixture-cell-2');
+    assert.deepEqual(world.readCells(brick).map(cell => cell.nodeName), ['air', 'air', 'air']);
+    // The returned view is Canvas's own public read after commit.
+    assert.deepEqual(result.view, await gateway.invoke({ namespace: 'hanaworldsCanvasDisplay', method: 'read', args: { sessionRef: undoSessionRef } }));
+    const rows = result.view.history.filter(row => row.objectRef === second.objectRef);
+    assert.deepEqual(rows.map(row => row.status), ['UNDONE', 'UNDONE']);
+    assert.equal(result.view.objects.find(object => object.objectRef === second.objectRef).occupiedCells, 0);
+    assert.equal(result.view.objects.find(object => object.objectRef === first.objectRef).occupiedCells, 2);
+    const head = canvas.store.snapshot.history[second.objectRef].at(-1);
+    assert.equal(head.transactionId, result.transactionId);
+    assert.equal(head.originTransactionId, 'undo-fixture-cell-2');
+    // A second click on the same row: no second Undo transaction, no world write.
+    const writes1 = historyWrites(world);
+    assert.equal(await reasonOf(element.props.undo(undoSessionRef, second.objectRef, 'undo-fixture-cell-2')), 'NOTHING_TO_UNDO');
+    assert.equal(historyWrites(world), writes1);
+    assert.equal(canvas.store.snapshot.history[second.objectRef].length, 2);
+    assert.deepEqual((await element.props.readActions(undoSessionRef)).objects[1].undo,
+      { available: false, reason: 'NOTHING_TO_UNDO', historyTransactionId: null });
+    assert.deepEqual(Object.keys(canvas.store.snapshot.pending), []);
+    if (process.env.CANVAS_CLIENT_UNDO_OUT) {
+      const { writeFile } = await import('node:fs/promises');
+      await writeFile(process.env.CANVAS_CLIENT_UNDO_OUT, JSON.stringify({ fixture: true, artifact, sessionRef: undoSessionRef,
+        actions, result, worldCalls: world.calls, wire }, null, 2));
+    }
+  } finally { await close(); }
+});
+
+test('external world edit after the build: panel Undo is refused whole, nothing written (FIXTURE world)', async () => {
+  const { createUndoExample } = await import('../scripts/undo-example.mjs');
+  const { undoSessionRef } = await import('../scripts/undo-fixture-world.mjs');
+  const { undoWorldFile } = await import('../scripts/undo-host.mjs');
+  const seed = async directory => {
+    await createUndoExample(directory);
+    const file = undoWorldFile(directory);
+    const value = JSON.parse(await readFile(file, 'utf8'));
+    value.nodes['9,2,8'] = { position: [9, 2, 8], nodeName: 'fixture:external', param1: 0, param2: 0, metadata: {}, inventory: {}, timer: null };
+    const { writeFile } = await import('node:fs/promises');
+    await writeFile(file, JSON.stringify(value), { mode: 0o600 });
+  };
+  const { registered, close, world, canvas } = await compose(seed, { fixtureWorld: true });
+  try {
+    const element = panel(registered, undoSessionRef);
+    const before = structuredClone(canvas.store.snapshot);
+    const second = (await element.props.readActions(undoSessionRef)).objects[1];
+    assert.equal(second.undo.historyTransactionId, 'undo-fixture-cell-2');
+    assert.equal(await reasonOf(element.props.undo(undoSessionRef, second.objectRef, 'undo-fixture-cell-2')), 'READBACK_MISMATCH');
+    assert.equal(historyWrites(world), 0);
+    assert.deepEqual(world.readCells([[8, 2, 8], [9, 2, 8], [10, 2, 8]]).map(cell => cell.nodeName),
+      ['fixture:brick', 'fixture:external', 'fixture:brick']);
+    assert.deepEqual(canvas.store.snapshot.history, before.history);
+    assert.deepEqual(Object.keys(canvas.store.snapshot.pending), []);
+  } finally { await close(); }
+});
+
+test('client view offers Undo only on the published latest row, and never in sample mode', async () => {
+  const React = (await import('react')).default;
+  const { renderToStaticMarkup } = await import('react-dom/server');
+  const { ObjectsHistoryView } = await import('../src/display-view.mjs');
+  const view = { state: 'READY', worldRef: 'w', objects: [{ objectRef: 'a', name: '小屋', occupiedCells: 3, bounds: null },
+    { objectRef: 'b', name: null, occupiedCells: 2, bounds: null }],
+    history: [{ transactionId: 'b-1', objectRef: 'b', objectName: null, sequence: 1, committedAt: null, mode: 'CELL', affectedCells: 2, status: 'COMMITTED' },
+      { transactionId: 'a-1', objectRef: 'a', objectName: '小屋', sequence: 1, committedAt: null, mode: 'CELL', affectedCells: 3, status: 'COMMITTED' }] };
+  const actions = { state: 'READY', worldRef: 'w', objects: [
+    { objectRef: 'a', mode: 'CELL', applied: true, undo: { available: true, reason: null, historyTransactionId: 'a-1' } },
+    { objectRef: 'b', mode: 'CELL', applied: true, undo: { available: false, reason: 'WORLD_CHANGED_SINCE', historyTransactionId: null } }] };
+  const undo = { confirming: null, busy: false, message: null, error: null, request() {}, cancel() {}, confirm() {} };
+  const render = props => renderToStaticMarkup(React.createElement(ObjectsHistoryView, { view, sample: false, ...props }));
+  const live = render({ actions, undo });
+  assert.equal(live.split('撤回这笔').length - 1, 1);
+  assert.match(live, /只撤回世界最近一次改动/);
+  assert.match(render({ actions, undo: { ...undo, confirming: 'a-1' } }), /确认撤回/);
+  assert.doesNotMatch(render({}), /撤回这笔/);
+  assert.match(render({}), /当前世界 · 只读/);
+  assert.doesNotMatch(render({ actions, undo, sample: true }), /撤回这笔/);
 });
