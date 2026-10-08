@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { digestValue, encodeRegionBlock, regionChunksOfBox } from 'hanaworlds-contracts';
 import { CanvasV5, CanvasStore, CanvasRegionV1, ADAPTER_CELL_REQUIREMENT,
-  ADAPTER_REGION_REQUIREMENT } from '../src/index.mjs';
+  ADAPTER_REGION_REQUIREMENT, apply as applyCanvas } from '../src/index.mjs';
 import { openUndoFixtureWorld, undoConnection, undoSessionRef,
   undoWorldRef } from '../scripts/undo-fixture-world.mjs';
 import { undoWorldFile } from '../scripts/undo-host.mjs';
@@ -214,5 +214,55 @@ test('a region write needs both ports compatible and is refused before any regio
       assert.equal(committed.result.status, 'VERIFIED');
       assert.deepEqual(env.world.readCells([[16, 2, 16], [17, 2, 16]]).map(c => c.nodeName),
         ['fixture:stone', 'fixture:stone']);
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+
+/*
+ * FIXTURE in the shape the Adapter publicly documents (F-AD-WORLD-MANAGE-01 REPORT,
+ * "公开 world-adapter/v6 协议握手读取", SOURCE_PUBLIC_PROVIDER): Host service
+ * hanaworldsWorldAdapterV6, `protocolHandshake` is a property (not a method),
+ * world-adapter 6.1 with exactly the two v6 ids, provenance source/digest null, and
+ * `contractHandshake` a separate property naming the Adapter's own package. Not the
+ * real Adapter; it proves Canvas's apply() reads that public location.
+ */
+const publicV6Handshake = () => ({ profileVersion: 'protocol-handshake/v1',
+  component: 'hanaworlds-adapter-luanti',
+  protocols: [{ protocol: 'world-adapter', major: 6, minor: 1 }],
+  capabilities: ['world-adapter/v6:callback-free-write', 'world-adapter/v6:write-path-state-facts'],
+  provenance: { packageName: 'hanaworlds-adapter-luanti', packageVersion: '0.7.4',
+    sourceRevision: null, artifactDigest: null } });
+const otherPackage = { contracts: 'hanaworlds-contracts@0.5.2' };
+
+test('apply() reads the per-cell handshake from the public hanaworldsWorldAdapterV6 property',
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'canvas-g3-public-'));
+    try {
+      const run = async port => {
+        const ctx = { get: name => name === 'dshHomePath' ? (...p) => join(directory, ...p) :
+          name === 'hanaworldsWorldAdapterV6' ? port : null, provide: () => {} };
+        const canvas = applyCanvas(ctx);
+        await canvas.ready;
+        try { return { ok: canvas.adapterCompatible() }; }
+        catch (error) { return { error: error.publicError ?? error }; }
+      };
+      const call = async () => null;
+      const accepted = await run({ protocolHandshake: publicV6Handshake(),
+        contractHandshake: otherPackage, call });
+      assert.equal(accepted.ok?.result, 'PROTOCOL_COMPATIBLE', JSON.stringify(accepted.error));
+      assert.equal(accepted.ok.component, 'hanaworlds-adapter-luanti');
+      // The Adapter's contractHandshake is another package identity; it never decides.
+      assert.equal(accepted.ok.provenance.sourceRevision, null);
+      // Wrong places are not read: no service, only contractHandshake, a method, the region port.
+      assert.equal((await run(null)).error.code, 'UNSUPPORTED_VERSION');
+      assert.equal((await run({ contractHandshake: otherPackage, call })).error.code,
+        'UNSUPPORTED_VERSION');
+      assert.equal((await run({ protocolHandshake: undefined,
+        handshake: () => publicV6Handshake(), call })).error.code, 'UNSUPPORTED_VERSION');
+      assert.equal((await run({ protocolHandshake: { ...publicV6Handshake(),
+        protocols: [{ protocol: 'world-adapter-region', major: 1, minor: 1 }] }, call }))
+        .error.code, 'UNSUPPORTED_VERSION');
+      if (g3) assert.equal((await run({ protocolHandshake: { ...publicV6Handshake(),
+        capabilities: ['world-adapter/v6:callback-free-write'] }, call })).error.code,
+      'CAPABILITY_UNAVAILABLE');
     } finally { await rm(directory, { recursive: true, force: true }); }
   });
