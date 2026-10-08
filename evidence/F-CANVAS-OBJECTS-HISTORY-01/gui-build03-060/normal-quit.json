@@ -1,0 +1,12 @@
+{
+  "observedAt": "2026-10-07T10:49:07.369Z",
+  "apps": [
+    {
+      "displayName": "HanaWorlds",
+      "id": "com.hanaworlds.app",
+      "isRunning": false,
+      "lastUsedDate": 812937600,
+      "useCount": 3
+    }
+  ]
+}

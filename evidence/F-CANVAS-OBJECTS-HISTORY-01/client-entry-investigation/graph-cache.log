@@ -1,0 +1,21 @@
+{
+  "real": "official ClientModuleRegistry+Cordis Context",
+  "fixture": "loader entries and own run package files, no App/profile",
+  "oldManifest": "no dsh.client",
+  "initialGraph": [],
+  "afterPackageReplacementAndLifecycleEvent": [],
+  "freshRegistryGraph": [
+    {
+      "id": "hanaworlds-canvas",
+      "url": "plugins/??hanaworlds-canvas/client.js&rev=9c019b34df74",
+      "rev": "9c019b34df74",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-session",
+        "@deepseek-ai/dsh-api-gateway"
+      ]
+    }
+  ],
+  "success": true
+}

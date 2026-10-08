@@ -1,0 +1,158 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "description": "Existing Canvas readScopedState(connectionRef, positions) raw return, no new wire. Validate subtypes with public Contracts validateType for x-order/x-uniqueBy/KNOWN digest semantic checks; Canvas additionally matches current world/profile/positions. Additional wrapper fields were never consumed.",
+  "type": "object",
+  "required": [
+    "worldRef",
+    "stateProfile",
+    "cells"
+  ],
+  "properties": {
+    "worldRef": {
+      "$ref": "#/definitions/Ref"
+    },
+    "stateProfile": {
+      "$ref": "#/definitions/StateProfile"
+    },
+    "cells": {
+      "$ref": "#/definitions/ScopedCells"
+    }
+  },
+  "additionalProperties": true,
+  "definitions": {
+    "Digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "x-typeName": "Digest"
+    },
+    "NodeFields": {
+      "type": "array",
+      "items": [
+        {
+          "const": "nodeName"
+        },
+        {
+          "const": "param1"
+        },
+        {
+          "const": "param2"
+        }
+      ],
+      "minItems": 3,
+      "maxItems": 3,
+      "additionalItems": false,
+      "x-typeName": "NodeFields",
+      "x-order": "fixed explicit complete node fields"
+    },
+    "Position": {
+      "type": "array",
+      "items": [
+        {
+          "$ref": "#/definitions/SafeInt"
+        },
+        {
+          "$ref": "#/definitions/SafeInt"
+        },
+        {
+          "$ref": "#/definitions/SafeInt"
+        }
+      ],
+      "minItems": 3,
+      "maxItems": 3,
+      "additionalItems": false,
+      "x-typeName": "Position",
+      "x-order": "x,y,z"
+    },
+    "Ref": {
+      "type": "string",
+      "minLength": 1,
+      "x-typeName": "Ref",
+      "x-normalization": "NONE; exact Unicode scalar sequence; never trim/lower/NFC; not a path"
+    },
+    "SafeInt": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991,
+      "x-typeName": "SafeInt"
+    },
+    "ScopedCell": {
+      "type": "object",
+      "properties": {
+        "position": {
+          "$ref": "#/definitions/Position"
+        },
+        "availability": {
+          "$ref": "#/definitions/ScopedCellAvailability"
+        },
+        "stateDigest": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "position",
+        "availability",
+        "stateDigest"
+      ],
+      "additionalProperties": false,
+      "x-typeName": "ScopedCell"
+    },
+    "ScopedCellAvailability": {
+      "enum": [
+        "KNOWN",
+        "UNKNOWN",
+        "UNLOADED"
+      ],
+      "x-typeName": "ScopedCellAvailability"
+    },
+    "ScopedCells": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/ScopedCell"
+      },
+      "minItems": 1,
+      "x-typeName": "ScopedCells",
+      "x-order": "position numeric x,y,z",
+      "x-uniqueBy": "position"
+    },
+    "StateProfile": {
+      "type": "object",
+      "properties": {
+        "profileVersion": {
+          "const": "state-profile/v2"
+        },
+        "nodeFields": {
+          "$ref": "#/definitions/NodeFields"
+        },
+        "metadataMode": {
+          "const": "exact"
+        },
+        "inventoryMode": {
+          "const": "exact"
+        },
+        "timerMode": {
+          "const": "exact"
+        },
+        "derivedLightMode": {
+          "const": "recompute-with-readback"
+        }
+      },
+      "required": [
+        "profileVersion",
+        "nodeFields",
+        "metadataMode",
+        "inventoryMode",
+        "timerMode",
+        "derivedLightMode"
+      ],
+      "additionalProperties": false,
+      "x-typeName": "StateProfile"
+    }
+  }
+}

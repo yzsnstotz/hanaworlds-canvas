@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "hanaworlds-contracts": "file:../../../S1-CONTRACT-REGION-V1-01/_evidence/final-052/hanaworlds-contracts-0.5.2.tgz"
+  }
+}

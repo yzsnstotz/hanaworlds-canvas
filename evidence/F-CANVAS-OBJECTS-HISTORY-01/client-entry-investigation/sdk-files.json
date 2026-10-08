@@ -1,0 +1,86 @@
+[
+  {
+    "path": "/Applications/HanaWorlds.app/Contents/Resources/hanaworlds-dsh/node_modules/@deepseek-ai/cordis/lib/index.js",
+    "bytes": 60361,
+    "sha256": "6a9394c0877ff45218818c6e815edd038f8057e1a1deb390a8d43ec81c57691e",
+    "basis": "official public SDK documentation/exported entry; targeted sections only, not full-file context read"
+  },
+  {
+    "path": "/Applications/HanaWorlds.app/Contents/Resources/hanaworlds-dsh/node_modules/@deepseek-ai/dsh-client-modules/README.md",
+    "bytes": 15516,
+    "sha256": "2d665361eefff4770fe935d9c7e606049cf82b15b73b53e70bd06b10c9595da2",
+    "basis": "official public SDK documentation/exported entry; targeted sections only, not full-file context read"
+  },
+  {
+    "path": "/Applications/HanaWorlds.app/Contents/Resources/hanaworlds-dsh/node_modules/@deepseek-ai/dsh-client-modules/lib/index.js",
+    "bytes": 41704,
+    "sha256": "03ea21df556256a61289bae762bd1831fff43d035d49b8926d6c0f0b30b0e073",
+    "basis": "official public SDK documentation/exported entry; targeted sections only, not full-file context read"
+  },
+  {
+    "path": "/Applications/HanaWorlds.app/Contents/Resources/hanaworlds-dsh/node_modules/@deepseek-ai/dsh-client-modules/lib/client.js",
+    "bytes": 40277,
+    "sha256": "6fa57df9f12225ea0644ed22bc149eadf7c21e5b0b43a8683c4081567b96374f",
+    "basis": "official public SDK documentation/exported entry; targeted sections only, not full-file context read"
+  },
+  {
+    "path": "/Applications/HanaWorlds.app/Contents/Resources/hanaworlds-dsh/node_modules/@deepseek-ai/dsh-api-gateway/README.md",
+    "bytes": 19280,
+    "sha256": "3cb6d9f5b332b539d83243b4190bafa0e255560781848f65d7c92cf893e1ea04",
+    "basis": "official public SDK documentation/exported entry; targeted sections only, not full-file context read"
+  },
+  {
+    "path": "/Applications/HanaWorlds.app/Contents/Resources/hanaworlds-dsh/node_modules/@deepseek-ai/dsh-api-gateway/lib/client.js",
+    "bytes": 82186,
+    "sha256": "e09e26fcd4849cd55683b9cc702dca896efce93a5af3968431c1c8a62147b9cf",
+    "basis": "official public SDK documentation/exported entry; targeted sections only, not full-file context read"
+  },
+  {
+    "path": "/Applications/HanaWorlds.app/Contents/Resources/hanaworlds-dsh/node_modules/@deepseek-ai/dsh-typert-registry/lib/client.js",
+    "bytes": 52899,
+    "sha256": "26fe17aab7e1cb9e28e55d984e30a7eb3d7e0482f7f38cf36e3d3ee65b3bed21",
+    "basis": "official public SDK documentation/exported entry; targeted sections only, not full-file context read"
+  },
+  {
+    "path": "/Applications/HanaWorlds.app/Contents/Resources/hanaworlds-dsh/node_modules/@deepseek-ai/dsh-client-ui-slots/README.md",
+    "bytes": 7784,
+    "sha256": "b85b6150f8225fb8b29454a0a411f76743e88c4c2b0f437806b8f112b71a992d",
+    "basis": "official public SDK documentation/exported entry; targeted sections only, not full-file context read"
+  },
+  {
+    "path": "/Applications/HanaWorlds.app/Contents/Resources/hanaworlds-dsh/node_modules/@deepseek-ai/dsh-client-ui-slots/lib/index.js",
+    "bytes": 23461,
+    "sha256": "57e1314e31a2015f30231e1e7596da658f1bb5cb64c103c4cf13381647412c99",
+    "basis": "official public SDK documentation/exported entry; targeted sections only, not full-file context read"
+  },
+  {
+    "path": "/Applications/HanaWorlds.app/Contents/Resources/hanaworlds-dsh/node_modules/@deepseek-ai/dsh-client-ui-renderer/lib/client.js",
+    "bytes": 75955,
+    "sha256": "ff99042d53a034cadad511ace442acfb3fa92f0ce86581de8611244e7664fb78",
+    "basis": "official public SDK documentation/exported entry; targeted sections only, not full-file context read"
+  },
+  {
+    "path": "/Applications/HanaWorlds.app/Contents/Resources/hanaworlds-dsh/node_modules/@deepseek-ai/dsh-client-ui-layout/README.md",
+    "bytes": 9892,
+    "sha256": "4750f70b0e69f1dd6025697a467b3bf7a99abf6abac42d0d5a96433dbe7bd9e3",
+    "basis": "official public SDK documentation/exported entry; targeted sections only, not full-file context read"
+  },
+  {
+    "path": "/Applications/HanaWorlds.app/Contents/Resources/hanaworlds-dsh/node_modules/@deepseek-ai/dsh-client-ui-sidebar/README.md",
+    "bytes": 10049,
+    "sha256": "b7d23797b7cdfea9935d9409490c2cc364d558690098e0e80b96408f1b72922f",
+    "basis": "official public SDK documentation/exported entry; targeted sections only, not full-file context read"
+  },
+  {
+    "path": "/Applications/HanaWorlds.app/Contents/Resources/hanaworlds-dsh/node_modules/@deepseek-ai/dsh-client-ui-session/README.md",
+    "bytes": 1748,
+    "sha256": "af6aec516b073237cb98181ff429e266fd3ceaad5ae3b6cd24e8ea1ab55da080",
+    "basis": "official public SDK documentation/exported entry; targeted sections only, not full-file context read"
+  },
+  {
+    "path": "/Applications/HanaWorlds.app/Contents/Resources/hanaworlds-dsh/node_modules/@deepseek-ai/dsh-client-ui-session/lib/client.js",
+    "bytes": 18540,
+    "sha256": "09e4fc1956d7679d876ede8c1e51712f00fb518e8dc2723855bb5f8ca34e270c",
+    "basis": "official public SDK documentation/exported entry; targeted sections only, not full-file context read"
+  }
+]

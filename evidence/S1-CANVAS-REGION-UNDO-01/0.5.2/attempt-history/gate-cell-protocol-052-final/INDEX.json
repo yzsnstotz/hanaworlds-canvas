@@ -1,0 +1,24 @@
+{
+  "files": [
+    {
+      "path": "cleanup.json",
+      "bytes": 197,
+      "sha256": "5e220ce6a2657934e8b3faf69402cceb12913c2ccbb40148e4cb0f76d72a083a"
+    },
+    {
+      "path": "inputs.json",
+      "bytes": 763,
+      "sha256": "3d39787e498c25490896be08291fa51f0b7bc552c69ef0c795f69a01090bc5d6"
+    },
+    {
+      "path": "runtime-resolution.log",
+      "bytes": 493,
+      "sha256": "10f4171bd57a5d3d72cf541affac799715347f1ddce92ba174da1ade12b483c4"
+    },
+    {
+      "path": "steps.json",
+      "bytes": 364,
+      "sha256": "5ccfd5949a72d596613f5bbc85cfb7ae82dd28915478c7e482bb6d3511932035"
+    }
+  ]
+}

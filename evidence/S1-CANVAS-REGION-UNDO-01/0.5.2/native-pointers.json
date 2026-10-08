@@ -1,0 +1,22 @@
+{
+  "thread_id": "01a113bb-9f35-7581-9d5d-8f5a5d823ab0",
+  "native": "/Users/yzliu/.codex/sessions/2026/10/07/rollout-2026-10-07T09-20-25-01a113bb-9f35-7581-9d5d-8f5a5d823ab0.jsonl",
+  "turn_context_line": 106,
+  "gate_actual_exit": 0,
+  "calls": [
+    {
+      "call_id": "call_XHTgl58xajKpvGHm7DSMmYZO",
+      "source_call_line": 370,
+      "source_output_line": 372,
+      "excerpt_call_line": 1,
+      "excerpt_output_line": 2
+    },
+    {
+      "call_id": "call_heWdfnXMvaXspwEKmoSXlk56",
+      "source_call_line": 377,
+      "source_output_line": 380,
+      "excerpt_call_line": 3,
+      "excerpt_output_line": 4
+    }
+  ]
+}

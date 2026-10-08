@@ -1,0 +1,157 @@
+[
+  {
+    "label": "runtime-resolution",
+    "argv": [
+      "npx",
+      "--yes",
+      "--package=node@24.13.1",
+      "--package=npm@11.8.0",
+      "-c",
+      "command -v node; command -v npm"
+    ],
+    "cwd": "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/cell-protocol-052-xbo5xtkk",
+    "exitCode": 0,
+    "seconds": 5.247432708041742
+  },
+  {
+    "label": "node-version",
+    "argv": [
+      "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/cell-protocol-052-xbo5xtkk/npm-cache/_npx/667390111e936fb1/node_modules/.bin/node",
+      "--version"
+    ],
+    "cwd": "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/cell-protocol-052-xbo5xtkk",
+    "exitCode": 0,
+    "seconds": 0.9138463329873048
+  },
+  {
+    "label": "npm-version",
+    "argv": [
+      "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/cell-protocol-052-xbo5xtkk/npm-cache/_npx/667390111e936fb1/node_modules/.bin/node",
+      "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/cell-protocol-052-xbo5xtkk/npm-cache/_npx/667390111e936fb1/node_modules/.bin/npm",
+      "--version"
+    ],
+    "cwd": "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/cell-protocol-052-xbo5xtkk",
+    "exitCode": 0,
+    "seconds": 0.0868171249749139
+  },
+  {
+    "label": "source-npm-ci",
+    "argv": [
+      "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/cell-protocol-052-xbo5xtkk/npm-cache/_npx/667390111e936fb1/node_modules/.bin/node",
+      "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/cell-protocol-052-xbo5xtkk/npm-cache/_npx/667390111e936fb1/node_modules/.bin/npm",
+      "ci",
+      "--ignore-scripts",
+      "--no-audit",
+      "--no-fund"
+    ],
+    "cwd": "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/cell-protocol-052-xbo5xtkk/source",
+    "exitCode": 0,
+    "seconds": 3.789202874992043
+  },
+  {
+    "label": "source-build",
+    "argv": [
+      "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/cell-protocol-052-xbo5xtkk/npm-cache/_npx/667390111e936fb1/node_modules/.bin/node",
+      "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/cell-protocol-052-xbo5xtkk/npm-cache/_npx/667390111e936fb1/node_modules/.bin/npm",
+      "run",
+      "build"
+    ],
+    "cwd": "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/cell-protocol-052-xbo5xtkk/source",
+    "exitCode": 0,
+    "seconds": 0.16222287499113008
+  },
+  {
+    "label": "consumer-install",
+    "argv": [
+      "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/cell-protocol-052-xbo5xtkk/npm-cache/_npx/667390111e936fb1/node_modules/.bin/node",
+      "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/cell-protocol-052-xbo5xtkk/npm-cache/_npx/667390111e936fb1/node_modules/.bin/npm",
+      "install",
+      "--prefix",
+      "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/cell-protocol-052-xbo5xtkk/consumer",
+      "--ignore-scripts",
+      "--no-audit",
+      "--no-fund",
+      "/Users/yzliu/.cache/hanaworlds-runs/S1-CONTRACT-REGION-V1-01/_evidence/final-052/hanaworlds-contracts-0.5.2.tgz"
+    ],
+    "cwd": "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/cell-protocol-052-xbo5xtkk",
+    "exitCode": 0,
+    "seconds": 0.32324216701090336
+  },
+  {
+    "label": "source-test",
+    "argv": [
+      "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/cell-protocol-052-xbo5xtkk/npm-cache/_npx/667390111e936fb1/node_modules/.bin/node",
+      "--test",
+      "test/protocol-handshake.test.mjs",
+      "test/local-world.test.mjs"
+    ],
+    "cwd": "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/cell-protocol-052-xbo5xtkk/source",
+    "exitCode": 0,
+    "seconds": 0.35139058402273804
+  },
+  {
+    "label": "source-types",
+    "argv": [
+      "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/cell-protocol-052-xbo5xtkk/npm-cache/_npx/667390111e936fb1/node_modules/.bin/node",
+      "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/cell-protocol-052-xbo5xtkk/source/node_modules/typescript/bin/tsc",
+      "--noEmit",
+      "--strict",
+      "--module",
+      "NodeNext",
+      "--moduleResolution",
+      "NodeNext",
+      "--target",
+      "ES2022",
+      "test/protocol-types.mts"
+    ],
+    "cwd": "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/cell-protocol-052-xbo5xtkk/source",
+    "exitCode": 0,
+    "seconds": 0.48238170804688707
+  },
+  {
+    "label": "npm-pack",
+    "argv": [
+      "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/cell-protocol-052-xbo5xtkk/npm-cache/_npx/667390111e936fb1/node_modules/.bin/node",
+      "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/cell-protocol-052-xbo5xtkk/npm-cache/_npx/667390111e936fb1/node_modules/.bin/npm",
+      "pack",
+      "--json",
+      "--pack-destination",
+      "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/_evidence/gate-cell-protocol-052-4d24eb8"
+    ],
+    "cwd": "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/cell-protocol-052-xbo5xtkk/source",
+    "exitCode": 0,
+    "seconds": 0.1724034589715302
+  },
+  {
+    "label": "packed-install",
+    "argv": [
+      "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/cell-protocol-052-xbo5xtkk/npm-cache/_npx/667390111e936fb1/node_modules/.bin/node",
+      "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/cell-protocol-052-xbo5xtkk/npm-cache/_npx/667390111e936fb1/node_modules/.bin/npm",
+      "install",
+      "--prefix",
+      "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/cell-protocol-052-xbo5xtkk/packed",
+      "--ignore-scripts",
+      "--no-audit",
+      "--no-fund",
+      "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/_evidence/gate-cell-protocol-052-4d24eb8/hanaworlds-canvas-0.5.2.tgz",
+      "/Users/yzliu/.cache/hanaworlds-runs/S1-CONTRACT-REGION-V1-01/_evidence/final-052/hanaworlds-contracts-0.5.2.tgz",
+      "cordis@4.0.0-rc.10",
+      "typescript@5.8.3"
+    ],
+    "cwd": "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/cell-protocol-052-xbo5xtkk",
+    "exitCode": 0,
+    "seconds": 3.4133239580551162
+  },
+  {
+    "label": "packed-test",
+    "argv": [
+      "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/cell-protocol-052-xbo5xtkk/npm-cache/_npx/667390111e936fb1/node_modules/.bin/node",
+      "--test",
+      "test/protocol-handshake.test.mjs",
+      "test/local-world.test.mjs"
+    ],
+    "cwd": "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/cell-protocol-052-xbo5xtkk/packed",
+    "exitCode": 1,
+    "seconds": 0.3670754579943605
+  }
+]

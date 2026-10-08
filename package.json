@@ -1,6 +1,6 @@
 {
   "name": "hanaworlds-canvas",
-  "version": "0.3.3",
+  "version": "0.6.0",
   "private": true,
   "type": "module",
   "license": "MIT",
@@ -13,28 +13,90 @@
     "node": ">=24.13.1 <25"
   },
   "exports": {
-    ".": "./src/index.mjs"
+    ".": {
+      "types": "./types/index.d.ts",
+      "import": "./src/index.mjs",
+      "default": "./src/index.mjs"
+    },
+    "./examples/native-facts-consumer.mjs": {
+      "types": "./types/native-facts-consumer.d.ts",
+      "import": "./examples/native-facts-consumer.mjs"
+    },
+    "./fixtures/native-facts-scoped-state.json": "./fixtures/native-facts-scoped-state.json",
+    "./fixtures/native-facts-scoped-state.schema.json": "./fixtures/native-facts-scoped-state.schema.json",
+    "./fixtures/native-facts-scoped-state.source.json": "./fixtures/native-facts-scoped-state.source.json",
+    "./display": "./src/display-host.mjs",
+    "./client": "./lib/client.js"
   },
   "files": [
     "src/index.mjs",
     "src/local-v5.mjs",
     "src/store-v5.mjs",
+    "src/region-v1.mjs",
     "cordis.patch.yml",
     "GADGET.md",
-    "NOTICE"
+    "NOTICE",
+    "types/index.d.ts",
+    "types/native-facts.d.ts",
+    "types/native-facts-consumer.d.ts",
+    "examples/native-facts-consumer.mjs",
+    "fixtures/",
+    "src/display-host.mjs",
+    "src/display-remote.mjs",
+    "lib/client.js",
+    "LICENSES/"
   ],
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-session",
+        "@deepseek-ai/dsh-api-gateway"
+      ]
     }
   },
   "scripts": {
-    "build": "node --check src/index.mjs && node --check src/local-v5.mjs && node --check src/store-v5.mjs",
-    "test": "node --test test/local-world.test.mjs"
+    "build": "node --check src/index.mjs && node --check src/local-v5.mjs && node --check src/store-v5.mjs && node --check src/region-v1.mjs && node --check src/display-host.mjs && node --check src/display-remote.mjs && node scripts/build-display.mjs",
+    "test": "node --test test/local-world.test.mjs test/protocol-handshake.test.mjs test/region-undo.test.mjs test/native-facts-public.test.mjs test/display.test.mjs test/display-view.test.mjs",
+    "test:display:gateway": "node --test test/display-remote.test.mjs",
+    "build:objects": "node scripts/build-objects-web.mjs",
+    "dev:objects": "node scripts/objects-web-server.mjs",
+    "test:objects": "node --test test/objects-web.test.mjs",
+    "prepare:objects-example": "node scripts/objects-example.mjs",
+    "test:objects-example": "node --test test/objects-example.test.mjs"
   },
   "dependencies": {
     "canonicalize": "5.1.0",
-    "hanaworlds-contracts": "https://codeload.github.com/yzsnstotz/hanaworlds-contracts/tar.gz/aad7c0ea2a4a9a93dfb13555c46cd98b9b5da777",
+    "hanaworlds-contracts": "https://codeload.github.com/yzsnstotz/hanaworlds-contracts/tar.gz/c006a839a6e6c2c63d57a14b72e4e6b26fa717f1",
     "icu": "2.3.1"
+  },
+  "devDependencies": {
+    "cordis": "4.0.0-rc.10",
+    "esbuild": "0.25.10",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "typescript": "5.8.3"
+  },
+  "types": "./types/index.d.ts",
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "~4.0.4",
+    "@deepseek-ai/dsh-typert-protocol": "0.2.0-rc.2",
+    "zod": "4.6.5"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-typert-protocol": {
+      "optional": true
+    },
+    "zod": {
+      "optional": true
+    }
   }
 }

@@ -1,0 +1,92 @@
+Browser tab: 2, Title: "对象与历史 · Canvas", URL: "http://127.0.0.1:47601/objects".
+0 AXWebArea 对象与历史 · Canvas, URL: 127.0.0.1:47601/objects
+	1 container root
+		2 container
+			3 link Description: ▦ HanaWorlds CANVAS, Value: 127.0.0.1:47601/objects
+			4 text 世界档案
+			5 link Description: 对象与历史 ↗, Value: 127.0.0.1:47601/objects
+			6 text 每一件作品，
+			7 text 都有留下的痕迹。 仅供查看
+		8 container
+			9 text HanaWorlds / Canvas 示例记录 · 隔离环境 示例会话
+			10 pop up button (disabled, collapsed, settable) 示例会话, Value: 隔离示例世界, ID: canvas-session, Secondary Actions: Expand
+				11 menu
+					12 (disabled) 隔离示例世界
+			13 container 对象与历史（Canvas）
+				14 container
+					15 text CANVAS · 世界记录
+					16 heading 对象与历史, Value: 1
+						17 text 对象与历史
+					18 text 看看世界里的作品，以及每一次已提交的改动。
+					19 switch 关闭示例数据, Value: 1
+					20 button 刷新
+				21 container
+					22 text 示例数据 这些记录来自隔离示例环境，经 Canvas 提交后保存；不来自真实世界，也不会写入真实世界。名称未保存的对象如实显示为未命名。
+				23 container 世界里的对象
+					24 heading 世界里的对象, Value: 2, ID: hw-canvas-objects-title
+						25 text 世界里的对象
+					26 text 3 个对象
+					89 content list
+						90 container
+							91 heading 未命名对象 1, Value: 3
+								92 text 未命名对象 1
+							93 definition list
+								94 container 位置
+									95 text 位置
+								96 text (12, 4, 8)
+								97 container 占地大小
+									98 text 占地大小
+								99 text 2 × 2 × 2 格
+								100 container 实际占用
+									101 text 实际占用
+								102 text 8 格
+						103 container
+							104 heading 未命名对象 2, Value: 3
+								105 text 未命名对象 2
+							106 definition list
+								107 container 位置
+									108 text 位置
+								109 text (0, 1, 3)
+								110 container 占地大小
+									111 text 占地大小
+								112 text 1 × 1 × 1 格
+								113 container 实际占用
+									114 text 实际占用
+								115 text 1 格
+						116 container
+							117 heading 未命名对象 3, Value: 3
+								118 text 未命名对象 3
+							119 definition list
+								120 container 位置
+									121 text 位置
+								122 text 当前无占地（已撤回）
+								123 container 占地大小
+									124 text 占地大小
+								125 text 0 格
+								126 container 实际占用
+									127 text 实际占用
+								128 text 0 格
+				67 container 改动时间线
+					68 heading 改动时间线, Value: 2, ID: hw-canvas-history-title
+						69 text 改动时间线
+					70 text 4 笔记录
+					129 content list
+						130 container
+							131 heading 未命名对象, Value: 3
+								132 text 未命名对象
+							133 text 已提交 2026/10/7 23:29:46 批量区域  ·  影响 8 格
+						134 container
+							135 heading 未命名对象, Value: 3
+								136 text 未命名对象
+							137 text 已提交 2026/10/7 23:29:46 逐格  ·  影响 1 格
+						138 container
+							139 heading 未命名对象, Value: 3
+								140 text 未命名对象
+							141 text 已撤回 2026/10/7 23:29:46 批量区域  ·  影响 2 格
+						142 container
+							143 heading 未命名对象, Value: 3
+								144 text 未命名对象
+							145 text 已撤回 2026/10/7 23:29:46 批量区域  ·  影响 2 格
+				88 text 这个页面只供查看；不会建造、修改或撤回世界中的内容。
+
+The focused UI element is 20 button 刷新

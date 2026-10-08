@@ -1,0 +1,21 @@
+✖ web example reads public-transaction-produced durable records unchanged after reopening (85.645834ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 138.189125
+
+✖ failing tests:
+
+test at test/objects-example.test.mjs:12:1
+✖ web example reads public-transaction-produced durable records unchanged after reopening (85.645834ms)
+  Error: EXAMPLE_TRANSACTION_FAILED:{"code":"RECOVERY_PENDING","phase":"apply","retryability":"AFTER_NEW_FACTS","mutationState":"UNKNOWN","transactionRef":"fixture-cell-keep","causeCode":null,"reason":"TRANSPORT_OUTCOME_UNKNOWN"}
+      at checked (file:///Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/source/scripts/objects-example.mjs:115:29)
+      at call (file:///Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/source/scripts/objects-example.mjs:138:5)
+      at async createObjectsExample (file:///Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/source/scripts/objects-example.mjs:156:3)
+      at async TestContext.<anonymous> (file:///Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/source/test/objects-example.test.mjs:18:21)
+      at async Test.run (node:internal/test_runner/test:1110:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:358:3)

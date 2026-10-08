@@ -1,0 +1,45 @@
+{
+  "source": "Installed official DSH runtime, linked only for engineering checks; this is not GUI product installation evidence.",
+  "packages": [
+    {
+      "name": "@deepseek-ai/cordis",
+      "version": "4.0.4",
+      "package_path": "/Applications/HanaWorlds.app/Contents/Resources/hanaworlds-dsh/node_modules/@deepseek-ai/cordis/package.json",
+      "package_sha256": "41c9dee4715a89ef94f227384460c8445857c8faf33493eb545604a948828649",
+      "entry_path": "/Applications/HanaWorlds.app/Contents/Resources/hanaworlds-dsh/node_modules/@deepseek-ai/cordis/lib/index.js",
+      "entry_sha256": "6a9394c0877ff45218818c6e815edd038f8057e1a1deb390a8d43ec81c57691e"
+    },
+    {
+      "name": "@deepseek-ai/dsh-typert-protocol",
+      "version": "0.2.0-rc.2",
+      "package_path": "/Applications/HanaWorlds.app/Contents/Resources/hanaworlds-dsh/node_modules/@deepseek-ai/dsh-typert-protocol/package.json",
+      "package_sha256": "81f763ee84ae961f4f12cd893302950aeb90b6e8bdf6f3c456907b5dff03cceb",
+      "entry_path": "/Applications/HanaWorlds.app/Contents/Resources/hanaworlds-dsh/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js",
+      "entry_sha256": "f7e0fa4b750267f6adaa1b901be7987f0d830800ec3a05f247251bf77de0b809"
+    },
+    {
+      "name": "@deepseek-ai/dsh-typert-registry",
+      "version": "0.2.0-rc.2",
+      "package_path": "/Applications/HanaWorlds.app/Contents/Resources/hanaworlds-dsh/node_modules/@deepseek-ai/dsh-typert-registry/package.json",
+      "package_sha256": "56a3bdd29e3c7e2c974bdf7f94e7071cae454e270d0332e99f46c63462fb6adb",
+      "entry_path": "/Applications/HanaWorlds.app/Contents/Resources/hanaworlds-dsh/node_modules/@deepseek-ai/dsh-typert-registry/lib/index.js",
+      "entry_sha256": "d52e98d35cfe8919dd6d6c46a2f4644a3c0135a0ed70c06a66d0cccd1fe12d82"
+    },
+    {
+      "name": "@deepseek-ai/dsh-api-gateway",
+      "version": "0.2.0-rc.2",
+      "package_path": "/Applications/HanaWorlds.app/Contents/Resources/hanaworlds-dsh/node_modules/@deepseek-ai/dsh-api-gateway/package.json",
+      "package_sha256": "f8598a14022fdd375c322a8bb09f7ec9146981c669ad94bd64a28f8e9d143ad0",
+      "entry_path": "/Applications/HanaWorlds.app/Contents/Resources/hanaworlds-dsh/node_modules/@deepseek-ai/dsh-api-gateway/lib/index.js",
+      "entry_sha256": "12489aafd3be30c606824f52b45f682c42f95448db89f2458bba87fa944a50c0"
+    },
+    {
+      "name": "zod",
+      "version": "4.6.5",
+      "package_path": "/Applications/HanaWorlds.app/Contents/Resources/hanaworlds-dsh/node_modules/zod/package.json",
+      "package_sha256": "bb5ffd84a42e4d15dfee478ed48bbd110ff7467f816870dc73474e65e3d3a243",
+      "entry_path": "/Applications/HanaWorlds.app/Contents/Resources/hanaworlds-dsh/node_modules/zod/index.js",
+      "entry_sha256": "32e7efd49a94a765f6d10a1a0a3c02c50c246def17c80c6f0225f85525d98505"
+    }
+  ]
+}

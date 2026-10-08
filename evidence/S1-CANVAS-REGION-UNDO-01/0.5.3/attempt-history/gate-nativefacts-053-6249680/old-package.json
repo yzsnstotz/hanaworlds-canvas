@@ -1,0 +1,7 @@
+{
+  "dependencies": {
+    "cordis": "^4.0.0-rc.10",
+    "hanaworlds-canvas": "file:../../_evidence/gate-cell-protocol-052-6d5905f/hanaworlds-canvas-0.5.2.tgz",
+    "hanaworlds-contracts": "file:../../../S1-CONTRACT-REGION-V1-01/_evidence/final-052/hanaworlds-contracts-0.5.2.tgz"
+  }
+}

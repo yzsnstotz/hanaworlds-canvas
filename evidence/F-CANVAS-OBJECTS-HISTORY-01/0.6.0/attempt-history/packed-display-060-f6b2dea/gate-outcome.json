@@ -1,0 +1,71 @@
+{
+  "success": false,
+  "checks": [
+    {
+      "name": "source-ci",
+      "binary": "npm",
+      "args": [
+        "ci",
+        "--ignore-scripts",
+        "--no-audit",
+        "--no-fund",
+        "--cache",
+        "/Users/yzliu/.cache/hanaworlds-runs/F-CANVAS-OBJECTS-HISTORY-01/display-gate-f6b2dea1/cache"
+      ],
+      "cwd": "/Users/yzliu/.cache/hanaworlds-runs/F-CANVAS-OBJECTS-HISTORY-01/display-gate-f6b2dea1/source",
+      "exitCode": 0,
+      "sha256": "da9acacabc8757641117d27d8b02a9163156c9084f54cc219a2433c8529213a0",
+      "log": "/Users/yzliu/.cache/hanaworlds-runs/F-CANVAS-OBJECTS-HISTORY-01/_evidence/packed-display-060-f6b2dea/source-ci.log"
+    },
+    {
+      "name": "source-build",
+      "binary": "npm",
+      "args": [
+        "run",
+        "build"
+      ],
+      "cwd": "/Users/yzliu/.cache/hanaworlds-runs/F-CANVAS-OBJECTS-HISTORY-01/display-gate-f6b2dea1/source",
+      "exitCode": 0,
+      "sha256": "918bb1509d1460055cc9abe29cada59eab2370b3a5321722546cb6a39ae3146f",
+      "log": "/Users/yzliu/.cache/hanaworlds-runs/F-CANVAS-OBJECTS-HISTORY-01/_evidence/packed-display-060-f6b2dea/source-build.log"
+    },
+    {
+      "name": "source-tests",
+      "binary": "npm",
+      "args": [
+        "test"
+      ],
+      "cwd": "/Users/yzliu/.cache/hanaworlds-runs/F-CANVAS-OBJECTS-HISTORY-01/display-gate-f6b2dea1/source",
+      "exitCode": 0,
+      "sha256": "8aa7e589feb5089170f5b3a7f3014baf35f9ac85cd74f21eb2ca18ffaafd441a",
+      "log": "/Users/yzliu/.cache/hanaworlds-runs/F-CANVAS-OBJECTS-HISTORY-01/_evidence/packed-display-060-f6b2dea/source-tests.log"
+    },
+    {
+      "name": "source-dsh-gateway",
+      "binary": "npm",
+      "args": [
+        "run",
+        "test:display:gateway"
+      ],
+      "cwd": "/Users/yzliu/.cache/hanaworlds-runs/F-CANVAS-OBJECTS-HISTORY-01/display-gate-f6b2dea1/source",
+      "exitCode": 0,
+      "sha256": "e2e9862b6659fb9626dd8b03ca94881a6bec12fdfdb2c81ff7892a1c0f1ebb50",
+      "log": "/Users/yzliu/.cache/hanaworlds-runs/F-CANVAS-OBJECTS-HISTORY-01/_evidence/packed-display-060-f6b2dea/source-dsh-gateway.log"
+    },
+    {
+      "name": "pack",
+      "binary": "npm",
+      "args": [
+        "pack",
+        "--json",
+        "--pack-destination",
+        "/Users/yzliu/.cache/hanaworlds-runs/F-CANVAS-OBJECTS-HISTORY-01/_evidence/packed-display-060-f6b2dea"
+      ],
+      "cwd": "/Users/yzliu/.cache/hanaworlds-runs/F-CANVAS-OBJECTS-HISTORY-01/display-gate-f6b2dea1/source",
+      "exitCode": 243,
+      "sha256": "d53dc648fb08f16fc3a4f851b18cbd40fb752d52d59d677921d310cff2ee9b1f",
+      "log": "/Users/yzliu/.cache/hanaworlds-runs/F-CANVAS-OBJECTS-HISTORY-01/_evidence/packed-display-060-f6b2dea/pack.log"
+    }
+  ],
+  "scratchRemoved": true
+}

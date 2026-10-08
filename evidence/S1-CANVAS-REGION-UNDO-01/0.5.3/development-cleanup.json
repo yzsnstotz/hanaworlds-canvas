@@ -1,0 +1,27 @@
+{
+  "removed": [
+    {
+      "path": "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/source/node_modules",
+      "logicalFileBytes": 286133687,
+      "device": 16777234,
+      "inode": 295368645,
+      "absent": true
+    },
+    {
+      "path": "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/nativefacts-053-npm-cache",
+      "logicalFileBytes": 380964237,
+      "device": 16777234,
+      "inode": 295365207,
+      "absent": true
+    },
+    {
+      "path": "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/nativefacts-053-tmp",
+      "logicalFileBytes": 1351140,
+      "device": 16777234,
+      "inode": 295365205,
+      "absent": true
+    }
+  ],
+  "scope": "only current NativeFacts development directories",
+  "preserved": "all source, fixed inputs, old E/tars/world/profile/rollback/admission"
+}

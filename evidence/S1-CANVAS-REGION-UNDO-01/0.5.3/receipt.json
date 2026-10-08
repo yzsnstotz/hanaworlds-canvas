@@ -1,0 +1,25 @@
+{
+  "artifactSource": "43e4dacff6c980f00305b369ae669a79ad8e715b",
+  "sourceDirty": false,
+  "version": "0.5.3",
+  "tar": "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/_evidence/gate-nativefacts-053-43e4dac/hanaworlds-canvas-0.5.3.tgz",
+  "sha256": "bde8dea7c19dd95e3d1ba8667c42c081053c6a7ef7893f82bbaa127337fc8f03",
+  "bytes": 28704,
+  "node": "24.13.1",
+  "npm": "11.8.0",
+  "cordis": "4.0.0-rc.10",
+  "consumer": "0.5.2",
+  "runtime": "REAL_CORDIS_CANVAS_AND_FS_STORE",
+  "external": "HOST_PATH_ADAPTER_AND_WORLD_FIXTURE",
+  "notRun": [
+    "real peers",
+    "Luanti",
+    "Desktop UI",
+    "model",
+    "clean-machine",
+    "product gate"
+  ],
+  "sourceTests": 2,
+  "packedTests": 2,
+  "oldExit": 1
+}

@@ -1,0 +1,6 @@
+{
+  "at": "2026-10-07T13:01:40.413274+00:00",
+  "selector": "all command lines containing own App path; no arguments returned",
+  "count": 0,
+  "ownProcesses": []
+}

@@ -1,0 +1,79 @@
+{
+  "classification": "SOURCE/FIXTURE_NOT_REAL_WORLD",
+  "canvasPackageVersion": "0.5.3",
+  "inheritedArtifactSource": "6d5905f033882cae36de463aab838c495d42604c",
+  "authority": {
+    "consumerFile": "src/local-v5.mjs",
+    "consumerSHA256": "5cfaf5eacd93f79cdcb8e9d46683ed19ef31011558f5da54fd5e5a4732098647",
+    "method": "readScopedState(connectionRef, positions)",
+    "rawRequiredFields": [
+      "worldRef",
+      "stateProfile",
+      "cells"
+    ],
+    "construction": "test/local-world.test.mjs existing normal nativeFacts callback; full raw return is published without a transaction envelope"
+  },
+  "contractsProvider": {
+    "version": "0.5.0",
+    "source": "c006a839a6e6c2c63d57a14b72e4e6b26fa717f1",
+    "tarSHA256": "7fb42f1eaaf4988730f6cf254faecb84bbbb1d84e293558b66727c470181b31e"
+  },
+  "contractsConsumer": {
+    "version": "0.5.2",
+    "source": "6185622e977ef5136e9ef12219e0ba89dbba29db",
+    "tarSHA256": "e6c50766ffc821ca90e07c38f473456952ef650e8a321f676dc44ce7d7d72209"
+  },
+  "schemaSubtypeNames": [
+    "Digest",
+    "NodeFields",
+    "Position",
+    "Ref",
+    "SafeInt",
+    "ScopedCell",
+    "ScopedCellAvailability",
+    "ScopedCells",
+    "StateProfile"
+  ],
+  "arguments": [
+    "local-connection",
+    [
+      [
+        0,
+        1,
+        3
+      ]
+    ]
+  ],
+  "fixtureSHA256": "7780c64077218111bc1ba4f5669a83b03f8cfe8f1368ace6f71c68812a9f8b69",
+  "digestBasis": {
+    "domain": "HanaWorlds|contracts@0.4.0|adapter-scoped-cell/v1\n",
+    "canonicalProjection": {
+      "profile": {
+        "profileVersion": "state-profile/v2",
+        "nodeFields": [
+          "nodeName",
+          "param1",
+          "param2"
+        ],
+        "metadataMode": "exact",
+        "inventoryMode": "exact",
+        "timerMode": "exact",
+        "derivedLightMode": "recompute-with-readback"
+      },
+      "record": {
+        "position": [
+          0,
+          1,
+          3
+        ],
+        "nodeName": "air",
+        "param1": 0,
+        "param2": 0,
+        "metadata": {},
+        "inventory": {},
+        "timer": null
+      }
+    },
+    "meaning": "Opaque Adapter scoped-cell digest from the existing normal fixture; Canvas passes it through, never derives real native state from the fixture."
+  }
+}

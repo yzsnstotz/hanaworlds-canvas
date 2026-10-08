@@ -1,0 +1,48 @@
+{
+  "version": "0.6.0",
+  "frozenSource": "b16fe3bfe849cf340b4b5c447446a880d606e251",
+  "originalEvidenceHead": "60954667246987a01141eb045f0fde70ac691f73",
+  "files": [
+    {
+      "name": "README.md",
+      "bytes": 2469,
+      "sha256": "6fc51fd1a5dc067a81bc76e23340101150c4c4925a0bc09e8774cce9f415d96a"
+    },
+    {
+      "name": "client-compose-asserted.log",
+      "bytes": 599,
+      "sha256": "94c48523ae232e8175db66d9d0b68cf63fad56195962ca806b0326af5fb1c3bf"
+    },
+    {
+      "name": "client-compose.log",
+      "bytes": 471,
+      "sha256": "36c02249fdf5788c8d17c0b6540fc087722c939f4bd1c6be1c50c54657d286b1"
+    },
+    {
+      "name": "graph-cache-probe.mjs",
+      "bytes": 2269,
+      "sha256": "8694589e6b7658da7b79397c31ea7a0280e1a9f9d0231d43f67f19b6e490abbd"
+    },
+    {
+      "name": "graph-cache-setup-failed.log",
+      "bytes": 510,
+      "sha256": "67e8057b9da256bc377c6c39a7967cc92e9522c88efb8cfb9002f555a3e299d0"
+    },
+    {
+      "name": "graph-cache.log",
+      "bytes": 637,
+      "sha256": "e474d57e5806e7091d54e2bc8406ffa285c3d37b470f6d8541111abfee1bad22"
+    },
+    {
+      "name": "probe.mjs",
+      "bytes": 2669,
+      "sha256": "d7619838adb711455f54a2c582890934f94beffcc385bcdbea6db1b5e540cf86"
+    },
+    {
+      "name": "sdk-files.json",
+      "bytes": 5069,
+      "sha256": "8e19483dcece92fd6743a40129da6ab2f41465dd28c6333872a49af60484a49f"
+    }
+  ],
+  "productGate": "PARTIAL — installed, missing own sidebar; no first-step pass"
+}

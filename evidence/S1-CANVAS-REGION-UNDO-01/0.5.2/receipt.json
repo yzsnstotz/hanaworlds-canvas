@@ -1,0 +1,25 @@
+{
+  "artifactSource": "6d5905f033882cae36de463aab838c495d42604c",
+  "sourceDirty": false,
+  "version": "0.5.2",
+  "tar": "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/_evidence/gate-cell-protocol-052-6d5905f/hanaworlds-canvas-0.5.2.tgz",
+  "sha256": "a441fac3088e8915e513e1f3e44ed6107a5fd43a75bac370365718b83538199d",
+  "bytes": 23689,
+  "node": "24.13.1",
+  "npm": "11.8.0",
+  "cordis": "4.0.0-rc.10",
+  "consumer": "0.5.2",
+  "runtime": "REAL_CORDIS_CANVAS_AND_FS_STORE",
+  "external": "HOST_PATH_ADAPTER_AND_WORLD_FIXTURE",
+  "notRun": [
+    "real peers",
+    "Luanti",
+    "Desktop UI",
+    "model",
+    "clean-machine",
+    "product gate"
+  ],
+  "sourceTests": 5,
+  "packedTests": 5,
+  "oldExit": 1
+}

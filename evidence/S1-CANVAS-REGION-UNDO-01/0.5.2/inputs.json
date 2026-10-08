@@ -1,0 +1,17 @@
+{
+  "contracts-050": {
+    "path": "/Users/yzliu/.cache/hanaworlds-runs/S1-CONTRACT-REGION-V1-01/_evidence/final-050/hanaworlds-contracts-0.5.0.tgz",
+    "sha256": "7fb42f1eaaf4988730f6cf254faecb84bbbb1d84e293558b66727c470181b31e",
+    "bytes": 139645
+  },
+  "consumer-052": {
+    "path": "/Users/yzliu/.cache/hanaworlds-runs/S1-CONTRACT-REGION-V1-01/_evidence/final-052/hanaworlds-contracts-0.5.2.tgz",
+    "sha256": "e6c50766ffc821ca90e07c38f473456952ef650e8a321f676dc44ce7d7d72209",
+    "bytes": 145318
+  },
+  "canvas-051": {
+    "path": "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/_evidence/gate-c3069d4/hanaworlds-canvas-0.5.1.tgz",
+    "sha256": "694ae85a3b0b5c14acd6dcb86cd953c98f1120c28ff970e8d16b686f29144210",
+    "bytes": 21356
+  }
+}

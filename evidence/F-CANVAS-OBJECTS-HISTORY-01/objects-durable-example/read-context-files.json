@@ -1,0 +1,47 @@
+[
+  {
+    "file": "src/local-v5.mjs",
+    "bytes": 51385,
+    "sha256": "2937b9e307ab16253a2284f6e4a6609ad853604175cfad25845aa909458876f3"
+  },
+  {
+    "file": "src/region-v1.mjs",
+    "bytes": 29114,
+    "sha256": "f0eff4214531c5d7ec05c8087cb943196f3b55a8fe4dc30df1a1789cfec685b8"
+  },
+  {
+    "file": "src/store-v5.mjs",
+    "bytes": 2304,
+    "sha256": "9b5422f110fb196fadcc1f9565fa1a6ab174585b04c5d5f31b3c093313ae6da1"
+  },
+  {
+    "file": "src/objects-web.jsx",
+    "bytes": 3961,
+    "sha256": "71ce11be7c1d48b2e65a880113c9e7acdedf9cf2298d208edb5e794d1063c081"
+  },
+  {
+    "file": "scripts/objects-web-server.mjs",
+    "bytes": 4472,
+    "sha256": "3ff927a506f068530fb20551b2587752d9ef6eb9ec96a57f813a14f255d19ed6"
+  },
+  {
+    "file": "test/local-world.test.mjs",
+    "bytes": 35819,
+    "sha256": "4b2334957565e13516372fcaa4f50b3a82396bb0d6e414b977ebf42266c8d7e9"
+  },
+  {
+    "file": "test/region-undo.test.mjs",
+    "bytes": 31440,
+    "sha256": "8b79ee376b7740abaabd4fdb20ef64b6b73fb9effa0f28c92afa2302b94f766e"
+  },
+  {
+    "file": "test/display-view.test.mjs",
+    "bytes": 2137,
+    "sha256": "8b26a5a0133bc7b9dc68d45428bd5bc6e4f7ecf183610a161c2140bbb840befb"
+  },
+  {
+    "file": "README.md",
+    "bytes": 14126,
+    "sha256": "29504db98b2d039fdb6cb53f4971f4721bbf5c0b633eaaf6f534b37c8b36da27"
+  }
+]
