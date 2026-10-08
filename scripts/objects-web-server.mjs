@@ -46,7 +46,8 @@ export async function createObjectsWebServer({ storeDirectory, assetsDirectory, 
       try {
         // Same-origin page clicks only: exact Host/Origin and a JSON body naming one object.
         const host = req.headers.host;
-        if (!/^127\.0\.0\.1:\d+$/.test(host ?? '') || req.headers.origin !== `http://${host}` ||
+        // 127.0.0.1 and localhost both name this machine; anything else is refused (DNS rebinding).
+        if (!/^(127\.0\.0\.1|localhost):\d+$/.test(host ?? '') || req.headers.origin !== `http://${host}` ||
             !String(req.headers['content-type']).startsWith('application/json'))
           return reply(res, 403, { error: 'SAME_ORIGIN_REQUIRED' });
         const body = await jsonBody(req);
@@ -84,6 +85,10 @@ export async function createObjectsWebServer({ storeDirectory, assetsDirectory, 
         const values = url.searchParams.getAll('session');
         if (values.length > 1 || values[0] === '') return reply(res, 400, { error: 'INVALID_SESSION' }, undefined, head);
         return reply(res, 200, await canvas.readObjectsHistory(values[0] ?? null), undefined, head);
+      }
+      // A copied link with trailing text still lands on the right page.
+      if (!url.pathname.startsWith('/api/') && !url.pathname.startsWith('/assets/')) {
+        res.writeHead(302, { Location: undo && url.pathname.startsWith('/undo') ? '/undo' : '/objects' }); return res.end();
       }
       return reply(res, 404, { error: 'NOT_FOUND' }, undefined, head);
     } catch (error) {
