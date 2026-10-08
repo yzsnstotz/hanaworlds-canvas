@@ -3,7 +3,7 @@ import { mkdir, open, readFile, rename } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { gzip, gunzip, constants as zlib } from 'node:zlib';
-import { canonicalJSON, checkProtocolCompatibility, comparePosition, digestValue,
+import { canonicalJSON, checkProtocolCompatibility, comparePosition, contractProtocols, digestValue,
   expandRegionBlock, expectedRegionSummary, protocolRequirement, publicError,
   regionBlockBox, regionCapabilities, requireKnownRegion, summarizeRegionStates,
   validateBoundResponse, validateDigestBinding, validateRegionCommit, validateRegionRead,
@@ -14,16 +14,33 @@ import { canonicalJSON, checkProtocolCompatibility, comparePosition, digestValue
  * canvas-region/v1 over the public Contracts 0.5.0 region v1 shapes.
  * Canvas is the only transaction decider. The Adapter region port only reads
  * and writes mapblock chunks (world-adapter-region/v1) and advertises its own
- * ProtocolHandshake; compatibility is protocol major + required capabilities.
+ * ProtocolHandshake; compatibility is protocol major + minor + required capabilities.
  */
 export const REGION_WIRE = 'canvas-region/v1';
 export const REGION_ADAPTER = 'world-adapter-region/v1';
 const ADAPTER = 'world-adapter/v6';
-const PACKAGE_VERSION = '0.6.2';
+const PACKAGE_VERSION = '0.6.3';
 export const CANVAS_REGION_CAPABILITIES = Object.freeze(regionCapabilities
   .filter(c => c.owner === 'hanaworlds-canvas').map(c => c.id).sort());
-export const ADAPTER_REGION_REQUIREMENT = protocolRequirement(REGION_ADAPTER,
-  regionCapabilities.filter(c => c.owner === 'hanaworlds-adapter-luanti').map(c => c.id));
+// A capability id is scoped by its wire ("<wire>:<name>"). Each Adapter requirement takes
+// only its own wire's ids, at the minor the Contracts declare for that protocol, and is
+// checked against the handshake of that port (G3: world-adapter/v6:* on the per-cell port,
+// world-adapter-region/v1:* on the region port).
+const ADAPTER_CAPABILITIES = regionCapabilities
+  .filter(c => c.owner === 'hanaworlds-adapter-luanti').map(c => c.id);
+const adapterRequirement = wire => {
+  const declared = contractProtocols.find(p => `${p.protocol}/v${p.major}` === wire);
+  if (!declared) throw new Error(`CANVAS_ADAPTER_PROTOCOL_UNDECLARED:${wire}`);
+  return protocolRequirement(wire, ADAPTER_CAPABILITIES.filter(id => id.startsWith(`${wire}:`)),
+    declared.minor);
+};
+export const ADAPTER_REGION_REQUIREMENT = adapterRequirement(REGION_ADAPTER);
+export const ADAPTER_CELL_REQUIREMENT = adapterRequirement(ADAPTER);
+{
+  const unscoped = ADAPTER_CAPABILITIES.filter(id =>
+    !id.startsWith(`${REGION_ADAPTER}:`) && !id.startsWith(`${ADAPTER}:`));
+  if (unscoped.length) throw new Error(`CANVAS_ADAPTER_CAPABILITY_UNSCOPED:${unscoped.join(',')}`);
+}
 export const SNAPSHOT_COMPRESSION = 'gzip'; // RFC 1952 via Node zlib
 const gz = promisify(gzip);
 const gunz = promisify(gunzip);
@@ -56,7 +73,8 @@ export const regionToolDescription = Object.freeze({
     'region operations compiled by Brush (region-operations/v1) with their digest',
     'no registered object footprint inside the specified cells',
     'every touched mapblock KNOWN after Adapter load',
-    'Adapter advertising world-adapter-region major 1 with its five capabilities'],
+    'Adapter advertising world-adapter-region major 1 and world-adapter major 6 at the ' +
+      'Contracts-declared minors with every Adapter capability of that wire'],
   unspecifiedCells: 'left untouched; only an explicit air palette entry carves',
 });
 
@@ -132,12 +150,14 @@ export class CanvasRegionV1 {
   get store() { return this.canvas.store; }
   #snapshots() { return new SnapshotFiles(this.store.directory); }
 
-  /** Adapter compatibility before any region read or write. */
+  /** Adapter compatibility (region port and per-cell port) before any region read or write. */
   #adapterCompatible() {
-    const advertised = this.regionAdapter?.protocolHandshake;
-    if (!this.regionAdapter?.call || advertised === undefined)
+    const region = this.regionAdapter?.protocolHandshake;
+    const cell = this.canvas.adapter?.protocolHandshake;
+    if (!this.regionAdapter?.call || region === undefined || cell === undefined)
       throw fail('UNSUPPORTED_VERSION', 'VERSION_UNSUPPORTED', 'decode');
-    return checkProtocolCompatibility(advertised, [ADAPTER_REGION_REQUIREMENT]);
+    checkProtocolCompatibility(cell, [ADAPTER_CELL_REQUIREMENT]);
+    return checkProtocolCompatibility(region, [ADAPTER_REGION_REQUIREMENT]);
   }
   async #current(body) {
     const session = this.store.snapshot.sessions[body.sessionRef];

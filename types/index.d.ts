@@ -55,6 +55,7 @@ export const REGION_WIRE: 'canvas-region/v1';
 export const REGION_ADAPTER: 'world-adapter-region/v1';
 export const CANVAS_REGION_CAPABILITIES: readonly string[];
 export const ADAPTER_REGION_REQUIREMENT: import('hanaworlds-contracts').ProtocolRequirement;
+export const ADAPTER_CELL_REQUIREMENT: import('hanaworlds-contracts').ProtocolRequirement;
 export const SNAPSHOT_COMPRESSION: 'gzip';
 export const regionToolDescription: Readonly<Record<string, unknown>>;
 export function encodeSnapshot(content: RegionSnapshotContent, before: RegionSummary):

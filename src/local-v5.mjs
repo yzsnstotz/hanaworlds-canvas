@@ -15,7 +15,7 @@ import { CanvasRegionV1 } from './region-v1.mjs';
 export { CanvasStore, CanvasRegionV1 };
 const WIRE = 'canvas/v5';
 const ADAPTER = 'world-adapter/v6';
-const PACKAGE_VERSION = '0.6.2';
+const PACKAGE_VERSION = '0.6.3';
 // The public wire defines canvas major 5, minor 0. Contracts publishes no
 // per-cell Canvas capability token; regional tokens describe the region port.
 const cellRequirement = protocolRequirement(WIRE, []);
@@ -955,7 +955,9 @@ async function nativeDirectory(ctx) {
 }
 export function apply(ctx) {
   const service = new CanvasV5({ store: null,
-    adapter: { call: (...args) => ctx.get?.('hanaworldsWorldAdapterV6')?.call(...args) },
+    adapter: {
+      get protocolHandshake() { return ctx.get?.('hanaworldsWorldAdapterV6')?.protocolHandshake; },
+      call: (...args) => ctx.get?.('hanaworldsWorldAdapterV6')?.call(...args) },
     nativeFacts: { readScopedState: (...args) => {
       const current = ctx.get?.('hanaworldsLuantiNativeFacts');
       if (typeof current?.readScopedState !== 'function')

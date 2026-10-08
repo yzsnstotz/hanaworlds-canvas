@@ -94,11 +94,18 @@ consumes the Adapter's `world-adapter-region/v1` port (`ReadRegion`,
 Adapter only loads, reads and writes mapblock chunks and reports per-chunk facts.
 
 - Compatibility: before any read or write Canvas runs
-  `checkProtocolCompatibility` on the Adapter's `ProtocolHandshake` with
-  `world-adapter-region` major 1 and its five capabilities. Another major, a
-  missing handshake (for example the exact-package 0.4.2 handshake) or a
-  missing capability is rejected; a different minor, patch, source or artifact
-  digest is accepted. Canvas advertises its own handshake (`canvas-region` 1.0,
+  `checkProtocolCompatibility` on both Adapter ports' `ProtocolHandshake`s:
+  the region port (`hanaworldsWorldAdapterRegionV1`) against
+  `ADAPTER_REGION_REQUIREMENT` and the per-cell port
+  (`hanaworldsWorldAdapterV6`) against `ADAPTER_CELL_REQUIREMENT`. Each
+  requirement holds only the Adapter capabilities of its own wire, at the
+  minor the Contracts declare for that protocol (with the G3 write-path scope:
+  `world-adapter-region/v1:callback-free-write` on the region port,
+  `world-adapter/v6:callback-free-write` and
+  `world-adapter/v6:write-path-state-facts` on the per-cell port). Another
+  major, a lower minor, a missing handshake on either port (for example the
+  exact-package 0.4.2 handshake) or a missing capability is rejected; a higher
+  minor, patch, source or artifact digest is accepted. Canvas advertises its own handshake (`canvas-region` 1.0,
   four `canvas-region/v1:*` capabilities) as `protocolHandshake`.
 - `describe()` gives the skill the tool's purpose, typical scale and
   prerequisites. There is no system threshold or setting.

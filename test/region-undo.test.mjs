@@ -9,13 +9,16 @@ import { canonicalJSON, checkProtocolCompatibility, comparePosition, contractHan
   encodeRegionBlock, expandRegionBlock, protocolRequirement, regionChunksOfBox,
   validateRegionSnapshotContent } from 'hanaworlds-contracts';
 import { CanvasV5, CanvasStore, CanvasRegionV1, canvasProtocolHandshake,
-  apply as applyCanvas } from '../src/index.mjs';
+  ADAPTER_REGION_REQUIREMENT, ADAPTER_CELL_REQUIREMENT, apply as applyCanvas } from '../src/index.mjs';
 
 /*
  * FIXTURE: the Adapter below (world-adapter/v6 connection reads plus a
  * world-adapter-region/v1 ReadRegion/WriteRegion port and its ProtocolHandshake)
  * is an explicit in-memory peer fixture built from the public Contracts 0.5.0
- * shapes, not the real Luanti Adapter. Brush compilation is likewise a test
+ * shapes, not the real Luanti Adapter. Its two ProtocolHandshakes advertise what a
+ * G3 Adapter publishes (Contracts 0.5.1+): world-adapter-region 1.1 with its six
+ * region capabilities on the region port, world-adapter 6.1 with callback-free-write
+ * and write-path-state-facts on the per-cell port. Brush compilation is likewise a test
  * helper over public encodeRegionBlock. Canvas, its durable store, compressed
  * snapshot files and reopen path are the real component runtime.
  */
@@ -32,14 +35,19 @@ const connectionOf = worldRef => ({ connectionRef: 'local-connection', connectio
     recoveryGuarantee: 'RECOVERABLE_VERIFIED', stateProfile,
     sessionDeleteSupported: true, imageMediaTypes: [], model: null } });
 const connection = connectionOf(WORLD);
-const ADAPTER_CAPS = ['world-adapter-region/v1:chunked-read', 'world-adapter-region/v1:chunked-write',
+const ADAPTER_CAPS = ['world-adapter-region/v1:callback-free-write',
+  'world-adapter-region/v1:chunked-read', 'world-adapter-region/v1:chunked-write',
   'world-adapter-region/v1:lighting-complete', 'world-adapter-region/v1:load-then-know',
   'world-adapter-region/v1:restore-state'];
-const handshake = (major = 1, minor = 0, capabilities = ADAPTER_CAPS, version = '0.4.9') => ({
+const CELL_CAPS = ['world-adapter/v6:callback-free-write', 'world-adapter/v6:write-path-state-facts'];
+const handshake = (major = 1, minor = 1, capabilities = ADAPTER_CAPS, version = '0.4.9',
+  protocol = 'world-adapter-region') => ({
   profileVersion: 'protocol-handshake/v1', component: 'fixture-adapter',
-  protocols: [{ protocol: 'world-adapter-region', major, minor }], capabilities,
+  protocols: [{ protocol, major, minor }], capabilities,
   provenance: { packageName: 'fixture-adapter', packageVersion: version,
     sourceRevision: null, artifactDigest: null } });
+const cellHandshake = (major = 6, minor = 1, capabilities = CELL_CAPS) =>
+  handshake(major, minor, capabilities, '0.4.9', 'world-adapter');
 const k = p => p.join(',');
 
 function fixtureWorld({ protocolHandshake = handshake(), worldRef = WORLD } = {}) {
@@ -78,7 +86,7 @@ function fixtureWorld({ protocolHandshake = handshake(), worldRef = WORLD } = {}
       nodes.set(k(p), { nodeName: palette[indices[i]].nodeName,
         param2: palette[indices[i]].param2 }); });
   };
-  world.adapter = { async call(operation, request) {
+  world.adapter = { protocolHandshake: cellHandshake(), async call(operation, request) {
     world.calls.push(operation);
     const respond = result => ({ contractVersion: 'world-adapter/v6',
       requestId: request.requestId, result, error: null });
@@ -444,8 +452,33 @@ test('protocol major + capabilities decide compatibility; patch and provenance d
       assert.equal((await run(handshake(2))).error.code, 'UNSUPPORTED_VERSION');
       assert.equal((await run(undefined)).error.code, 'UNSUPPORTED_VERSION');
       assert.equal((await run(contractHandshake)).error.code, 'UNSUPPORTED_VERSION');
-      const lacking = await run(handshake(1, 0, ADAPTER_CAPS.filter(c => !c.endsWith('restore-state'))));
+      const lacking = await run(handshake(1, 1, ADAPTER_CAPS.filter(c => !c.endsWith('restore-state'))));
       assert.equal(lacking.error.code, 'CAPABILITY_UNAVAILABLE');
+      // G3 write-path scope: region port needs callback-free-write at the declared minor,
+      // the per-cell port needs its own two ids; v6 ids are never asked of the region port.
+      const regionG3 = ADAPTER_REGION_REQUIREMENT.capabilities.includes(
+        'world-adapter-region/v1:callback-free-write');
+      if (regionG3) {
+        assert.equal((await run(handshake(1, 1, ADAPTER_CAPS.filter(c =>
+          !c.endsWith('callback-free-write'))))).error.code, 'CAPABILITY_UNAVAILABLE');
+        assert.equal((await run(handshake(1, 0))).error.code, 'UNSUPPORTED_VERSION');
+      }
+      assert.deepEqual(ADAPTER_REGION_REQUIREMENT.capabilities.filter(c =>
+        !c.startsWith('world-adapter-region/v1:')), []);
+      assert.deepEqual(ADAPTER_CELL_REQUIREMENT.capabilities.filter(c =>
+        !c.startsWith('world-adapter/v6:')), []);
+      const cellPort = canvas.adapter;
+      const runCell = async protocolHandshake => {
+        canvas.adapter = { ...cellPort, protocolHandshake };
+        try { return await run(handshake()); } finally { canvas.adapter = cellPort; }
+      };
+      assert.equal((await runCell(undefined)).error.code, 'UNSUPPORTED_VERSION');
+      assert.equal((await runCell(cellHandshake(5))).error.code, 'UNSUPPORTED_VERSION');
+      if (ADAPTER_CELL_REQUIREMENT.capabilities.length) {
+        assert.equal((await runCell(cellHandshake(6, 1, CELL_CAPS.filter(c =>
+          !c.endsWith('write-path-state-facts'))))).error.code, 'CAPABILITY_UNAVAILABLE');
+        assert.equal((await runCell(cellHandshake(6, 0))).error.code, 'UNSUPPORTED_VERSION');
+      }
       assert.equal((await run(handshake(), { contractVersion: 'canvas-region/v2' })).error.code,
         'UNSUPPORTED_VERSION');
       assert.equal(world.writes.length, 0);
@@ -461,7 +494,7 @@ test('protocol major + capabilities decide compatibility; patch and provenance d
         'PROTOCOL_COMPATIBLE');
       assert.throws(() => checkProtocolCompatibility(canvasProtocolHandshake,
         [protocolRequirement('canvas-region/v2')]), e => e.code === 'UNSUPPORTED_VERSION');
-      assert.equal(canvas.status().version, '0.6.2');
+      assert.equal(canvas.status().version, '0.6.3');
     } finally { await rm(directory, { recursive: true, force: true }); }
   });
 

@@ -48,7 +48,12 @@ function fixtureEnvironment() {
       stateDigest:createHash('sha256').update('HanaWorlds|contracts@0.4.0|adapter-scoped-cell/v1\n')
         .update(canonicalize({profile,record:record(p)})).digest('hex')}))};
   } };
-  env.adapter = { async call(operation, request) {
+  // FIXTURE per-cell port handshake: what a G3 Adapter advertises on world-adapter/v6.
+  env.adapter = { protocolHandshake:{ profileVersion:'protocol-handshake/v1', component:'objects-fixture-adapter',
+    protocols:[{ protocol:'world-adapter', major:6, minor:1 }],
+    capabilities:['world-adapter/v6:callback-free-write','world-adapter/v6:write-path-state-facts'],
+    provenance:{ packageName:'objects-fixture-adapter', packageVersion:'1.0.0', sourceRevision:null, artifactDigest:null } },
+    async call(operation, request) {
     calls.push({port:'world-adapter/v6',operation,request:structuredClone(request)});
     const answer = result => ({contractVersion:'world-adapter/v6',requestId:request.requestId,result,error:null});
     if (operation==='DiscoverConnections') return answer({capabilityRevision:'fixture-cap-1',connections:[{
@@ -81,7 +86,8 @@ function fixtureEnvironment() {
     throw new Error(`FIXTURE_UNSUPPORTED_CELL_OPERATION:${operation}`);
   } };
   env.regionAdapter = { protocolHandshake:{profileVersion:'protocol-handshake/v1',component:'objects-fixture-adapter',
-    protocols:[{protocol:'world-adapter-region',major:1,minor:0}],capabilities:[
+    protocols:[{protocol:'world-adapter-region',major:1,minor:1}],capabilities:[
+      'world-adapter-region/v1:callback-free-write',
       'world-adapter-region/v1:chunked-read','world-adapter-region/v1:chunked-write','world-adapter-region/v1:lighting-complete',
       'world-adapter-region/v1:load-then-know','world-adapter-region/v1:restore-state'],
     provenance:{packageName:'objects-fixture-adapter',packageVersion:'1.0.0',sourceRevision:null,artifactDigest:null}},

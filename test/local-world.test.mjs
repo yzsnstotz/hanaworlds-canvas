@@ -10,6 +10,7 @@ const consumer = await import(process.env.CANVAS_CONSUMER_ENTRY ?? 'hanaworlds-c
 import { readFile, writeFile } from 'node:fs/promises';
 import { digestValue, checkContractHandshake, contractHandshake } from 'hanaworlds-contracts';
 import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
 import canonicalize from 'canonicalize';
 
 const stateProfile = { profileVersion: 'state-profile/v2',
@@ -565,10 +566,13 @@ test('host exposes durable Canvas facts as separate public ports', async () => {
     assert.equal(typeof ports.get('hanaworldsWorldRevisionOracle')?.read, 'function');
     assert.equal(ports.has('hanaworldsLuantiInspectionContext'), false);
     const advertised = ports.get('hanaworldsCanvasV5').contractHandshake;
-    assert.equal(advertised.contracts, 'hanaworlds-contracts@0.5.0');
-    assert.equal(ports.get('hanaworldsCanvasV5').status().version, '0.6.2');
-    // The provider keeps its 0.5.0 exact identity. A separate 0.5.2 consumer
-    // must reject that exact identity; its cell admission uses ProtocolHandshake.
+    // Canvas advertises the exact identity of the Contracts package it runs on (the pin
+    // itself is the lockfile's job). A consumer on another package must reject that
+    // exact identity; its cell admission uses ProtocolHandshake.
+    const entry = process.env.CANVAS_ENTRY ?? new URL('../src/index.mjs', import.meta.url).href;
+    const running = createRequire(entry)('hanaworlds-contracts/package.json');
+    assert.equal(advertised.contracts, `hanaworlds-contracts@${running.version}`);
+    assert.equal(ports.get('hanaworldsCanvasV5').status().version, '0.6.3');
     if (advertised.contracts === contractHandshake.contracts)
       assert.doesNotThrow(() => checkContractHandshake(advertised));
     else
