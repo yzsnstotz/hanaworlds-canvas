@@ -79,6 +79,9 @@ async function call(operation, body) {
   event('CANVAS_CALL', { operation, error: response.error, guardRefusal: response.guardRefusal ?? null,
     status: response.result?.status ?? null });
   if (response.error) fail(response.error.code, { error: response.error, guardRefusal: response.guardRefusal ?? null });
+  if (['Undo', 'Redo'].includes(operation) && response.result?.status !== 'VERIFIED')
+    fail(response.result?.error?.code ?? response.result?.status ?? 'RECOVERY_PENDING',
+      { receipt: response.result, error: response.result?.error ?? null, guardRefusal: response.result?.guardRefusal ?? null });
   return response.result;
 }
 const selection = async worldRef => (await call('ReadWorldSelectionContext',
@@ -201,6 +204,14 @@ const actions = {
       intentDigest: sha(`canvas-trial|${operation}|intent`), surfaceActionDigest: sha(`canvas-trial|${operation}|surface`),
       localContext: session.localContext });
   },
+  async recoverHistory({ transactionId }) {
+    const row = canvas.store.snapshot.pending[transactionId] ?? canvas.store.snapshot.transactions[transactionId];
+    const session = await bound();
+    if (!row?.body || row.body.sessionRef !== SESSION || row.body.worldRef !== session.activeWorldRef)
+      fail('CURRENT_WORLD_MISMATCH');
+    if (row.before) await loadArea(session.activeWorldRef, row.before.coveredPositions);
+    return canvas.resolvePendingHistory({ sessionRef: SESSION, transactionId });
+  },
   async cells({ positions }) {
     const session = await bound();
     await loadArea(session.activeWorldRef, positions);
@@ -250,7 +261,7 @@ const page = await readFile(new URL('./page.html', import.meta.url));
 const routes = { '/api/create': q => actions.create(q), '/api/start': q => actions.start(q), '/api/stop': q => actions.stop(q),
   '/api/select': q => actions.select(q), '/api/build': q => actions.build(q), '/api/readback': q => actions.readback(q),
   '/api/undo': q => actions.history({ ...q, operation: 'Undo' }), '/api/redo': q => actions.history({ ...q, operation: 'Redo' }),
-  '/api/cells': q => actions.cells(q) };
+  '/api/cells': q => actions.cells(q), '/api/recover-history': q => actions.recoverHistory(q) };
 async function handle(req, res) {
   const path = new URL(req.url, 'http://localhost').pathname;
   try {

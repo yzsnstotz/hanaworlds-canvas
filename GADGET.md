@@ -316,3 +316,18 @@ INV-POSE-STAYS-IN-ENGINE cause; no geometry is read, supplied or persisted. The 
 undetermined Stage 1 policies remain undetermined. The independent tests use the
 public `hanaworlds-contracts/fixtures/config-engine-facts` input and explicitly prove
 only FIXTURE behavior. The older 47613 page still runs 0.6.14 and was not replaced.
+
+## 0.10.4 History outcome recovery
+
+Canvas queries the exact prepared History transaction after a failed/lost Apply reply.
+A prepared outcome is released only by the Adapter's public Abort NONE and the exact before
+readback; Abort request identity and confirmation survive reopening. A queried VERIFIED
+outcome is finalized after bound revision and target readback checks, without another Apply.
+RESTORE_FAILED retains the original receipt/guard/applyFailure and reservation. UNKNOWN
+stays pending. The plugin-owned `resolvePendingHistory({sessionRef,transactionId})` never
+forces Restore or changes bindings. The isolated real trial adds a same-transaction recovery
+button and per-object cell readback. Existing services require a supported runtime entry; this
+package does not rewrite or migrate their pending context.
+
+A valid ROLLED_BACK History reply is queried and read back as ROLLED_BACK; it is not decoded
+as a fabricated TRANSACTION_MISMATCH error and never leaves PREPARED stranded.

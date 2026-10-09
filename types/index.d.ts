@@ -34,6 +34,11 @@ export class CanvasV5 implements CanvasV5ProtocolSource {
   status(): { component: string; version: string; canvasContract: string;
     adapterContract: string; storage: string; productReadiness: 'UNPROVEN' };
   current(sessionRef: string): any;
+  /** Exact pending History outcome; it never reapplies or forces Restore. */
+  resolvePendingHistory(request: { sessionRef: string; transactionId: string }): Promise<{
+    transactionId: string; status: string; recoveryPending?: boolean;
+    receipt: import("hanaworlds-contracts").ReceiptProjection; response: unknown;
+  }>;
   /** G3 write-before guard on the per-cell port; throws a public decode error when incompatible. */
   adapterCompatible(): ReturnType<typeof import('hanaworlds-contracts').checkProtocolCompatibility>;
   call<N extends keyof OperationMap['canvas/v6']>(operation: N,

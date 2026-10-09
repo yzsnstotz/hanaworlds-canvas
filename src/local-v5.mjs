@@ -15,6 +15,7 @@ import * as contractsSdk from 'hanaworlds-contracts';
 import { CanvasRegionV1, ADAPTER_CELL_REQUIREMENT, ENGINE_GUARD_REQUIREMENTS, requireGuards,
   unmetGuards, failureDetail, restoreFailure } from './region-v1.mjs';
 import { CanvasConfigSupply } from './config-supply.mjs';
+import { resolveHistoryOutcome } from './history-recovery.mjs';
 
 export { CanvasStore, CanvasRegionV1, CanvasConfigSupply };
 const WIRE = 'canvas/v6';
@@ -24,7 +25,7 @@ const SESSION = 'session/v4';
 // pre-seam canvas behaviour left to switch to.
 const canvasProtocol = contractProtocols.find(row => row.protocol === 'canvas');
 if (!canvasProtocol || canvasProtocol.major !== 6) throw new Error('CANVAS_PROTOCOL_UNDECLARED');
-const PACKAGE_VERSION = '0.10.3';
+const PACKAGE_VERSION = '0.10.4';
 // The public wire defines canvas major 6, minor 0. Contracts publishes no
 // per-cell Canvas capability token; regional tokens describe the region port.
 const cellRequirement = protocolRequirement(WIRE, []);
@@ -86,6 +87,8 @@ export class CanvasV5 {
     this.adapterId = adapterId;
     this.ready = Promise.resolve();
     this.storageState = store ? 'READY' : 'UNAVAILABLE';
+    this.activeHistoryTransactions = new Set();
+    this.historyRecoveryRuns = new Map();
   }
   get contractHandshake() { return structuredClone(contractHandshake); }
   /** @returns {import('hanaworlds-contracts').ProtocolHandshake} */
@@ -94,6 +97,46 @@ export class CanvasV5 {
     canvasContract: WIRE, adapterContract: ADAPTER, storage: this.storageState,
     productReadiness: 'UNPROVEN' }; }
   current(sessionRef) { return this.store?.snapshot.sessions[sessionRef] ?? null; }
+  /** Plugin-owned same-transaction query/recovery, scoped to its active Session and context. */
+  async resolvePendingHistory(request) {
+    await this.ready;
+    const row = this.store?.snapshot.pending[request.transactionId] ??
+      this.store?.snapshot.transactions[request.transactionId];
+    const current = this.current(request.sessionRef);
+    if (!row?.body || row.body.sessionRef !== request.sessionRef ||
+        this.store.snapshot.retiredSessions?.[request.sessionRef] || !current ||
+        current.activeWorldRef !== row.body.worldRef || !same(current.localContext, row.body.localContext))
+      throw fail('CURRENT_WORLD_MISMATCH', 'SCOPE_DENIED');
+    await this.#identity({ ...row.body, requestId: `history-recovery-${randomUUID()}` });
+    // An in-flight Apply owns its transaction until its outcome is processed.
+    if (this.activeHistoryTransactions.has(request.transactionId))
+      throw fail('TRANSACTION_CONFLICT', 'REVISION_CHANGED');
+    return this.#resolveHistoryOutcome(request);
+  }
+  async #resolveHistoryOutcome(request) {
+    const key = request.transactionId;
+    if (this.historyRecoveryRuns.has(key)) return this.historyRecoveryRuns.get(key);
+    const run = (async () => {
+      try { return await resolveHistoryOutcome(this, request); }
+      catch (error) {
+        const row = this.store?.snapshot.pending[key];
+        if (row?.body.sessionRef === request.sessionRef) {
+          await this.store.commit(next => {
+            if (next.pending[key]) next.pending[key].queryFailure = error.publicError?.code ?? error.message;
+          });
+          const pending = fail('RECOVERY_PENDING', 'TRANSPORT_OUTCOME_UNKNOWN', 'apply');
+          Object.assign(pending.publicError, { retryability: 'SAME_TRANSACTION_QUERY',
+            mutationState: row.abortConfirmation?.mutationState === 'NONE' ? 'NONE' : 'UNKNOWN',
+            transactionRef: key,
+            causeCode: error.publicError?.causeCode ?? error.publicError?.code ?? 'TARGET_FACTS_INCOMPLETE' });
+          throw pending;
+        }
+        throw error;
+      }
+    })();
+    this.historyRecoveryRuns.set(key, run);
+    try { return await run; } finally { this.historyRecoveryRuns.delete(key); }
+  }
   /**
    * G3 write-before guard for the per-cell port: its ProtocolHandshake must name
    * world-adapter major 6 at the Contracts-declared minor with every world-adapter/v7
@@ -717,6 +760,7 @@ export class CanvasV5 {
         originTransactionId: body.historyTransactionId,
         before: current, expected: target, phase: 'RESERVED' };
     });
+    this.activeHistoryTransactions.add(body.transactionId);
     let prepared;
     try {
       prepared = await this.#adapter('PrepareHistoryTransaction', {
@@ -736,10 +780,16 @@ export class CanvasV5 {
         preparedHistoryTransaction: prepared, localContext: body.localContext });
       if (adapterReceipt.status !== 'VERIFIED' && adapterReceipt.guardRefusal && adapterReceipt.error)
         throw engineRefusal(adapterReceipt);
-      if (adapterReceipt.status !== 'VERIFIED' ||
-          adapterReceipt.previousWorldRevision !== body.expectedWorldRevision ||
+      if (adapterReceipt.status !== 'VERIFIED') {
+        // ROLLED_BACK and RESTORE_FAILED are valid outcomes, not malformed successful receipts.
+        // Query/readback their exact outcome; never invent an ErrorCode for their status.
+        throw Object.assign(new Error(adapterReceipt.error?.code ?? 'APPLY_FAILED'), {
+          publicError: adapterReceipt.error ?? fail('APPLY_FAILED', 'APPLY_ERROR', 'apply').publicError,
+          guardRefusal: adapterReceipt.guardRefusal ?? null });
+      }
+      if (adapterReceipt.previousWorldRevision !== body.expectedWorldRevision ||
           adapterReceipt.transactionPayloadDigest !== prepared.transactionPayloadDigest)
-        throw fail('TRANSACTION_MISMATCH', 'PAYLOAD_CHANGED');
+        throw fail('REPLAY_MISMATCH', 'PAYLOAD_CHANGED');
       await this.store.commit(next => { next.pending[body.transactionId].phase = 'APPLIED'; });
       const actual = await this.#read(body, positions, stateProfile,
         redo ? 'after-redo' : 'after-undo');
@@ -780,10 +830,16 @@ export class CanvasV5 {
         await this.store.commit(next => { delete next.pending[body.transactionId]; });
         throw error;
       }
-      return this.#rollback({ ...body, operationDigest: historyOperationDigest,
-        guarantee: 'RECOVERABLE_VERIFIED' }, prepared, current, positions,
-        stateProfile, replayKey, admission.requestDigest, error, operation);
-    }
+      // Never Restore from a lost/error reply: the exact public query decides whether it
+      // remained prepared, completed, or still has an unknown outcome. No new transaction.
+      await this.store.commit(next => {
+        Object.assign(next.pending[body.transactionId], { failure: failureDetail(error),
+          causeCode: error.publicError?.code ?? 'TARGET_FACTS_INCOMPLETE',
+          phase: 'RESTORE_PENDING', receiptStatus: 'RECOVERY_PENDING' });
+      });
+      return (await this.#resolveHistoryOutcome({ sessionRef: body.sessionRef,
+        transactionId: body.transactionId })).response;
+    } finally { this.activeHistoryTransactions.delete(body.transactionId); }
   }
   /** An Undo history row: cell Undo (direction UNDO) or whole-region Undo. */
   #undoRow(row) {

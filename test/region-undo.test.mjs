@@ -653,7 +653,7 @@ test('protocol major + capabilities decide compatibility; patch and provenance d
         'PROTOCOL_COMPATIBLE');
       assert.throws(() => checkProtocolCompatibility(canvasProtocolHandshake,
         [protocolRequirement('canvas-region/v3')]), e => e.code === 'UNSUPPORTED_VERSION');
-      assert.equal(canvas.status().version, '0.10.3');
+      assert.equal(canvas.status().version, '0.10.4');
     } finally { await rm(directory, { recursive: true, force: true }); }
   });
 
