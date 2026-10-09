@@ -9,6 +9,7 @@ import { canonicalJSON, checkProtocolCompatibility, comparePosition, contractHan
   guardRefusalError,
   encodeRegionBlock, expandRegionBlock, protocolRequirement, regionChunksOfBox,
   validateRegionSnapshotContent } from 'hanaworlds-contracts';
+import { restoreFailedResponse as regionRestoreFailedResponse } from '../src/region-v1.mjs';
 import { CanvasV5, CanvasStore, CanvasRegionV1, canvasProtocolHandshake,
   ADAPTER_REGION_REQUIREMENT, ADAPTER_CELL_REQUIREMENT, apply as applyCanvas } from '../src/index.mjs';
 import { fixtureSessions } from '../scripts/fixture-sessions.mjs';
@@ -427,6 +428,52 @@ test('a region rollback the engine guard refuses is pending manual recovery with
       assert.equal(actions.recovery[0].receiptStatus, 'RESTORE_FAILED');
     } finally { await rm(directory, { recursive: true, force: true }); }
   });
+
+test('a region Undo the engine guard refuses writes nothing and is not recorded as an Undo',
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'canvas-region-g1-undo-'));
+    try {
+      const world = fixtureWorld();
+      const { canvas, region } = await boot(directory, world);
+      const localContext = await select(canvas);
+      const committed = await region.call('ApplyRegionCommit', commit(localContext, terrain()));
+      assert.equal(committed.result.status, 'VERIFIED', JSON.stringify(committed.error));
+      const after = picture(world);
+      const historyBefore = structuredClone(canvas.store.snapshot.history);
+      world.guardRestore = true;
+      const undone = await region.call('UndoRegionCommit', undo(localContext,
+        committed.result.historyRevision));
+      // Forward restore refused with zero writes; the region is verified unchanged (ROLLED_BACK).
+      assert.equal(undone.result.status, 'ROLLED_BACK');
+      assert.equal(picture(world), after);
+      assert.deepEqual(canvas.store.snapshot.history, historyBefore);
+      assert.deepEqual(canvas.store.snapshot.pending, {});
+      // Contract gap (REPORT): canvas-region/v2 has no place for the restore-stage GuardRefusal
+      // of a refused Undo that ended ROLLED_BACK, so the response carries none.
+      assert.equal(undone.guardRefusal, null);
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+
+test('a refused restore whose causing failure is itself a restore is not repaired into a receipt', () => {
+  // rc.2: applyFailure.error.phase must not be restore. Canvas returns null (RECOVERY_PENDING)
+  // and names the rejection instead of reshaping the errors.
+  const body = { requestId: 'r', transactionId: 't' };
+  const restoreError = Object.assign(new Error('RESTORE_FAILED'), { guardRefusal: REGION_G1,
+    publicError: guardRefusalError(REGION_G1, { transactionRef: 't', cause: 'RESTORE_FAILED' }) });
+  const cause = Object.assign(new Error('RESTORE_FAILED'), { guardRefusal: REGION_G1,
+    publicError: guardRefusalError(REGION_G1, { transactionRef: 't', cause: 'APPLY_FAILED' }) });
+  assert.equal(regionRestoreFailedResponse(body, 'UndoRegionCommit', restoreError, cause), null);
+  assert.equal(typeof restoreError.receiptRejected, 'string');
+  // The expressible case: an apply failure as cause.
+  const applyCause = Object.assign(new Error('APPLY_FAILED'), { publicError: { code: 'APPLY_FAILED',
+    phase: 'apply', retryability: 'AFTER_NEW_FACTS', mutationState: 'UNKNOWN', transactionRef: 't',
+    causeCode: null, reason: 'APPLY_ERROR' } });
+  const fresh = Object.assign(new Error('RESTORE_FAILED'), { guardRefusal: REGION_G1,
+    publicError: guardRefusalError(REGION_G1, { transactionRef: 't', cause: 'RESTORE_FAILED' }) });
+  const response = regionRestoreFailedResponse(body, 'ApplyRegionCommit', fresh, applyCause);
+  assert.equal(response.error.causeCode, 'APPLY_FAILED');
+  assert.deepEqual({ ...response.guardRefusal }, REGION_G1);
+});
 
 test('unknown, wrong world, footprint conflict and external edits never write', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'canvas-region-reject-'));

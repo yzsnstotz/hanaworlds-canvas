@@ -154,13 +154,20 @@ export function restoreFailure(restoreError, applyFailure, transactionRef) {
     { ...restoreError.publicError, transactionRef, causeCode: cause };
   return { error, guardRefusal };
 }
-function restoreFailedResponse(body, operation, restoreError, cause) {
-  const applyFailure = failureDetail(cause);
-  const failure = restoreFailure(restoreError, applyFailure, body.transactionId);
-  if (!failure) return null;
-  return validateResponse(REGION_WIRE, operation, { contractVersion: REGION_WIRE,
-    requestId: body.requestId, result: null, error: failure.error,
-    guardRefusal: failure.guardRefusal, applyFailure });
+export function restoreFailedResponse(body, operation, restoreError, cause) {
+  try {
+    const applyFailure = failureDetail(cause);
+    const failure = restoreFailure(restoreError, applyFailure, body.transactionId);
+    if (!failure) return null;
+    return validateResponse(REGION_WIRE, operation, { contractVersion: REGION_WIRE,
+      requestId: body.requestId, result: null, error: failure.error,
+      guardRefusal: failure.guardRefusal, applyFailure });
+  } catch (shapeError) {
+    // The Contracts cannot express this outcome (e.g. a region Undo whose causing failure is
+    // itself a restore): not repaired; the caller records it and answers RECOVERY_PENDING.
+    restoreError.receiptRejected = shapeError.publicError?.code ?? shapeError.code ?? shapeError.message;
+    return null;
+  }
 }
 
 /** Compressed RegionSnapshotContent: gzip over its canonical JSON, bound by RegionSnapshotRef. */
@@ -445,7 +452,8 @@ export class CanvasRegionV1 {
       await this.#pendingPhase(body.transactionId, 'RESTORE_PENDING', { restoreCode,
         causeCode: cause?.publicError?.code ?? cause?.code ?? null,
         receiptStatus: failed ? 'RESTORE_FAILED' : 'RECOVERY_PENDING',
-        guardRefusal: restoreError?.guardRefusal ?? null });
+        guardRefusal: restoreError?.guardRefusal ?? null,
+        receiptRejected: restoreError?.receiptRejected ?? null });
       if (failed) {
         await this.store.commit(state => { state.replay[replayKey] = { digest: requestHash, response: failed }; });
         return failed;
@@ -539,7 +547,8 @@ export class CanvasRegionV1 {
         await this.#pendingPhase(body.undoTransactionId, 'RESTORE_PENDING', { restoreCode,
           causeCode: cause?.publicError?.code ?? cause?.code ?? null,
           receiptStatus: failed ? 'RESTORE_FAILED' : 'RECOVERY_PENDING',
-          guardRefusal: restoreError?.guardRefusal ?? null });
+          guardRefusal: restoreError?.guardRefusal ?? null,
+          receiptRejected: restoreError?.receiptRejected ?? null });
         if (failed) {
           await this.store.commit(next => { next.replay[replayKey] = { digest: requestHash, response: failed }; });
           return failed;
