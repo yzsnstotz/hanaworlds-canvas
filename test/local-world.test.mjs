@@ -134,6 +134,7 @@ test('build commits only after complete readback and stores one durable history 
     let restores = 0;
     let mismatchAfterApply = false;
     let restoreFails = false;
+    let inspectionExtra = null;
     const preparedTransactions = new Set();
     let scopedFactReads = 0;
     let lastOpaqueDigest;
@@ -176,11 +177,15 @@ test('build commits only after complete readback and stores one durable history 
       if (operation === 'InspectRegion') {
         const targetFacts = { ...fixture.request.regionInspection.targetFacts,
           worldRevision: request.expectedWorldRevision };
-        regionInspection = { ...fixture.request.regionInspection,
+        const inspected = { ...fixture.request.regionInspection,
           inspectionId: request.inspectionId, placementSettings: request.placementSettings,
           targetFacts, targetFactsDigest: D('target-facts', targetFacts),
           evidence: { ...fixture.request.regionInspection.evidence,
             worldRevision: request.expectedWorldRevision } };
+        // FIXTURE negative: a 0.x-style inspection carrying player geometry.
+        if (inspectionExtra) return respond({ outcome: 'REGION_INSPECTED',
+          inspection: { ...inspected, ...inspectionExtra } });
+        regionInspection = inspected;
         return respond({ outcome: 'REGION_INSPECTED', inspection: regionInspection });
       }
       if (operation === 'InspectWorld') return respond({
@@ -301,7 +306,20 @@ test('build commits only after complete readback and stores one durable history 
     assert.deepEqual({ ...placement.result.inspection.placementSettings },
       { frontGapCells: 2, forwardSearchCells: 16, lateralSearchCells: 8,
         verticalSearchCells: 4, settingsRevision: 'placement-0' });
+    // Contracts 1.x: no player geometry is accepted from the Adapter or persisted by Canvas.
+    inspectionExtra = { bodyOccupiedPositions: [[0, 1, 3]] };
+    const withBody = await canvas.call('InspectPlacementRegion', {
+      contractVersion: 'canvas/v6', sessionRef, requestId: 'inspect-with-body', worldRef,
+      anchor: { kind: 'CURRENT_VIEW', invocationId: 'confirmed-body' },
+      footprint: { widthCells: 1, depthCells: 1, heightCells: 1 }, localContext });
+    inspectionExtra = null;
+    assert.notEqual(withBody.error, null);
+    assert.equal(withBody.result, null);
+    const persisted = await readFile(join(directory, 'canvas-v6.json'), 'utf8');
+    for (const word of ['bodyOccupiedPositions', 'avatarDimensions', 'collisionBox'])
+      assert.equal(persisted.includes(word), false, word);
     const placementStore = await CanvasStore.open(directory);
+    assert.equal(Object.keys(placementStore.snapshot.placementInspections).length, 1);
     assert.equal(placementStore.snapshot.placementInspections[
       placement.result.inspection.inspectionId].inspection.targetFacts.worldRevision,
     initialWorldRevision);
