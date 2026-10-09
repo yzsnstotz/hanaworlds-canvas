@@ -25,7 +25,7 @@ const SESSION = 'session/v4';
 // pre-seam canvas behaviour left to switch to.
 const canvasProtocol = contractProtocols.find(row => row.protocol === 'canvas');
 if (!canvasProtocol || canvasProtocol.major !== 6) throw new Error('CANVAS_PROTOCOL_UNDECLARED');
-const PACKAGE_VERSION = '0.10.4';
+const PACKAGE_VERSION = '0.10.5';
 // The public wire defines canvas major 6, minor 0. Contracts publishes no
 // per-cell Canvas capability token; regional tokens describe the region port.
 const cellRequirement = protocolRequirement(WIRE, []);
@@ -269,7 +269,14 @@ export class CanvasV5 {
       .map(([transactionId, row]) => ({ transactionId, mode: row.kind === 'REGION' ? 'REGION' : 'CELL',
         phase: row.phase, recoveryPending: row.phase === 'RESTORE_PENDING',
         receiptStatus: row.receiptStatus ?? null, guardRefusal: row.guardRefusal ?? null,
-        restoreCode: row.restoreCode ?? null, causeCode: row.causeCode ?? null }))
+        restoreCode: row.restoreCode ?? null, causeCode: row.causeCode ?? null,
+        // NONE requires the exact public Abort confirmation, never just the Apply error.
+        // Keep the original failure separate from a later query/readback failure.
+        mutationState: row.abortConfirmation?.mutationState === 'NONE' ? 'NONE' :
+          row.queriedReceipt?.error?.mutationState ?? 'UNKNOWN',
+        abortConfirmation: row.abortConfirmation ?? null,
+        originalFailure: row.applyFailure ?? row.failure ?? null,
+        queryFailure: row.queryFailure ?? null }))
       .sort((a, b) => a.transactionId.localeCompare(b.transactionId));
     const pending = recovery.length > 0;
     const objects = Object.values(s.objects[worldRef] ?? {})

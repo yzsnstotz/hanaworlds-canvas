@@ -331,3 +331,12 @@ package does not rewrite or migrate their pending context.
 
 A valid ROLLED_BACK History reply is queried and read back as ROLLED_BACK; it is not decoded
 as a fabricated TRANSACTION_MISMATCH error and never leaves PREPARED stranded.
+
+### Pending History evidence (0.10.5)
+
+`readHistoryActions(sessionRef).recovery` retains the exact transaction's `originalFailure`
+(public error/guard), a later `queryFailure`, and its public `abortConfirmation`.
+`mutationState: NONE` after Abort does not claim that final readback succeeded: the row stays
+pending until the complete original before image is read back. A lost Abort reply is still
+`UNKNOWN`. The trial page shows this same projection. These are existing Canvas-owned
+evidence, not additional engine facts or a new transaction outcome.

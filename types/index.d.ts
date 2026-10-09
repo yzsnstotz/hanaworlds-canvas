@@ -60,6 +60,13 @@ export interface RecoveryRow {
   receiptStatus: 'RESTORE_FAILED' | 'RECOVERY_PENDING' | null;
   guardRefusal: import('hanaworlds-contracts').GuardRefusal | null;
   restoreCode: string | null; causeCode: string | null;
+  /** NONE is proved by this transaction's public Abort receipt; an uncertain reply stays UNKNOWN. */
+  mutationState: import('hanaworlds-contracts').MutationState;
+  abortConfirmation: { transactionId: string; status: 'ABORTED_PREPARED'; mutationState: 'NONE' } | null;
+  originalFailure: { error: import('hanaworlds-contracts').Error;
+    guardRefusal: import('hanaworlds-contracts').GuardRefusal | null } | null;
+  /** Failure of the later exact query, Abort or readback, distinct from originalFailure. */
+  queryFailure: string | null;
 }
 export type EngineGuardOperation = 'ApplyRecoverableCommit' | 'Undo' | 'Redo' |
   'ApplyRegionCommit' | 'UndoRegionCommit' | 'RecoverRegion';
