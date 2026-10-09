@@ -40,7 +40,7 @@ function render(){
   p+='<div class="box">适用域 '+j(c.domain)+'<br>来源 '+j(c.sources)+'</div>';
   p+='<div class="box">CompilationConfig <span class="'+(pr.status==='SUPPLIED'?'ok':'bad')+'">'+esc(pr.status)+'</span> · revision '+j(pr.revision)+' · digest '+j(pr.digest)+'</div><table><tr><th>字段</th><th>状态</th><th>值</th><th>来源</th></tr>';
   for(const [f,r] of Object.entries(pr.fields||{}))p+='<tr><td>'+esc(f)+'</td><td class="'+(r.status==='SUPPLIED'?'ok':'bad')+'">'+esc(r.status)+'</td><td>'+j(r.value)+'</td><td>'+(r.provenance?esc(r.provenance.kind)+'<br>'+j(r.provenance.ref)+'<br>rev '+j(r.provenance.sourceRevision):esc(r.reason)+' '+esc(r.need)+(r.cause?' · cause '+esc(r.cause):''))+'</td></tr>';
-  p+='</table><div class="box">消费口 hanaworldsCompilerConfig.read：'+(S.compiler.ok?'<span class="ok">返回</span> compilerRevision '+j(S.compiler.compilerRevision):'<span class="bad">拒绝</span> '+j(S.compiler.error))+'</div>';
+  p+='</table><div class="box">消费口 hanaworldsCompilerConfig（同一次观察）：'+(S.compiler.ok?'<span class="ok">返回</span> compilerRevision '+j(S.compiler.compilerRevision):'<span class="bad">拒绝</span> '+j(S.compiler.error))+'</div>';
   p+='<table><tr><th>#</th><th>被取代</th><th>失效原因</th></tr>'+[...S.supply.history].reverse().map(h=>'<tr><td>'+esc(h.observedSequence)+'</td><td>'+esc(h.supersededAt)+'</td><td>'+esc(h.invalidationReasons.join(', '))+'</td></tr>').join('')+'</table>';}
  $('#supply').innerHTML=p;
  const e=S.engineSafety;let g='<div class="box">Safety 规则来源：玩家确认（Canvas 不声明、不供给 SafetyProfile）。</div><div class="box">引擎守卫声明（来自当前连接）'+j(e.declaration)+'</div><table><tr><th>操作</th><th>状态</th><th>未覆盖</th></tr>';

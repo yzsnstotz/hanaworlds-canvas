@@ -210,6 +210,21 @@ const actions = {
 };
 let lastBuild = null;
 
+/** One real supply observation per page refresh (each reads the World's full Catalogue through
+ * the engine). The CompilerConfig consumer outcome shown is that same observation's: SUPPLIED →
+ * its compilerRevision; otherwise the named refusal the port gives for it. */
+async function supplyView(worldRef) {
+  if (!worldRef) return { supply: null, compiler: null };
+  let report;
+  try { report = await supply.read(worldRef); }
+  catch (e) { return { supply: { error: e.publicError ?? { code: e.message } }, compiler: null }; }
+  const profile = report.current.profiles.compilationConfig;
+  const compiler = profile.status === 'SUPPLIED' ?
+    { ok: true, sameObservation: true, compilationConfig: profile.value, compilerRevision: profile.revision } :
+    { ok: false, sameObservation: true, error: { code: profile.status === 'NOT_BOUND' ? 'WORLD_NOT_BOUND' :
+      'CAPABILITY_UNAVAILABLE', reason: 'REQUIRED_FACT_UNKNOWN' }, missingSources: profile.missing };
+  return { supply: report, compiler };
+}
 async function snapshot() {
   const rows = await worldRows();
   const current = canvas.current(SESSION);
@@ -221,8 +236,7 @@ async function snapshot() {
       real: 'Luanti 世界、native 进程、Adapter、Canvas 供给/事务/历史均为本卡真实隔离运行。' },
     prerequisites: await local.describeFlatWorldCreation({ requesterRef, userPath: profile }),
     worlds: rows, session: SESSION, selection: current,
-    supply: worldRef ? await supply.read(worldRef).catch(e => ({ error: e.publicError ?? { code: e.message }, missingSources: e.missingSources ?? null })) : null,
-    compiler: worldRef ? await compiler.read(worldRef).then(v => ({ ok: true, ...v }), e => ({ ok: false, error: e.publicError ?? { code: e.message }, missingSources: e.missingSources ?? null })) : null,
+    ...await supplyView(worldRef),
     engineSafety: canvas.readEngineSafety(SESSION),
     history: current ? await canvas.readHistoryActions(SESSION) : null,
     lastBuild,
