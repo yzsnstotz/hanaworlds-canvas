@@ -20,7 +20,7 @@ import { canonicalJSON, checkProtocolCompatibility, comparePosition, contractPro
 export const REGION_WIRE = 'canvas-region/v2';
 export const REGION_ADAPTER = 'world-adapter-region/v2';
 const ADAPTER = 'world-adapter/v7';
-const PACKAGE_VERSION = '0.8.0';
+const PACKAGE_VERSION = '0.9.0';
 export const CANVAS_REGION_CAPABILITIES = Object.freeze(regionCapabilities
   .filter(c => c.owner === 'hanaworlds-canvas').map(c => c.id).sort());
 // A capability id is scoped by its wire ("<wire>:<name>"). Each Adapter requirement takes
@@ -143,11 +143,20 @@ export function failureDetail(cause) {
     causeCode: null, reason: 'APPLY_ERROR' };
   return { error: validateType('Error', error), guardRefusal: cause?.guardRefusal ?? null };
 }
+/** A restore-stage guard refusal in the Contracts engine form: no cause, nothing written. */
+export function engineFormRefusal(error) {
+  const e = error?.publicError;
+  return !!error?.guardRefusal && e?.phase === 'restore' && e.causeCode === null &&
+    e.mutationState === 'NONE';
+}
 export function restoreFailure(restoreError, applyFailure, transactionRef) {
-  // Only the engine's own restore refusal (phase restore); Canvas's own unverified restore and a
-  // lost transport stay RECOVERY_PENDING, which recoverPending() may finish.
-  if (restoreError?.publicError?.code !== 'RESTORE_FAILED' ||
-      restoreError.publicError.phase !== 'restore') return null;
+  // Only the engine's own restore refusal (phase restore): the transaction form (RESTORE_FAILED)
+  // or the engine form (a guard refusal with no cause, nothing written), which the transaction
+  // owner turns into the transaction form here. Canvas's own unverified restore and a lost
+  // transport stay RECOVERY_PENDING, which recoverPending() may finish.
+  const refused = restoreError?.publicError;
+  if (refused?.phase !== 'restore' ||
+      (refused.code !== 'RESTORE_FAILED' && !restoreError.guardRefusal)) return null;
   const guardRefusal = restoreError.guardRefusal ?? null;
   const cause = applyFailure.error.code;
   const error = guardRefusal ? { ...guardRefusalError(guardRefusal, { transactionRef, cause }) } :
@@ -536,6 +545,23 @@ export class CanvasRegionV1 {
       restored = await this.#restore(tx, body.undoTransactionId, originBefore,
         origin.result.beforeSummary, origin.box, 'undo');
     } catch (cause) {
+      // An Undo the engine refuses in the engine form (no cause, nothing written) is returned
+      // unchanged with applyFailure null, once Canvas has read back that the region is still the
+      // pre-Undo image; it is not pending. Anything else rolls back to the pre-Undo image.
+      if (engineFormRefusal(cause)) {
+        const now = await this.#read(tx, origin.box, 'INSPECT', 'undo-refused', origin.layout);
+        if (same(this.#summary(body.worldRef, now), preUndoSummary)) {
+          const response = validateResponse(REGION_WIRE, 'UndoRegionCommit', {
+            contractVersion: REGION_WIRE, requestId: body.requestId, result: null,
+            error: { ...cause.publicError }, guardRefusal: { ...cause.guardRefusal },
+            applyFailure: null });
+          await this.store.commit(next => {
+            next.replay[replayKey] = { digest: requestHash, response };
+            delete next.pending[body.undoTransactionId];
+          });
+          return response;
+        }
+      }
       let back;
       try {
         back = await this.#restore(tx, body.undoTransactionId, preUndoContent, preUndoSummary,

@@ -35,7 +35,7 @@ Stage 1 validation configuration supply (v1 batch; earlier 0.6.11–0.6.15 notes
   `invalidationReasons`; reads are otherwise read-only (no Adapter call, no World write).
 - Store: the 1.x store lives in `<dsh home>/data/hanaworlds-canvas-v1/canvas-v6.json`
   (schemaVersion 6). A 0.x store is never read, migrated or accepted.
-- Contracts `#semver:^1.0.0-rc.2` (0.8.0): canvas/v6, world-adapter/v7, session/v4,
+- Contracts `#semver:^1.0.0-rc.3` (0.9.0): canvas/v6, world-adapter/v7, session/v4,
   canvas-region/v2, world-adapter-region/v2; the session-world seam is unconditional. Host
   service keys are unchanged (`hanaworldsCanvasV5`, `hanaworldsCanvasRegionV1`,
   `hanaworldsWorldAdapterV6`, `hanaworldsWorldAdapterRegionV1`, `hanaworldsWorkshopV3`, ...).
@@ -51,8 +51,8 @@ Stage 1 validation configuration supply (v1 batch; earlier 0.6.11–0.6.15 notes
   (`CAPABILITY_UNAVAILABLE/validate`); a region response also carries that `guardRefusal`.
   `CanvasV5.readEngineSafety(sessionRef)` lists, per operation, the requirements and the uncovered
   ones; the `/supply` page shows it.
-- Transaction role (G1): when the engine refuses a rollback (`RESTORE_FAILED`, phase restore,
-  with or without a `GuardRefusal`), BUILD/Undo/Redo answer the canvas/v6 `RESTORE_FAILED`
+- Transaction role (G1): when the engine refuses a rollback (phase restore: the transaction form
+  `RESTORE_FAILED`, or rc.3's engine form = a `GuardRefusal` with no cause and nothing written), BUILD/Undo/Redo answer the canvas/v6 `RESTORE_FAILED`
   receipt and region commit/undo the canvas-region/v2 response with `result: null`: error =
   the restore failure with `causeCode` = the failure that made the restore necessary,
   `guardRefusal` = the restore's own reason, `applyFailure` = that causing failure in full
@@ -60,6 +60,10 @@ Stage 1 validation configuration supply (v1 batch; earlier 0.6.11–0.6.15 notes
   restore) answers `RECOVERY_PENDING`. Either way the transaction stays a durable
   `RESTORE_PENDING` row (restoreCode/causeCode/receiptStatus/guardRefusal), blocks the World,
   replays exactly, and `readHistoryActions(sessionRef).recovery` lists it; it is never success.
+- Region Undo refused by an engine guard (rc.3 engine form): once Canvas has read back that the
+  region is still the pre-Undo image, `UndoRegionCommit` returns that error and `guardRefusal`
+  unchanged with `applyFailure: null`; nothing is written, recorded as Undo or left pending, and
+  the call replays exactly.
 - Refusals are Contracts `ContractError`s (0.6.12), so a consumer that maps errors through
   `publicError()` (Workshop) keeps the exact code/reason; `missingSources` is on the thrown
   object and in `hanaworldsCanvasConfigSupply.read`, not in the public Error shape.

@@ -237,11 +237,11 @@ test('build commits only after complete readback and stores one durable history 
         restores++;
         // G1 FIXTURE: the engine's BODY_CLEARANCE guard refuses the restore (a real body blocks a
         // solid target), with the public GuardRefusal beside the Contracts restore error. The
-        // Adapter does not know why Canvas restores, so its causeCode is its own.
+        // Adapter does not know why Canvas restores.
+        // rc.3 engine form: no cause, nothing written; Canvas owns the transaction form.
         if (restoreFails === 'G1') return { contractVersion: 'world-adapter/v7',
           requestId: request.requestId, result: null, guardRefusal: G1_REFUSAL,
-          error: guardRefusalError(G1_REFUSAL, { transactionRef: request.originTransactionId,
-            cause: 'RESTORE_FAILED' }) };
+          error: guardRefusalError(G1_REFUSAL, { transactionRef: request.originTransactionId }) };
         // FIXTURE: a restore whose outcome the transport cannot tell (no receipt rule fits).
         if (restoreFails === 'UNKNOWN') throw new Error('FIXTURE_TRANSPORT_LOST');
         record = { ...record, nodeName: 'air' };
@@ -637,12 +637,14 @@ test('build commits only after complete readback and stores one durable history 
     const afterRestoreFailed = await CanvasStore.open(directory);
     assert.equal(afterRestoreFailed.snapshot.transactions['build-3'], undefined);
     assert.equal(afterRestoreFailed.snapshot.pending['build-3'].phase, 'RESTORE_PENDING');
-    assert.equal(afterRestoreFailed.snapshot.pending['build-3'].restoreCode, 'RESTORE_FAILED');
+    // The store keeps the engine's own code (engine form); the receipt is the transaction form.
+    assert.equal(afterRestoreFailed.snapshot.pending['build-3'].restoreCode, 'SAFETY_INVARIANT_FAILED');
+    assert.equal(g1Receipt.error.code, 'RESTORE_FAILED');
     assert.equal(afterRestoreFailed.snapshot.pending['build-3'].causeCode, 'READBACK_MISMATCH');
     let actions = await canvas.readHistoryActions(sessionRef);
     assert.deepEqual(actions.recovery, [{ transactionId: 'build-3', mode: 'CELL',
       phase: 'RESTORE_PENDING', recoveryPending: true, receiptStatus: 'RESTORE_FAILED',
-      guardRefusal: G1_REFUSAL, restoreCode: 'RESTORE_FAILED', causeCode: 'READBACK_MISMATCH' }]);
+      guardRefusal: G1_REFUSAL, restoreCode: 'SAFETY_INVARIANT_FAILED', causeCode: 'READBACK_MISMATCH' }]);
     assert.ok(actions.objects.every(row => row.undo.reason === 'TRANSACTION_PENDING' ||
       row.undo.reason === 'NOTHING_TO_UNDO'));
     // The same request replays the same receipt and never writes or restores again.
@@ -697,7 +699,7 @@ test('host exposes durable Canvas facts as separate public ports', async () => {
     const entry = process.env.CANVAS_ENTRY ?? new URL('../src/index.mjs', import.meta.url).href;
     const running = createRequire(entry)('hanaworlds-contracts/package.json');
     assert.equal(advertised.contracts, `hanaworlds-contracts@${running.version}`);
-    assert.equal(ports.get('hanaworldsCanvasV5').status().version, '0.8.0');
+    assert.equal(ports.get('hanaworldsCanvasV5').status().version, '0.9.0');
     assert.doesNotThrow(() => checkContractHandshake(advertised));
     // Public Contracts conformance cases, each patched over Canvas's advertised handshake.
     const patched = c => { const h = { ...advertised, ...c.patch };
