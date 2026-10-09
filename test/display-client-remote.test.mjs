@@ -34,7 +34,7 @@ function loadClientBundle(source) {
 
 async function compose(seed, { fixtureWorld = false } = {}) {
   const profile = await mkdtemp(join(tmpdir(), 'canvas-client-remote-'));
-  const store = join(profile, 'data', 'hanaworlds-canvas');
+  const store = join(profile, 'data', 'hanaworlds-canvas-v1');
   if (seed) await seed(store);
   const host = new Context();
   await host.plugin(TypertRegistry);

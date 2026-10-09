@@ -195,8 +195,13 @@ export class CanvasV5 {
     if (!session) return structuredClone({ state: 'NO_WORLD', worldRef: null, objects: [] });
     const worldRef = session.activeWorldRef;
     const worldRevision = s.worldRevisions[worldRef];
-    const pending = Object.values(s.pending).some(row =>
-      (row.body?.worldRef ?? row.worldRef) === worldRef);
+    const recovery = Object.entries(s.pending)
+      .filter(([, row]) => (row.body?.worldRef ?? row.worldRef) === worldRef)
+      .map(([transactionId, row]) => ({ transactionId, mode: row.kind === 'REGION' ? 'REGION' : 'CELL',
+        phase: row.phase, recoveryPending: row.phase === 'RESTORE_PENDING',
+        restoreCode: row.restoreCode ?? null, causeCode: row.causeCode ?? null }))
+      .sort((a, b) => a.transactionId.localeCompare(b.transactionId));
+    const pending = recovery.length > 0;
     const objects = Object.values(s.objects[worldRef] ?? {})
       .sort((a, b) => a.creationSequence - b.creationSequence).map(object => {
         const rows = s.history[object.objectRef] ?? [];
@@ -231,8 +236,9 @@ export class CanvasV5 {
             s.transactions[rows[0].transactionId].after.coveredPositions,
           undo, redo };
       });
+    // Unfinished transactions of this World, including a rollback waiting for recovery.
     return structuredClone({ state: objects.length ? 'READY' : 'EMPTY', worldRef,
-      worldRevision, localContext: session.localContext, objects });
+      worldRevision, localContext: session.localContext, objects, recovery });
   }
   async readHistoryFacts(request) {
     const state = await this.#durable();
@@ -527,11 +533,21 @@ export class CanvasV5 {
         delete state.pending[body.transactionId];
       });
       return response;
-    } catch {
+    } catch (restoreError) {
+      // G1: a rollback the engine could not finish (e.g. RESTORE_FAILED when a real body
+      // blocks a solid target cell) is never reported as success or swallowed. The reservation
+      // stays as an explicit, durable recovery-pending row and blocks the World.
+      const restoreCode = restoreError?.publicError?.code ?? restoreError?.code ?? 'RESTORE_FAILED';
+      const causeCode = cause?.publicError?.code ?? cause?.code ?? null;
+      await this.store.commit(state => {
+        const row = state.pending[body.transactionId];
+        if (row) Object.assign(row, { phase: 'RESTORE_PENDING', restoreCode, causeCode });
+      });
       const pending = fail('RECOVERY_PENDING', 'TRANSPORT_OUTCOME_UNKNOWN', 'apply');
       pending.publicError.retryability = 'SAME_TRANSACTION_QUERY';
       pending.publicError.mutationState = 'UNKNOWN';
       pending.publicError.transactionRef = body.transactionId;
+      pending.publicError.causeCode = restoreCode;
       pending.cause = cause;
       throw pending;
     }
@@ -1190,6 +1206,7 @@ export class CanvasV5 {
 
 export const name = 'hanaworlds-canvas';
 export const inject = [];
+export const STORE_ROOT = 'hanaworlds-canvas-v1';
 async function nativeDirectory(ctx) {
   const homePath = ctx.get?.('dshHomePath');
   if (typeof homePath !== 'function') throw new Error('CANVAS_STORAGE_UNAVAILABLE');
@@ -1202,8 +1219,9 @@ async function nativeDirectory(ctx) {
       join(homedir(), configured.slice(2)) : configured;
     if (root !== resolve(expanded)) throw new Error('CANVAS_STORAGE_UNAVAILABLE');
   }
-  const directory = join(root, 'data', 'hanaworlds-canvas');
-  if (homePath('data', 'hanaworlds-canvas') !== directory)
+  // New root for the 1.x store; the 0.x root (data/hanaworlds-canvas) is left untouched.
+  const directory = join(root, 'data', STORE_ROOT);
+  if (homePath('data', STORE_ROOT) !== directory)
     throw new Error('CANVAS_STORAGE_UNAVAILABLE');
   const canonicalRoot = await realpath(root);
   for (const path of [root, join(root, 'data'), directory]) {
@@ -1254,11 +1272,9 @@ export function apply(ctx) {
     read: request => service.readHistoryFacts(request) });
   ctx.provide?.('hanaworldsWorldRevisionOracle', {
     read: worldRef => service.readWorldRevision(worldRef) });
-  // Stage 1 validation configuration supply. The two consumer keys and shapes are the ones
-  // Workshop's published Host assembly reads; hanaworldsCanvasConfigSupply is Canvas's own
-  // provenance/revision/invalidation readback of the same observation.
+  // Stage 1 validation configuration supply: the CompilerConfig consumer key and Canvas's own
+  // provenance/revision/invalidation readback. Canvas provides no SafetyProfile service.
   const supply = new CanvasConfigSupply(service);
-  ctx.provide?.('hanaworldsSafetyProfile', { read: worldRef => supply.readSafetyProfile(worldRef) });
   ctx.provide?.('hanaworldsCompilerConfig', { read: worldRef => supply.readCompilerConfig(worldRef) });
   ctx.provide?.('hanaworldsCanvasConfigSupply', { read: worldRef => supply.read(worldRef) });
   // One Loader entry per package; the display binds inside Canvas's own fiber.

@@ -133,7 +133,7 @@ const regionInput = (origin,size) => {
 
 export async function createObjectsExample(directory) {
   // This is an explicit one-time fixture producer, never a server read side effect.
-  try { await readFile(join(directory,'canvas-v5.json')); throw new Error('EXAMPLE_ALREADY_EXISTS'); }
+  try { await readFile(join(directory,'canvas-v6.json')); throw new Error('EXAMPLE_ALREADY_EXISTS'); }
   catch (error) { if (error.code!=='ENOENT') throw error; }
   const env=fixtureEnvironment();
   const canvas=new CanvasV5({store:await CanvasStore.open(directory),adapter:env.adapter,nativeFacts:env.nativeFacts,sessions:fixtureSessions()});

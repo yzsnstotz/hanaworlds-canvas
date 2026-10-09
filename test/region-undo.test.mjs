@@ -371,6 +371,10 @@ test('unverified restore stays durably pending and normal reopen recovers from t
       world.failRestore = false;
       ({ canvas, region } = await boot(directory, world));
       assert.equal(canvas.store.snapshot.pending['region-tx-1'].phase, 'RESTORE_PENDING');
+      // G1: the failed rollback is durably named and readable, never reported as success.
+      assert.equal(result.error.causeCode, 'RESTORE_FAILED');
+      assert.equal(canvas.store.snapshot.pending['region-tx-1'].restoreCode, 'RESTORE_FAILED');
+      assert.equal(canvas.store.snapshot.transactions['region-tx-1'], undefined);
       const blocked = await region.call('ApplyRegionCommit', commit(localContext, terrain(),
         { requestId: 'region-9', transactionId: 'region-tx-9' }));
       assert.equal(blocked.error.code, 'TRANSACTION_CONFLICT');

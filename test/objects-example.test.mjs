@@ -17,7 +17,7 @@ test('web example reads public-transaction-produced durable records unchanged af
     const exampleDirectory = join(scratch, 'isolated-example');
     const receipt = await createObjectsExample(exampleDirectory);
     assert.equal(receipt.classification, 'REAL_RUNTIME + FIXTURE');
-    const persisted = await readFile(join(exampleDirectory, 'canvas-v5.json'));
+    const persisted = await readFile(join(exampleDirectory, 'canvas-v6.json'));
     const state = JSON.parse(persisted);
     assert.deepEqual(Object.keys(state.pending), []);
     assert.equal(Object.keys(state.transactions).length, 4);
@@ -57,7 +57,7 @@ test('web example reads public-transaction-produced durable records unchanged af
     await new Promise(resolve => server.close(resolve)); server = null;
     base = await start();
     assert.deepEqual(await (await fetch(base+'/api/example')).json(),first);
-    assert.deepEqual(await readFile(join(exampleDirectory,'canvas-v5.json')),persisted,'web reads and reopen must not regenerate records or timestamps');
+    assert.deepEqual(await readFile(join(exampleDirectory,'canvas-v6.json')),persisted,'web reads and reopen must not regenerate records or timestamps');
     await assert.rejects(createObjectsExample(exampleDirectory), /EXAMPLE_ALREADY_EXISTS/);
   } finally {
     if (server) await new Promise(resolve => server.close(resolve));

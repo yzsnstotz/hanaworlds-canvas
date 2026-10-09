@@ -2,7 +2,10 @@ import { mkdir, open, readFile, rename, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
-const fresh = () => ({ schemaVersion: 5, sessions: {}, connections: {},
+// Canvas 1.x store (contracts major 1). A 0.x store lives in another root and is never read,
+// migrated or made compatible.
+export const STORE_FILE = 'canvas-v6.json';
+const fresh = () => ({ schemaVersion: 6, sessions: {}, connections: {},
   connectionInventories: {}, objects: {},
   footprints: {}, registryRevisions: {}, worldRevisions: {}, placementSettings: {},
   placementInspections: {}, analyses: {}, transactions: {},
@@ -20,9 +23,9 @@ export class CanvasStore {
     if (typeof directory !== 'string' || !directory) throw new Error('CANVAS_STORAGE_UNAVAILABLE');
     await mkdir(directory, { recursive: true, mode: 0o700 });
     let snapshot;
-    try { snapshot = JSON.parse(await readFile(join(directory, 'canvas-v5.json'), 'utf8')); }
+    try { snapshot = JSON.parse(await readFile(join(directory, STORE_FILE), 'utf8')); }
     catch (error) { if (error.code !== 'ENOENT') throw error; snapshot = fresh(); }
-    if (snapshot.schemaVersion !== 5) throw new Error('CANVAS_STORAGE_VERSION_UNSUPPORTED');
+    if (snapshot.schemaVersion !== 6) throw new Error('CANVAS_STORAGE_VERSION_UNSUPPORTED');
     return new this(directory, snapshot);
   }
   async commit(change) {
@@ -30,13 +33,13 @@ export class CanvasStore {
       if (this.unavailable) throw new Error('CANVAS_STORAGE_UNAVAILABLE');
       const next = structuredClone(this.snapshot);
       const result = await change(next);
-      const temporary = join(this.directory, `.canvas-v5-${randomUUID()}.tmp`);
+      const temporary = join(this.directory, `.canvas-v6-${randomUUID()}.tmp`);
       let renamed = false;
       try {
         const file = await open(temporary, 'wx', 0o600);
         try { await file.writeFile(JSON.stringify(next)); await file.sync(); }
         finally { await file.close(); }
-        await rename(temporary, join(this.directory, 'canvas-v5.json'));
+        await rename(temporary, join(this.directory, STORE_FILE));
         renamed = true;
         const directory = await open(this.directory, 'r');
         try { await directory.sync(); } finally { await directory.close(); }

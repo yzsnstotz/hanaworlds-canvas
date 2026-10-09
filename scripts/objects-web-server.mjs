@@ -30,7 +30,7 @@ export async function createObjectsWebServer({ storeDirectory, assetsDirectory, 
     await Promise.all(['undo.js', 'undo.css'].map(name => readFile(join(assetsDirectory, name)))) : [];
   const undo = undoDirectory ? await openUndoHost(undoDirectory) : null;
   const canvas = new CanvasV5({ store: await CanvasStore.open(storeDirectory) });
-  if (sampleStoreDirectory) await readFile(join(sampleStoreDirectory, 'canvas-v5.json'));
+  if (sampleStoreDirectory) await readFile(join(sampleStoreDirectory, 'canvas-v6.json'));
   const example = sampleStoreDirectory ? new CanvasV5({ store: await CanvasStore.open(sampleStoreDirectory) }) : null;
   const reply = (res, status, value, contentType = 'application/json; charset=utf-8', head = false) => {
     res.writeHead(status, { 'Content-Type': contentType, 'Cache-Control': 'no-store',

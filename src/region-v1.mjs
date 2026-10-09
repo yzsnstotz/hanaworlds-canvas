@@ -223,9 +223,9 @@ export class CanvasRegionV1 {
     return validateResponse(REGION_WIRE, operation,
       { contractVersion: REGION_WIRE, requestId: body.requestId, result, error: null });
   }
-  async #pendingPhase(transactionId, phase) {
+  async #pendingPhase(transactionId, phase, extra = {}) {
     await this.store.commit(next => { if (next.pending[transactionId])
-      next.pending[transactionId].phase = phase; });
+      Object.assign(next.pending[transactionId], { phase, ...extra }); });
   }
 
   async #commit(raw) {
@@ -351,17 +351,15 @@ export class CanvasRegionV1 {
       restored = await this.#restore(body, body.transactionId, content, beforeSummary, box,
         'restore');
     } catch (restoreError) {
-      await this.store.commit(state => {
-        const row = state.pending[body.transactionId];
-        if (row) { row.phase = 'RESTORE_PENDING';
-          row.causeCode = cause?.publicError?.code ?? cause?.code ?? null; }
-      });
+      // G1: an unfinished rollback stays a durable, readable recovery-pending row.
+      const restoreCode = restoreError?.publicError?.code ?? restoreError?.code ?? 'RESTORE_FAILED';
+      await this.#pendingPhase(body.transactionId, 'RESTORE_PENDING', { restoreCode,
+        causeCode: cause?.publicError?.code ?? cause?.code ?? null });
       const pending = fail('RECOVERY_PENDING', 'TRANSPORT_OUTCOME_UNKNOWN', 'apply');
       pending.publicError.retryability = 'SAME_TRANSACTION_QUERY';
       pending.publicError.mutationState = 'UNKNOWN';
       pending.publicError.transactionRef = body.transactionId;
-      pending.publicError.causeCode = restoreError?.publicError?.code ??
-        restoreError?.code ?? 'RESTORE_FAILED';
+      pending.publicError.causeCode = restoreCode;
       throw pending;
     }
     const lighting = restored.lighting ?? facts.lighting ??
@@ -438,8 +436,10 @@ export class CanvasRegionV1 {
       try {
         back = await this.#restore(tx, body.undoTransactionId, preUndoContent, preUndoSummary,
           origin.box, 'undo-restore');
-      } catch {
-        await this.#pendingPhase(body.undoTransactionId, 'RESTORE_PENDING');
+      } catch (restoreError) {
+        const restoreCode = restoreError?.publicError?.code ?? restoreError?.code ?? 'RESTORE_FAILED';
+        await this.#pendingPhase(body.undoTransactionId, 'RESTORE_PENDING', { restoreCode,
+          causeCode: cause?.publicError?.code ?? cause?.code ?? null });
         const pending = fail('RECOVERY_PENDING', 'TRANSPORT_OUTCOME_UNKNOWN', 'apply');
         pending.publicError.retryability = 'SAME_TRANSACTION_QUERY';
         pending.publicError.mutationState = 'UNKNOWN';

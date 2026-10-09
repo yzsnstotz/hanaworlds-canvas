@@ -29,7 +29,7 @@ test('display is an immutable, session-bound read of durable current objects and
     });
     const canvas = new CanvasV5({ store });
     assert.equal(typeof canvas.readObjectsHistory, 'function', 'read-only Canvas display API is missing');
-    const before = await readFile(join(directory, 'canvas-v5.json'));
+    const before = await readFile(join(directory, 'canvas-v6.json'));
     const view = await canvas.readObjectsHistory('session-1');
     assert.equal(view.state, 'READY');
     assert.deepEqual(view.objects[0].bounds, { min: [1,2,3], max: [2,2,3], size: [2,1,1] });
@@ -44,7 +44,7 @@ test('display is an immutable, session-bound read of durable current objects and
     assert.equal((await canvas.readObjectsHistory('other-session')).state, 'NO_WORLD');
     view.objects[0].bounds.min[0] = 999;
     assert.equal((await canvas.readObjectsHistory('session-1')).objects[0].bounds.min[0], 1);
-    assert.deepEqual(await readFile(join(directory, 'canvas-v5.json')), before, 'panel read must not commit/replay or mutate durable data');
+    assert.deepEqual(await readFile(join(directory, 'canvas-v6.json')), before, 'panel read must not commit/replay or mutate durable data');
     const reopened = new CanvasV5({ store: await CanvasStore.open(directory) });
     assert.deepEqual(await reopened.readObjectsHistory('session-1'), await canvas.readObjectsHistory('session-1'));
   } finally { await rm(directory, { recursive: true, force: true }); }

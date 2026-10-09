@@ -12,7 +12,7 @@ import { supplyFixturePeers, supplySessionRef, supplyWorldRef } from './config-s
  * the page has no policy editing and never writes a World.
  */
 const MAX_BODY = 1024;
-const page = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>校验配置供给 · Canvas</title><link rel="stylesheet" href="/assets/supply.css"></head><body><main id="root"><h1>Stage 1 校验配置供给 · Canvas</h1><p class="layer">本页层级：<span class="real">SOURCE</span> Canvas 代码 + <span class="fixture">FIXTURE</span> 对端输入 · <b>REAL 供给 0</b> · 不是 TO_TEST</p><p class="note">输入 World，读取 Canvas 对该 World 的 SafetyProfile / CompilationConfig 供给：每项来源、适用域、revision、变更失效记录。<span class="fixture">FIXTURE</span> 只标在对端输入上。</p><form id="read"><label>World <input id="world" name="world" value="${supplyWorldRef}" autocomplete="off"></label><button>读取供给</button></form><section id="fixture"></section><section id="out"></section></main><script src="/assets/supply.js" defer></script></body></html>`;
+const page = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>校验配置供给 · Canvas</title><link rel="stylesheet" href="/assets/supply.css"></head><body><main id="root"><h1>Stage 1 校验配置供给 · Canvas</h1><p class="layer">本页层级：<span class="real">SOURCE</span> Canvas 代码 + <span class="fixture">FIXTURE</span> 对端输入 · <b>REAL 供给 0</b> · 不是 TO_TEST</p><p class="note">输入 World，读取 Canvas 对该 World 的 CompilationConfig 供给：每项来源、适用域、revision、变更失效记录。Safety 规则不由 Canvas 声明或供给。<span class="fixture">FIXTURE</span> 只标在对端输入上。</p><form id="read"><label>World <input id="world" name="world" value="${supplyWorldRef}" autocomplete="off"></label><button>读取供给</button></form><section id="fixture"></section><section id="out"></section></main><script src="/assets/supply.js" defer></script></body></html>`;
 const css = `body{font:14px/1.5 -apple-system,system-ui,sans-serif;margin:0;background:#f7f7f5;color:#1d1d1b}main{max-width:1000px;margin:0 auto;padding:16px}h1{font-size:20px}h2{font-size:16px;margin:18px 0 6px}.note{color:#555}.fixture{background:#ffd54a;color:#3a2a00;font-weight:700;padding:1px 6px;border-radius:4px;font-size:12px}.real{background:#cfe8d6;color:#123;font-weight:700;padding:1px 6px;border-radius:4px;font-size:12px}form{display:flex;gap:8px;align-items:center;margin:12px 0}input{font:inherit;padding:4px 8px;min-width:260px}button{font:inherit;padding:4px 12px;cursor:pointer}table{border-collapse:collapse;width:100%;background:#fff;margin:4px 0 10px}td,th{border:1px solid #ddd;padding:4px 6px;text-align:left;vertical-align:top;font-size:13px}th{background:#eee}.SUPPLIED{color:#0a6b2e;font-weight:700}.MISSING,.SOURCE_MISSING,.NOT_BOUND{color:#a11;font-weight:700}code{font-size:12px;word-break:break-all}.box{background:#fff;border:1px solid #ddd;padding:8px;margin:6px 0}.fixbox{border:2px dashed #e0b400;background:#fffbe6;padding:8px;margin:8px 0}.fixbox button{margin:2px}.layer{background:#fff;border:2px solid #1d1d1b;padding:6px 10px;font-size:15px}`;
 const client = `const $=s=>document.querySelector(s);const esc=v=>String(v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const j=v=>v===null||v===undefined?'—':'<code>'+esc(typeof v==='string'?v:JSON.stringify(v))+'</code>';
@@ -25,12 +25,25 @@ function render(d){if(d.error){$('#out').innerHTML='<div class="box MISSING">'+j
 let h='<h2>来源权威 <span class="real">REAL Canvas 代码</span></h2><div class="box">authority '+j(d.report.authority)+' · '+j(d.report.profileVersion)+' · World '+j(d.report.worldRef)+' · contracts '+j(c.contracts)+' · Canvas 声明记录 '+j(c.declaration)+'</div>';
 h+='<h2>适用域（Canvas 自己的选择表；连接来自 <span class="fixture">FIXTURE 输入</span>）</h2><div class="box">'+(c.domain?Object.entries(c.domain).map(([k,v])=>esc(k)+' '+j(v)).join('<br>')+'<br>sessions '+j(c.sessionRefs):'<span class="NOT_BOUND">NOT_BOUND</span>：该 World 没有被任何 Session 绑定')+'</div>';
 h+='<div class="box">本次观察 #'+esc(c.observedSequence)+' '+j(c.observationDigest)+' · '+esc(c.observedAt)+(c.sources?' · Catalogue <span class="fixture">FIXTURE 输入</span> '+j(c.sources.catalogue):'')+'</div>';
-h+=profile('SafetyProfile',c.profiles.safetyProfile,d.ports.safetyProfile)+profile('CompilationConfig',c.profiles.compilationConfig,d.ports.compilerConfig);
+h+='<h2>Safety 规则</h2><div class="box">来源：<b>玩家确认</b>（skill 提案 → 玩家确认 → 合约纯函数）。Canvas 不声明、不供给 SafetyProfile，也没有 hanaworldsSafetyProfile 服务。</div>';
+h+='<h2>引擎安全能力（Canvas 事务角色）</h2><table><tr><th>能力</th><th>Canvas 侧</th></tr>'+d.engine.map(r=>'<tr><td>'+esc(r.name)+'</td><td class="'+r.status+'">'+esc(r.status)+'</td></tr><tr><td colspan="2">'+esc(r.detail)+'</td></tr>').join('')+'</table>';
+h+=profile('CompilationConfig',c.profiles.compilationConfig,d.ports.compilerConfig);
 h+='<h2>变更 / 失效记录（持久，'+d.report.history.length+' 条）</h2><table><tr><th>#</th><th>观察</th><th>被取代</th><th>原因</th></tr>';for(const r of [...d.report.history].reverse())h+='<tr><td>'+esc(r.observedSequence)+'</td><td>'+j(r.observationDigest.slice(0,16))+'</td><td>'+esc(r.supersededAt)+'</td><td>'+esc(r.invalidationReasons.join(', '))+'</td></tr>';h+='</table>';$('#out').innerHTML=h;}
 function renderFixture(f){$('#fixture').innerHTML='<div class="fixbox"><span class="fixture">FIXTURE</span> 对端输入（不是配置来源权威）：'+j(f)+'<br><button data-a="worldedit">改 FIXTURE worldedit revision</button><button data-a="noworldedit">FIXTURE Catalogue 去掉 worldedit</button><button data-a="rebind">FIXTURE 新连接 incarnation 并重选</button><button data-a="unbind">经 Canvas 解绑</button></div>';
 for(const b of document.querySelectorAll('#fixture button'))b.onclick=async()=>{const r=await post('/api/fixture/'+b.dataset.a);if(r.fixture)renderFixture(r.fixture);await read();};}
 async function read(){const w=$('#world').value;const r=await fetch('/api/supply?worldRef='+encodeURIComponent(w));const d=await r.json();if(d.fixture)renderFixture(d.fixture);render(d);}
 $('#read').onsubmit=e=>{e.preventDefault();read();};fetch('/api/fixture').then(r=>r.json()).then(d=>renderFixture(d.fixture));`;
+
+// Canvas-side state of the engine safety capabilities. The public capability names and refusal
+// codes are the Contracts' (v1.0.0 candidate); until those bytes exist nothing is claimed here.
+const ENGINE_CAPABILITIES = [
+  { name: 'G1 回滚身体复查（RESTORE_FAILED）', status: 'SUPPLIED',
+    detail: 'Canvas 收到 RESTORE_FAILED → 事务记为待恢复（RESTORE_PENDING，可读，不报成功）。引擎复查由 Adapter 实现。' },
+  { name: 'G2 逐格保护', status: 'MISSING',
+    detail: 'Canvas 提交前按合约能力名检查、缺失即具名拒绝：等待 hanaworlds-contracts v1.0.0-rc.1 的能力名，尚未接入。' },
+  { name: 'G3 不封住玩家', status: 'MISSING',
+    detail: 'Canvas 提交前按合约能力名检查、缺失即具名拒绝：等待 hanaworlds-contracts v1.0.0-rc.1 的能力名，尚未接入。' },
+];
 
 async function portOutcome(key, read) {
   try { return { key, ok: true, value: await read() }; }
@@ -114,9 +127,8 @@ export async function createConfigSupplyServer(runDirectory) {
         const worldRef = url.searchParams.get('worldRef') ?? '';
         const report = await supply.read(worldRef);
         const ports = {
-          safetyProfile: await portOutcome('hanaworldsSafetyProfile', () => supply.readSafetyProfile(worldRef)),
           compilerConfig: await portOutcome('hanaworldsCompilerConfig', () => supply.readCompilerConfig(worldRef)) };
-        return reply(res, 200, { report, ports, fixture: peers.describe() });
+        return reply(res, 200, { report, ports, engine: ENGINE_CAPABILITIES, fixture: peers.describe() });
       }
       return reply(res, 404, { error: 'NOT_FOUND' });
     } catch (error) {

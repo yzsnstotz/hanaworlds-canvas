@@ -5,12 +5,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { contractHandshake, digestValue, publicError, schemaBundle, validateType }
   from 'hanaworlds-contracts';
-const { CanvasV5, CanvasStore, CanvasConfigSupply, assembleProfile, withoutPlayerGeometry,
+const { CanvasV5, CanvasStore, CanvasConfigSupply, assembleProfile, STORE_ROOT,
   apply: applyCanvas } =
   await import(process.env.CANVAS_ENTRY ?? new URL('../src/index.mjs', import.meta.url).href);
 import { g3CellHandshake } from './support/g3-adapter-handshake.mjs';
-const { STAGE1_POLICY_DECLARATION, STAGE1_POLICY_REVISION } = await import(
-  new URL('../src/stage1-policy.mjs', import.meta.url).href);
 import { fixtureSessions } from '../scripts/fixture-sessions.mjs';
 
 // FIXTURE peer inputs only (contracts-shaped Adapter, NativeFacts Catalogue and Session port).
@@ -75,7 +73,7 @@ async function select(canvas, world, sessionRef) {
 }
 const temp = () => mkdtemp(join(tmpdir(), 'canvas-config-supply-'));
 
-test('unbound World: both consumer ports refuse WORLD_NOT_BOUND, no fact is read', async () => {
+test('unbound World: the CompilerConfig port refuses WORLD_NOT_BOUND, no fact is read', async () => {
   const directory = await temp();
   try {
     const world = fixtureWorld();
@@ -85,10 +83,10 @@ test('unbound World: both consumer ports refuse WORLD_NOT_BOUND, no fact is read
     const report = await supply.read('local-world');
     assert.equal(report.authority, 'hanaworlds-canvas');
     assert.equal(report.current.domain, null);
-    assert.equal(report.current.profiles.safetyProfile.status, 'NOT_BOUND');
-    for (const read of [() => supply.readSafetyProfile('local-world'),
-      () => supply.readCompilerConfig('local-world')])
-      await assert.rejects(read, error => publicError(error).code === 'WORLD_NOT_BOUND');
+    assert.deepEqual(Object.keys(report.current.profiles), ['compilationConfig']);
+    assert.equal(report.current.profiles.compilationConfig.status, 'NOT_BOUND');
+    await assert.rejects(supply.readCompilerConfig('local-world'),
+      error => publicError(error).code === 'WORLD_NOT_BOUND');
     assert.equal(world.catalogueReads, 0);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
@@ -106,55 +104,30 @@ test('bound World: every field names its source; sourceless fields are refused b
       connectionIncarnationRef: 'socket-open-1', payloadVersion: 'local-world/v1',
       capabilityRevision: 'cap-1' });
     assert.deepEqual(current.sessionRefs, ['session-1']);
-    const safety = current.profiles.safetyProfile;
+    // v1: Canvas supplies only CompilationConfig; it declares no Safety value.
+    assert.deepEqual(Object.keys(current.profiles), ['compilationConfig']);
+    assert.equal(Object.hasOwn(current, 'declaration'), false);
     const compile = current.profiles.compilationConfig;
     // Schema constants come from the installed Contracts schema, attributed to it.
-    for (const [profile, type] of [[safety, 'SafetyProfile'], [compile, 'CompilationConfig']])
-      for (const [field, row] of Object.entries(profile.fields))
-        if (Object.hasOwn(schemaBundle.definitions[type].properties[field], 'const')) {
-          assert.equal(row.status, 'SUPPLIED');
-          assert.equal(row.provenance.kind, 'CONTRACT_SCHEMA');
-          assert.equal(row.provenance.sourceRevision, contractHandshake.contracts);
-        }
-    assert.equal(safety.fields.connectivity.value, 6);
+    for (const [field, row] of Object.entries(compile.fields))
+      if (Object.hasOwn(schemaBundle.definitions.CompilationConfig.properties[field], 'const')) {
+        assert.equal(row.status, 'SUPPLIED');
+        assert.equal(row.provenance.kind, 'CONTRACT_SCHEMA');
+        assert.equal(row.provenance.sourceRevision, contractHandshake.contracts);
+      }
     // worldeditRevision is the bound World's loaded Catalogue fact, bound to that Catalogue.
     assert.deepEqual(compile.fields.worldeditRevision, { status: 'SUPPLIED',
       value: 'fixture-worldedit-1', provenance: { kind: 'ENGINE_FACT',
         ref: 'hanaworldsLuantiNativeFacts.readCatalogue(worldRef).modRevisions.worldedit',
         sourceRevision: digestValue('catalogue', world.catalogue).sha256 } });
-    assert.deepEqual(safety.missing.map(row => [row.field, row.sourceKind, row.reason]), [
-      ['avatarDimensions', 'ENGINE_FACT', 'REQUIRED_FACT_UNKNOWN'],
-      ['requireEntranceConnectivity', 'DECLARED_POLICY', 'POLICY_UNAVAILABLE'],
-      ['hazardPolicy', 'DECLARED_POLICY', 'POLICY_UNAVAILABLE'],
-      ['optionalLightRule', 'DECLARED_POLICY', 'POLICY_UNAVAILABLE']]);
-    // INV-POSE: the envelope stays in the engine; Canvas names that, it does not fill it.
-    assert.equal(safety.missing[0].cause, 'INV-POSE-STAYS-IN-ENGINE');
-    for (const row of safety.missing.slice(1)) {
-      assert.equal(row.cause, 'VALUE_UNDETERMINED');
-      assert.ok(row.impact.length > 0);
-    }
-    // The one value a current non-switchable project rule fixes, attributed to Canvas's record.
-    const body = safety.fields.requireBodyClearance;
-    assert.equal(body.status, 'SUPPLIED');
-    assert.equal(body.value, true);
-    assert.equal(body.provenance.kind, 'CANVAS_DECLARATION');
-    assert.equal(body.provenance.sourceRevision, STAGE1_POLICY_REVISION);
-    assert.equal(body.provenance.basis.id, 'INV-BODY-RECHECK-AT-PREPARE');
-    assert.equal(current.declaration, STAGE1_POLICY_REVISION);
     assert.deepEqual(compile.missing.map(row => [row.field, row.sourceKind]),
       [['backendProfileId', 'ENGINE_FACT']]);
-    for (const profile of [safety, compile]) {
-      assert.equal(profile.status, 'SOURCE_MISSING');
-      assert.equal(profile.value, null);
-      assert.equal(profile.revision, null);
-    }
+    assert.equal(compile.status, 'SOURCE_MISSING');
+    assert.equal(compile.value, null);
+    assert.equal(compile.revision, null);
     // A consumer mapping through Contracts publicError() (Workshop) keeps the exact refusal.
-    await assert.rejects(supply.readSafetyProfile('local-world'), error =>
-      publicError(error).code === 'CAPABILITY_UNAVAILABLE' &&
-      publicError(error).reason === 'POLICY_UNAVAILABLE' && publicError(error).phase === 'validate' &&
-      error.publicError.code === 'CAPABILITY_UNAVAILABLE' &&
-      error.publicError.reason === 'POLICY_UNAVAILABLE' && error.missingSources.length === 4);
     await assert.rejects(supply.readCompilerConfig('local-world'), error =>
+      publicError(error).code === 'CAPABILITY_UNAVAILABLE' && publicError(error).phase === 'validate' &&
       error.publicError.code === 'CAPABILITY_UNAVAILABLE' &&
       error.publicError.reason === 'REQUIRED_FACT_UNKNOWN' &&
       error.missingSources[0].field === 'backendProfileId');
@@ -275,68 +248,51 @@ test('host keys: Workshop consumer shapes plus Canvas own provenance readback', 
     provide: (name, port) => ports.set(name, port) };
     const canvas = applyCanvas(ctx);
     await canvas.ready;
-    for (const key of ['hanaworldsSafetyProfile', 'hanaworldsCompilerConfig',
-      'hanaworldsCanvasConfigSupply'])
+    for (const key of ['hanaworldsCompilerConfig', 'hanaworldsCanvasConfigSupply'])
       assert.equal(typeof ports.get(key)?.read, 'function', key);
+    // v1: Canvas provides no second SafetyProfile service.
+    assert.equal(ports.has('hanaworldsSafetyProfile'), false);
     await select(canvas, world, 'session-1');
     const report = await ports.get('hanaworldsCanvasConfigSupply').read('local-world');
     assert.equal(report.current.profiles.compilationConfig.fields.worldeditRevision.value,
       'fixture-worldedit-1');
-    await assert.rejects(ports.get('hanaworldsSafetyProfile').read('local-world'),
-      error => error.publicError.code === 'CAPABILITY_UNAVAILABLE');
     await assert.rejects(ports.get('hanaworldsCompilerConfig').read('local-world'),
       error => error.publicError.code === 'CAPABILITY_UNAVAILABLE');
   } finally { await rm(profile, { recursive: true, force: true }); }
 });
 
-test('Stage 1 policy declaration: Canvas-only, cited or UNDETERMINED, never a default', () => {
-  const record = STAGE1_POLICY_DECLARATION;
-  assert.equal(record.declarer, 'hanaworlds-canvas');
-  assert.ok(Object.isFrozen(record) && Object.isFrozen(record.fields.requireBodyClearance));
-  assert.deepEqual(Object.keys(record.fields).sort(), ['hazardPolicy', 'optionalLightRule',
-    'requireBodyClearance', 'requireEntranceConnectivity']);
-  for (const [field, row] of Object.entries(record.fields)) {
-    if (row.status === 'DECLARED') {
-      assert.equal(row.basis.kind, 'PROJECT_RULE', field);
-      assert.match(row.basis.sha256, /^[0-9a-f]{64}$/);
-      assert.match(row.basis.sourceRevision, /^hanaworlds-docs@[0-9a-f]{40}$/);
-      assert.equal(row.basis.switchable, false);
-    } else {
-      assert.equal(row.status, 'UNDETERMINED', field);
-      assert.equal(Object.hasOwn(row, 'value'), false, field);
-      assert.ok(row.checked.length && row.impact, field);
-    }
-  }
-  assert.match(STAGE1_POLICY_REVISION, /^stage1-policy-[0-9a-f]{32}$/);
+test('v1: no Safety declaration or player geometry in the supply or its durable record', async () => {
+  const directory = await temp();
+  try {
+    const world = fixtureWorld();
+    const canvas = await boundCanvas(directory, world);
+    const supply = new CanvasConfigSupply(canvas);
+    assert.equal(supply.readSafetyProfile, undefined);
+    await supply.read('local-world');
+    world.catalogue = withWorldedit('fixture-worldedit-2');
+    await supply.read('local-world');
+    const stored = await readFile(join(directory, 'canvas-v6.json'), 'utf8');
+    for (const word of ['SafetyProfile', 'safetyProfile', 'avatarDimensions',
+      'requireBodyClearance', 'requireEntranceConnectivity', 'hazardPolicy', 'optionalLightRule',
+      'stage1-policy', '"declaration"', 'bodyOccupiedPositions'])
+      assert.equal(stored.includes(word), false, word);
+  } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
-test('INV-POSE: Canvas never persists player geometry, even when a source supplies it', async () => {
-  // FIXTURE observation: a supplied envelope exercises the durable-form guard only.
-  const domain = { worldRef: 'w', connectionRef: 'c', connectionIncarnationRef: 'i',
-    payloadVersion: 'p', capabilityRevision: 'r' };
-  const envelope = { width: 0.6, height: 1.77, depth: 0.6, unit: 'node' };
-  const fields = Object.fromEntries(schemaBundle.definitions.SafetyProfile.required.map(field => {
-    const schema = schemaBundle.definitions.SafetyProfile.properties[field];
-    const value = Object.hasOwn(schema, 'const') ? schema.const : field === 'avatarDimensions' ?
-      envelope : field === 'hazardPolicy' ? { forbidLiquid: true, maximumDamagePerSecond: 0 } :
-      field === 'optionalLightRule' ? null : true;
-    return [field, { status: 'SUPPLIED', value, provenance: { kind: 'FIXTURE', ref: field,
-      sourceRevision: 'f-1' } }];
-  }));
-  const safetyProfile = assembleProfile('safetyProfile', fields, domain);
-  assert.equal(safetyProfile.status, 'SUPPLIED');
-  const observation = { contracts: 'c', declaration: 'd', domain, sessionRefs: [], sources: null,
-    profiles: { safetyProfile, compilationConfig: { type: 'CompilationConfig', status: 'SOURCE_MISSING',
-      value: null, digest: null, revision: null, fields: {}, missing: [] } } };
-  const stored = withoutPlayerGeometry(observation);
-  const text = JSON.stringify(stored);
-  for (const number of ['0.6', '1.77']) assert.equal(text.includes(number), false, number);
-  assert.equal(text.includes(safetyProfile.digest), false);
-  assert.equal(text.includes(safetyProfile.revision), false);
-  assert.equal(stored.profiles.safetyProfile.fields.avatarDimensions.redacted, 'INV-POSE-STAYS-IN-ENGINE');
-  assert.equal(stored.profiles.safetyProfile.fields.avatarDimensions.provenance.sourceRevision, 'f-1');
-  // The caller's own observation is untouched (the live read still returns the profile).
-  assert.deepEqual({ ...observation.profiles.safetyProfile.value.avatarDimensions }, envelope);
+test('v1 store: a new root; a 0.x store is never read, migrated or accepted', async () => {
+  const directory = await temp();
+  try {
+    assert.equal(STORE_ROOT, 'hanaworlds-canvas-v1');
+    const { writeFile } = await import('node:fs/promises');
+    // A 0.x file left in the directory is ignored; a 0.x schema in the 1.x file is refused.
+    await writeFile(join(directory, 'canvas-v5.json'), JSON.stringify({ schemaVersion: 5,
+      placementInspections: { old: { inspection: { bodyOccupiedPositions: [[0, 0, 0]] } } } }));
+    const fresh = await CanvasStore.open(directory);
+    assert.equal(fresh.snapshot.schemaVersion, 6);
+    assert.deepEqual(fresh.snapshot.placementInspections, {});
+    await writeFile(join(directory, 'canvas-v6.json'), JSON.stringify({ schemaVersion: 5 }));
+    await assert.rejects(CanvasStore.open(directory), /CANVAS_STORAGE_VERSION_UNSUPPORTED/);
+  } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
 // Candidate public fixture inputs only; no Adapter implementation or live engine is used.
@@ -369,10 +325,6 @@ test('candidate backend uses only the public loaded payload declaration, with pr
     const result = await supply.readCompilerConfig('local-world');
     validateType('CompilationConfig', result.compilationConfig);
     assert.equal(result.compilationConfig.backendProfileId, row.value);
-    const avatar = report.current.profiles.safetyProfile.fields.avatarDimensions;
-    assert.equal(avatar.value, null);
-    assert.equal(avatar.factReason, 'NO_PUBLIC_SOURCE');
-    assert.equal(avatar.availability, 'UNAVAILABLE');
     assert.deepEqual(world.adapterCalls, []);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
@@ -448,26 +400,19 @@ test('candidate connection and Catalogue mismatches are stale, never usable back
 test('single and multiple missing-source refusals validate as public Error, without schema fallback', async () => {
   // Only the refusal projection is isolated here; policy values are never installed or changed.
   for (const missing of [
-    [{ field: 'avatarDimensions', reason: 'REQUIRED_FACT_UNKNOWN' }],
     [{ field: 'backendProfileId', reason: 'REQUIRED_FACT_UNKNOWN' }],
     [{ field: 'worldeditRevision', reason: 'REQUIRED_FACT_UNKNOWN' }],
-    [{ field: 'hazardPolicy', reason: 'POLICY_UNAVAILABLE' }],
-    [{ field: 'avatarDimensions', reason: 'REQUIRED_FACT_UNKNOWN' },
-      { field: 'hazardPolicy', reason: 'POLICY_UNAVAILABLE' }],
     [{ field: 'backendProfileId', reason: 'REQUIRED_FACT_UNKNOWN' },
       { field: 'worldeditRevision', reason: 'REQUIRED_FACT_UNKNOWN' }],
   ]) {
     const supply = new CanvasConfigSupply(null);
     supply.read = async () => ({ current: { observationDigest: 'FIXTURE-refusal', profiles:
-      Object.fromEntries(['safetyProfile', 'compilationConfig'].map(name => [name,
-        { status: 'SOURCE_MISSING', missing }])) } });
-    for (const read of [() => supply.readSafetyProfile('w'), () => supply.readCompilerConfig('w')]) {
-      await assert.rejects(read, e => {
-        const error = publicError(e); validateType('Error', error);
-        return error.code === 'CAPABILITY_UNAVAILABLE' && error.phase === 'validate' &&
-          error.mutationState === 'NONE' && e.missingSources === missing;
-      });
-    }
+      { compilationConfig: { status: 'SOURCE_MISSING', missing } } } });
+    await assert.rejects(supply.readCompilerConfig('w'), e => {
+      const error = publicError(e); validateType('Error', error);
+      return error.code === 'CAPABILITY_UNAVAILABLE' && error.phase === 'validate' &&
+        error.mutationState === 'NONE' && e.missingSources === missing;
+    });
   }
 });
 
@@ -487,7 +432,7 @@ test('candidate public fixture shape failures are refused through the consumer w
           error.missingSources.some(row => row.field === 'backendProfileId');
       }, item.title);
     }
-    const stored = await readFile(join(directory, 'canvas-v5.json'), 'utf8');
+    const stored = await readFile(join(directory, 'canvas-v6.json'), 'utf8');
     assert.equal(stored.includes('collisionBox'), false);
     assert.equal(stored.includes('playerNames'), false);
   } finally { await rm(directory, { recursive: true, force: true }); }

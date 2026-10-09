@@ -19,7 +19,7 @@ async function load(homePath) {
   return service;
 }
 
-const directory = root => join(root, 'data', 'hanaworlds-canvas');
+const directory = root => join(root, 'data', 'hanaworlds-canvas-v1');
 const native = root => (...parts) => join(root, ...parts);
 async function withHome(root, work) {
   const original = process.env.DSH_HOME;

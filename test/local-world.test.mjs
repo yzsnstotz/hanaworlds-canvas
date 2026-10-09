@@ -114,11 +114,11 @@ test('build commits only after complete readback and stores one durable history 
     'hanaworlds-contracts/fixtures/main'))));
   const D = (kind, value) => digestValue(kind, value).sha256;
   const profile = await mkdtemp(join(tmpdir(), 'canvas-build-'));
-  const directory = join(profile, 'data', 'hanaworlds-canvas');
+  const directory = join(profile, 'data', 'hanaworlds-canvas-v1');
   const saveState = async name => {
     if (process.env.CANVAS_RUNTIME_EVIDENCE)
       await writeFile(join(process.env.CANVAS_RUNTIME_EVIDENCE, name),
-        await readFile(join(directory, 'canvas-v5.json')), { mode: 0o600 });
+        await readFile(join(directory, 'canvas-v6.json')), { mode: 0o600 });
   };
   let runtime;
   try {
@@ -132,6 +132,7 @@ test('build commits only after complete readback and stores one durable history 
     let writes = 0;
     let restores = 0;
     let mismatchAfterApply = false;
+    let restoreFails = false;
     const preparedTransactions = new Set();
     let scopedFactReads = 0;
     let lastOpaqueDigest;
@@ -226,6 +227,11 @@ test('build commits only after complete readback and stores one durable history 
       }
       if (operation === 'RestoreTransaction') {
         restores++;
+        // G1 FIXTURE: the engine refuses the rollback (e.g. a real body blocks a solid target).
+        if (restoreFails) return { contractVersion: 'world-adapter/v6', requestId: request.requestId,
+          result: null, error: { code: 'RESTORE_FAILED', phase: 'apply',
+            retryability: 'SAME_TRANSACTION_QUERY', mutationState: 'UNKNOWN',
+            transactionRef: request.originTransactionId, causeCode: null, reason: 'RESTORE_ERROR' } };
         record = { ...record, nodeName: 'air' };
         const projection = { worldRef, coveredPositions: [position], records: [record],
           stateProfile };
@@ -553,6 +559,65 @@ test('build commits only after complete readback and stores one durable history 
       publicReadback: publicReadback.result.status, reopenedReadback: reopenedReadback.result.status,
       undo: undo.result.status, originalTransaction: 'build-1', undoTransaction: 'undo-1',
       noDuplicateWrites: writes === 3, rollback: failed.result.status, restores }));
+    // G1: a rollback the engine refuses is recorded as recovery pending, never success.
+    const worldNow = await canvas.readWorldRevision(worldRef);
+    const thirdPlacement = await canvas.call('InspectPlacementRegion', {
+      contractVersion: 'canvas/v5', sessionRef, requestId: 'inspect-restore-failed', worldRef,
+      anchor: { kind: 'CURRENT_VIEW', invocationId: 'confirmed-3' },
+      footprint: { widthCells: 1, depthCells: 1, heightCells: 1 }, localContext: selectedContext });
+    assert.equal(thirdPlacement.error, null, JSON.stringify(thirdPlacement));
+    const thirdInspection = thirdPlacement.result.inspection;
+    const thirdBuild = structuredClone(build);
+    thirdBuild.targetFactsDigest = thirdInspection.targetFactsDigest;
+    thirdBuild.witnesses = thirdBuild.witnesses.map(witness => ({ ...witness,
+      targetFactsDigest: thirdInspection.targetFactsDigest,
+      facts: witness.facts.evidence ? { ...witness.facts,
+        evidence: { ...witness.facts.evidence, worldRevision: worldNow } } : witness.facts }));
+    const thirdOperations = { ...operations, buildDigest: D('build', thirdBuild),
+      targetFactsDigest: thirdInspection.targetFactsDigest };
+    const thirdOperationDigest = D('operations', thirdOperations);
+    const thirdAnalysis = await canvas.call('AnalyzeAffectedObjects', {
+      contractVersion: 'canvas/v5', sessionRef, requestId: 'analyze-restore-failed', worldRef,
+      transactionId: 'build-3', operations: thirdOperations, operationDigest: thirdOperationDigest,
+      expectedRevision: worldNow,
+      expectedRegistryRevision: (await CanvasStore.open(directory)).snapshot.registryRevisions[worldRef],
+      expectedSelectionRevision: selectedObject.result.selectionRevision,
+      localContext: selectedContext });
+    assert.equal(thirdAnalysis.error, null, JSON.stringify(thirdAnalysis));
+    restoreFails = true;
+    const pendingRestore = await canvas.call('ApplyRecoverableCommit', {
+      ...apply, requestId: 'apply-restore-failed', transactionId: 'build-3',
+      operations: thirdOperations, operationDigest: thirdOperationDigest,
+      analysisDigest: D('affected-analysis', thirdAnalysis.result),
+      expectedWorldRevision: worldNow, localContext: selectedContext,
+      regionInspectionBinding: { inspectionId: thirdInspection.inspectionId, build: thirdBuild } });
+    assert.equal(pendingRestore.result, null);
+    assert.equal(pendingRestore.error.code, 'RECOVERY_PENDING');
+    assert.equal(pendingRestore.error.causeCode, 'RESTORE_FAILED');
+    assert.equal(pendingRestore.error.mutationState, 'UNKNOWN');
+    assert.equal(pendingRestore.error.transactionRef, 'build-3');
+    assert.equal(restores, 2);
+    const afterRestoreFailed = await CanvasStore.open(directory);
+    assert.equal(afterRestoreFailed.snapshot.transactions['build-3'], undefined);
+    assert.equal(afterRestoreFailed.snapshot.pending['build-3'].phase, 'RESTORE_PENDING');
+    assert.equal(afterRestoreFailed.snapshot.pending['build-3'].restoreCode, 'RESTORE_FAILED');
+    assert.equal(afterRestoreFailed.snapshot.pending['build-3'].causeCode, 'READBACK_MISMATCH');
+    const actions = await canvas.readHistoryActions(sessionRef);
+    assert.deepEqual(actions.recovery, [{ transactionId: 'build-3', mode: 'CELL',
+      phase: 'RESTORE_PENDING', recoveryPending: true, restoreCode: 'RESTORE_FAILED',
+      causeCode: 'READBACK_MISMATCH' }]);
+    assert.ok(actions.objects.every(row => row.undo.reason === 'TRANSACTION_PENDING' ||
+      row.undo.reason === 'NOTHING_TO_UNDO'));
+    // The same request never reports success and never writes again.
+    const writesBefore = writes;
+    const repeated = await canvas.call('ApplyRecoverableCommit', {
+      ...apply, requestId: 'apply-restore-failed', transactionId: 'build-3',
+      operations: thirdOperations, operationDigest: thirdOperationDigest,
+      analysisDigest: D('affected-analysis', thirdAnalysis.result),
+      expectedWorldRevision: worldNow, localContext: selectedContext,
+      regionInspectionBinding: { inspectionId: thirdInspection.inspectionId, build: thirdBuild } });
+    assert.notEqual(repeated.error, null);
+    assert.equal(writes, writesBefore);
   } finally { await runtime?.dispose(); await rm(profile, { recursive: true, force: true }); }
 });
 

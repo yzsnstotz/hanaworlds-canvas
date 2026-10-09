@@ -1,44 +1,32 @@
 import { createHash } from 'node:crypto';
 import canonicalize from 'canonicalize';
 import { ContractError, contractHandshake, digestValue, schemaBundle, validateType,
-  validateConfigEngineFacts, requireKnownWriteBackend, configEngineFacts }
+  validateConfigEngineFacts, requireKnownWriteBackend }
   from 'hanaworlds-contracts';
-import { STAGE1_POLICY_DECLARATION, STAGE1_POLICY_REVISION } from './stage1-policy.mjs';
 
 /*
- * Stage 1 validation configuration supply: SafetyProfile and CompilationConfig for one World.
+ * Stage 1 validation configuration supply: CompilationConfig for one World.
  *
- * Canvas is the authority that assembles, revisions and invalidates these two profiles because
- * the transaction decision and its safety invariants are Canvas's. Canvas does not invent any
- * value: every field names where it comes from, and a field without a real source is reported
- * by name and the profile is refused (CAPABILITY_UNAVAILABLE). There is no default, no fixture
- * value, no hand-written revision and no editing path here.
+ * Canvas assembles, revisions and invalidates the CompilationConfig of the bound World. It does
+ * not invent any value: every field names where it comes from, and a field without a real source
+ * is reported by name and the profile is refused (CAPABILITY_UNAVAILABLE). There is no default,
+ * no fixture value, no hand-written revision and no editing path here.
+ *
+ * Canvas declares and supplies no SafetyProfile (v1): its only source is the player's confirmed
+ * intent through the Contracts pure function, never a World, Host or Canvas value. Canvas keeps
+ * its transaction role (per-cell/region commit, rollback, recovery) and the engine checks bodies.
  *
  * Field sources (the whole table; a new schema field not listed here is refused as UNMAPPED):
  * - CONTRACT_SCHEMA: the installed Contracts schema allows exactly one value (`const`).
  * - ENGINE_FACT: read from the bound World through the public NativeFacts port.
- * - DECLARED_POLICY: Canvas's own Stage 1 declaration record (stage1-policy.mjs). A field it
- *   declares carries the cited project rule; an UNDETERMINED field is refused with its impact.
  */
-export const SUPPLY_PROFILE = 'canvas-stage1-config-supply/v1';
+export const SUPPLY_PROFILE = 'canvas-stage1-config-supply/v2';
 const AUTHORITY = 'hanaworlds-canvas';
 const CONTRACTS_REF = contractHandshake.contracts;
 const definitions = schemaBundle.definitions;
 
-const MISSING_SOURCE = {
-  // INV-POSE-STAYS-IN-ENGINE keeps players' collision boxes inside the Adapter; no public
-  // non-pose envelope fact exists. Canvas never derives, defaults or persists player geometry.
-  avatarDimensions: { sourceKind: 'ENGINE_FACT',
-    cause: configEngineFacts.avatarDimensions.cause,
-    availability: configEngineFacts.avatarDimensions.record.availability,
-    factReason: configEngineFacts.avatarDimensions.record.reason,
-    reason: configEngineFacts.avatarDimensions.refusal.reason,
-    need: 'a public non-pose collision envelope fact allowed under INV-POSE-STAYS-IN-ENGINE ' +
-      '(C-STAGE1-CONFIG-SEAM-01 / hanaworlds-adapter-luanti-SUPPLY-01); none exists' },
-};
 const WORLDEDIT_MOD = 'worldedit';
 const PROFILES = {
-  safetyProfile: { type: 'SafetyProfile', digestKind: 'safety-profile', revisionPrefix: 'safety-config' },
   compilationConfig: { type: 'CompilationConfig', digestKind: 'compilation-config',
     revisionPrefix: 'compiler-config' },
 };
@@ -111,17 +99,6 @@ function resolveField(type, field, facts) {
         sourceRevision: engine.value.sourceRevision,
         basis: engine.value.writeBackend.basis } };
   }
-  const declared = type === 'SafetyProfile' ? STAGE1_POLICY_DECLARATION.fields[field] : null;
-  if (declared?.status === 'DECLARED') return { status: 'SUPPLIED', value: declared.value,
-    provenance: { kind: 'CANVAS_DECLARATION',
-      ref: `${STAGE1_POLICY_DECLARATION.profileVersion}#${field}`,
-      sourceRevision: STAGE1_POLICY_REVISION, basis: declared.basis } };
-  if (declared) return { status: 'MISSING', value: null, provenance: null,
-    sourceKind: 'DECLARED_POLICY', reason: 'POLICY_UNAVAILABLE', cause: 'VALUE_UNDETERMINED',
-    need: `${STAGE1_POLICY_DECLARATION.profileVersion}#${field}: no current authoritative rule ` +
-      `fixes this value (checked ${declared.checked.join('; ')})`, impact: declared.impact };
-  const missing = MISSING_SOURCE[field];
-  if (missing) return { status: 'MISSING', value: null, provenance: null, ...missing };
   return { status: 'MISSING', value: null, provenance: null, sourceKind: 'UNMAPPED',
     reason: 'REQUIRED_FACT_UNKNOWN', need: `no Canvas source is mapped for ${type}.${field}` };
 }
@@ -134,7 +111,7 @@ export function assembleProfile(name, fields, domain) {
   const { type, digestKind, revisionPrefix } = PROFILES[name];
   const missing = Object.entries(fields).filter(([, row]) => row.status !== 'SUPPLIED')
     .map(([field, row]) => ({ profile: type, field, sourceKind: row.sourceKind,
-      reason: row.reason, need: row.need, cause: row.cause ?? null, impact: row.impact ?? null }));
+      reason: row.reason, need: row.need, cause: row.cause ?? null }));
   if (missing.length) return { type, status: 'SOURCE_MISSING', value: null, digest: null,
     revision: null, fields, missing };
   const value = validateType(type, Object.fromEntries(Object.entries(fields)
@@ -147,24 +124,6 @@ export function assembleProfile(name, fields, domain) {
   return { type, status: 'SUPPLIED', value, digest, revision, fields, missing: [] };
 }
 
-/**
- * The durable form of an observation: never any player geometry (INV-POSE-STAYS-IN-ENGINE).
- * A supplied avatarDimensions value, and the SafetyProfile value/digest/revision derived from
- * it, are returned live to the caller but stored only as status and source provenance.
- */
-export function withoutPlayerGeometry(observation) {
-  const stored = structuredClone(observation);
-  const safety = stored.profiles?.safetyProfile;
-  const avatar = safety?.fields?.avatarDimensions;
-  if (avatar?.status === 'SUPPLIED') {
-    avatar.value = null;
-    avatar.redacted = 'INV-POSE-STAYS-IN-ENGINE';
-    Object.assign(safety, { value: null, digest: null, revision: null,
-      redacted: 'INV-POSE-STAYS-IN-ENGINE' });
-  }
-  return stored;
-}
-
 function changeReasons(previous, current) {
   if (!previous) return ['FIRST_OBSERVATION'];
   const reasons = [];
@@ -172,7 +131,6 @@ function changeReasons(previous, current) {
     (previous.domain ? 'CONNECTION_DOMAIN_CHANGED' : 'WORLD_BOUND') : 'WORLD_UNBOUND');
   if (!same(previous.sources, current.sources)) reasons.push('SOURCE_REVISION_CHANGED');
   if (previous.contracts !== current.contracts) reasons.push('CONTRACTS_CHANGED');
-  if (previous.declaration !== current.declaration) reasons.push('DECLARATION_CHANGED');
   for (const name of Object.keys(PROFILES)) {
     const a = previous.profiles[name], b = current.profiles[name];
     if (a.status !== b.status) reasons.push(`${PROFILES[name].type.toUpperCase()}_STATUS_CHANGED`);
@@ -229,7 +187,7 @@ export class CanvasConfigSupply {
     const before = this.#domain(worldRef);
     let observation;
     if (!before) {
-      observation = { contracts: CONTRACTS_REF, declaration: STAGE1_POLICY_REVISION, domain: null,
+      observation = { contracts: CONTRACTS_REF, domain: null,
         sessionRefs: [], sources: null,
         profiles: Object.fromEntries(Object.entries(PROFILES).map(([name, { type }]) => [name,
           { type, status: 'NOT_BOUND', value: null, digest: null, revision: null, fields: null,
@@ -247,7 +205,7 @@ export class CanvasConfigSupply {
           .map(field => [field, resolveField(type, field, facts)]));
         profiles[name] = assembleProfile(name, fields, before.domain);
       }
-      observation = { contracts: CONTRACTS_REF, declaration: STAGE1_POLICY_REVISION, domain: before.domain,
+      observation = { contracts: CONTRACTS_REF, domain: before.domain,
         sessionRefs: [...before.sessionRefs].sort(), profiles,
         sources: { configEngineFacts: configEngine.status === 'READ' ?
           { status: 'READ', sourceRevision: configEngine.value.sourceRevision } :
@@ -255,8 +213,6 @@ export class CanvasConfigSupply {
           { status: 'READ', digest: catalogue.digest } :
           { status: catalogue.status, cause: catalogue.cause } } };
     }
-    const live = observation;
-    observation = withoutPlayerGeometry(observation);
     const digest = observationDigest(observation);
     const record = await store.commit(state => {
       state.configSupply ??= {};
@@ -270,9 +226,8 @@ export class CanvasConfigSupply {
         observedAt: now };
       return structuredClone(row);
     });
-    // The caller gets this read's live profiles; the store and history keep the durable form.
     return { profileVersion: SUPPLY_PROFILE, authority: AUTHORITY, worldRef,
-      current: { ...record.current, profiles: live.profiles }, history: record.history };
+      current: record.current, history: record.history };
   }
   #require(report, name) {
     const profile = report.current.profiles[name];
@@ -281,14 +236,9 @@ export class CanvasConfigSupply {
       throw supplyError('STALE_REVISION', 'REVISION_CHANGED',
         { missingSources: profile.missing, observationDigest: report.current.observationDigest });
     if (profile.status !== 'SUPPLIED') throw supplyError('CAPABILITY_UNAVAILABLE',
-      profile.missing.some(row => row.reason === 'POLICY_UNAVAILABLE') ?
-        'POLICY_UNAVAILABLE' : 'REQUIRED_FACT_UNKNOWN',
+      'REQUIRED_FACT_UNKNOWN',
       { missingSources: profile.missing, observationDigest: report.current.observationDigest });
     return profile;
-  }
-  /** Consumer port hanaworldsSafetyProfile.read(worldRef): a SafetyProfile or a named refusal. */
-  async readSafetyProfile(worldRef) {
-    return structuredClone(this.#require(await this.read(worldRef), 'safetyProfile').value);
   }
   /** Consumer port hanaworldsCompilerConfig.read(worldRef): {compilationConfig, compilerRevision}. */
   async readCompilerConfig(worldRef) {

@@ -17,7 +17,7 @@ const D = (kind, value) => digestValue(kind, value).sha256;
  * and is never run by the server.
  */
 export async function createUndoExample(directory) {
-  try { await readFile(join(directory, 'canvas-v5.json')); throw new Error('EXAMPLE_ALREADY_EXISTS'); }
+  try { await readFile(join(directory, 'canvas-v6.json')); throw new Error('EXAMPLE_ALREADY_EXISTS'); }
   catch (error) { if (error.code !== 'ENOENT') throw error; }
   const store = await CanvasStore.open(directory);
   const world = await openUndoFixtureWorld(undoWorldFile(directory), { create: true });

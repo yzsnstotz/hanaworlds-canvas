@@ -15,7 +15,7 @@ export const undoWorldFile = directory => join(directory, 'fixture-world.json');
  */
 export async function openUndoHost(directory, { world: preparedWorld } = {}) {
   // A missing example is a startup error; reads never create one.
-  await readFile(join(directory, 'canvas-v5.json'));
+  await readFile(join(directory, 'canvas-v6.json'));
   const world = preparedWorld ?? await openUndoFixtureWorld(undoWorldFile(directory));
   const canvas = new CanvasV5({ store: await CanvasStore.open(directory), adapter: world.adapter, nativeFacts: world.nativeFacts,
     sessions: fixtureSessions() });

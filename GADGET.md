@@ -15,35 +15,30 @@ minor the installed Contracts declare (5.0 on 0.5.3, 5.1 on 0.5.4),
 capabilities=[] because Contracts publishes no per-cell Canvas token. Check it
 with `protocolRequirement('canvas/v5', [])` / `checkProtocolCompatibility`.
 
-Stage 1 validation configuration supply (0.6.11):
-- Canvas provides `hanaworldsSafetyProfile.read(worldRef)` → `SafetyProfile` and
-  `hanaworldsCompilerConfig.read(worldRef)` → `{compilationConfig, compilerRevision}`
-  (the exact keys/shapes Workshop 0.4.13's Host assembly reads), plus its own readback
-  `hanaworldsCanvasConfigSupply.read(worldRef)` (`canvas-stage1-config-supply/v1`).
+Stage 1 validation configuration supply (v1 batch; earlier 0.6.11–0.6.15 notes below are history):
+- Canvas provides `hanaworldsCompilerConfig.read(worldRef)` → `{compilationConfig, compilerRevision}`
+  and its own readback `hanaworldsCanvasConfigSupply.read(worldRef)` (`canvas-stage1-config-supply/v2`).
+- Canvas declares and supplies **no SafetyProfile**: the record `canvas-stage1-policy-declaration/v1`,
+  the Safety part of the supply and the `hanaworldsSafetyProfile` service are gone. The only
+  SafetyProfile source is the player's confirmed intent through the Contracts pure function.
 - Domain: the World's bound connection in Canvas's own selection table (connectionRef,
   connectionIncarnationRef, payloadVersion, capabilityRevision). Unbound → `WORLD_NOT_BOUND`;
   two different bound connections → `CURRENT_WORLD_MISMATCH`; a domain change during the
   fact read → `STALE_REVISION`.
-- Every field names its source: `CONTRACT_SCHEMA` (schema `const`), `ENGINE_FACT`
-  (`worldeditRevision` = bound World's `NativeFacts.readCatalogue(worldRef).modRevisions.worldedit`).
-  `CANVAS_DECLARATION` (0.6.13): Canvas is the only declarer of the four Stage 1 policy fields,
-  in the read-only record `canvas-stage1-policy-declaration/v1` (`src/stage1-policy.mjs`,
-  revision in every observation). `requireBodyClearance=true` cites the non-switchable project
-  rule INV-BODY-RECHECK-AT-PREPARE; `requireEntranceConnectivity`, `hazardPolicy` and
-  `optionalLightRule` are UNDETERMINED (no current rule fixes them; each row states its impact).
-  `avatarDimensions` (no public geometry source), the undetermined policy fields and
-  a missing backend payload declaration have no source: the profile is refused
-  `CAPABILITY_UNAVAILABLE` with `missingSources`. No default, fixture value or
-  hand-written revision is ever used; there is no editing path.
-- Revisions are Canvas-generated from value + provenance + domain (`safety-config-…`,
-  `compiler-config-…`, the latter is `compilerRevision`). Each change of observation is
-  recorded durably in Canvas's store with `invalidationReasons`; reads are otherwise read-only
-  (no Adapter call, no World write).
-- INV-POSE-STAYS-IN-ENGINE (0.6.14): `avatarDimensions` is refused with cause
-  `INV-POSE-STAYS-IN-ENGINE` (no public non-pose envelope fact). Canvas never derives, defaults
-  or persists player geometry: the durable supply record (`withoutPlayerGeometry`) keeps only
-  status and source provenance for a supplied envelope and drops the SafetyProfile
-  value/digest/revision derived from it; only the live read returns them.
+- Every field names its source: `CONTRACT_SCHEMA` (schema `const`) or `ENGINE_FACT`
+  (`worldeditRevision` = bound World's `NativeFacts.readCatalogue(worldRef).modRevisions.worldedit`,
+  `backendProfileId` = the loaded payload declaration). A field without a source is refused
+  `CAPABILITY_UNAVAILABLE` with `missingSources`. No default, fixture value or hand-written
+  revision is ever used; there is no editing path.
+- Revisions are Canvas-generated from value + provenance + domain (`compiler-config-…` =
+  `compilerRevision`). Each change of observation is recorded durably in Canvas's store with
+  `invalidationReasons`; reads are otherwise read-only (no Adapter call, no World write).
+- Store: the 1.x store lives in `<dsh home>/data/hanaworlds-canvas-v1/canvas-v6.json`
+  (schemaVersion 6). A 0.x store is never read, migrated or accepted.
+- Transaction role (G1): when the engine refuses a rollback (`RESTORE_FAILED`), the transaction
+  stays a durable `RESTORE_PENDING` row with `restoreCode`/`causeCode`, the call answers
+  `RECOVERY_PENDING` (mutationState UNKNOWN, causeCode = the restore code) and
+  `readHistoryActions(sessionRef).recovery` lists it; it is never reported as success.
 - Refusals are Contracts `ContractError`s (0.6.12), so a consumer that maps errors through
   `publicError()` (Workshop) keeps the exact code/reason; `missingSources` is on the thrown
   object and in `hanaworldsCanvasConfigSupply.read`, not in the public Error shape.
@@ -268,9 +263,9 @@ referenced by the git range `#semver:^0.5.6`; `v0.5.6` releases the same
 config-engine-facts types (+0 types, +0 wire against 0.5.5-rc.1).
 This is SOURCE/FIXTURE consistency, not a live provider or product gate.
 
-The existing public keys remain `hanaworldsCanvasConfigSupply.read(worldRef)`,
+(History, 0.6.15.) The public keys were then `hanaworldsCanvasConfigSupply.read(worldRef)`,
 `hanaworldsSafetyProfile.read(worldRef)` and `hanaworldsCompilerConfig.read(worldRef)`
-(the last returns `{compilationConfig, compilerRevision}`). Canvas consumes the
+(the last returns `{compilationConfig, compilerRevision}`); the v1 batch removed the second. Canvas consumes the
 public `hanaworldsLuantiNativeFacts.readConfigEngineFacts(worldRef)` alongside
 `readCatalogue(worldRef)`. `validateConfigEngineFacts` checks the selected connection
 triple, fresh Catalogue digest and canonical sourceRevision. Only a KNOWN backend

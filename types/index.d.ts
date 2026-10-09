@@ -42,7 +42,17 @@ export class CanvasV5 implements CanvasV5ProtocolSource {
   readFootprints(worldRef: string, objectRefs: string[], request: unknown): Promise<any>;
   readHistoryFacts(request: unknown): Promise<any>;
   readWorldRevision(worldRef: string): Promise<string>;
+  /** Plugin-owned read: per-object Undo/Redo availability plus every unfinished transaction of
+   * the World; a rollback the engine refused stays `recoveryPending` (phase RESTORE_PENDING). */
+  readHistoryActions(sessionRef: string): Promise<{ state: string; worldRef: string | null;
+    objects: any[]; recovery?: RecoveryRow[] } & Record<string, unknown>>;
 }
+export interface RecoveryRow {
+  transactionId: string; mode: 'CELL' | 'REGION'; phase: string; recoveryPending: boolean;
+  restoreCode: string | null; causeCode: string | null;
+}
+/** Data directory name under `<dsh home>/data` for the 1.x store; 0.x data is never read. */
+export const STORE_ROOT: 'hanaworlds-canvas-v1';
 export class CanvasRegionV1 {
   constructor(canvas: CanvasV5, regionAdapter: any);
   readonly protocolHandshake: ProtocolHandshake;
@@ -65,68 +75,50 @@ export function encodeSnapshot(content: RegionSnapshotContent, before: RegionSum
 export function decodeSnapshot(compressed: Uint8Array, ref: RegionSnapshotRef,
   before: RegionSummary): Promise<RegionSnapshotContent>;
 /** Stage 1 validation configuration supply (Canvas-own observation; not a Contracts wire). */
-export type ConfigFieldSource = 'CONTRACT_SCHEMA' | 'ENGINE_FACT' | 'CANVAS_DECLARATION' |
-  'DECLARED_POLICY' | 'UNDEFINED_IN_CONTRACT' | 'UNMAPPED';
+export type ConfigFieldSource = 'CONTRACT_SCHEMA' | 'ENGINE_FACT' | 'UNMAPPED';
 export interface ConfigFieldRow {
   status: 'SUPPLIED' | 'MISSING';
   value: unknown;
-  provenance: { kind: ConfigFieldSource; ref: string; sourceRevision: string;
-    basis?: Stage1PolicyBasis } | null;
-  sourceKind?: ConfigFieldSource; reason?: 'REQUIRED_FACT_UNKNOWN' | 'POLICY_UNAVAILABLE';
-  need?: string; cause?: string; impact?: string; redacted?: 'INV-POSE-STAYS-IN-ENGINE';
+  provenance: { kind: ConfigFieldSource; ref: string; sourceRevision: string; basis?: string } | null;
+  sourceKind?: ConfigFieldSource; reason?: 'REQUIRED_FACT_UNKNOWN' | 'REVISION_CHANGED';
+  need?: string; cause?: string;
 }
-/** Canvas's own Stage 1 policy declaration (read-only; changes only with the package). */
-export interface Stage1PolicyBasis {
-  kind: 'PROJECT_RULE'; ref: string; sourceRevision: string; sha256: string; id: string;
-  switchable: false; text: string; derivation: string;
-}
-export type Stage1PolicyField = { status: 'DECLARED'; value: unknown; basis: Stage1PolicyBasis } |
-  { status: 'UNDETERMINED'; checked: string[]; impact: string };
-export const STAGE1_POLICY_DECLARATION: Readonly<{
-  profileVersion: 'canvas-stage1-policy-declaration/v1'; declarer: 'hanaworlds-canvas'; scope: string;
-  fields: Readonly<Record<'requireBodyClearance' | 'requireEntranceConnectivity' | 'hazardPolicy' |
-    'optionalLightRule', Stage1PolicyField>> }>;
-export const STAGE1_POLICY_REVISION: string;
 export interface ConfigDomain {
   worldRef: string; connectionRef: string; connectionIncarnationRef: string;
   payloadVersion: string; capabilityRevision: string | null;
 }
 export interface ConfigProfileObservation<T> {
-  type: 'SafetyProfile' | 'CompilationConfig';
+  type: 'CompilationConfig';
   status: 'SUPPLIED' | 'SOURCE_MISSING' | 'NOT_BOUND';
   value: T | null; digest: string | null; revision: string | null;
   fields: Record<string, ConfigFieldRow> | null;
   missing: { profile: string; field: string; sourceKind: ConfigFieldSource; reason: string;
-    need: string; cause: string | null; impact: string | null }[];
+    need: string; cause: string | null }[];
 }
 export interface ConfigObservation {
-  contracts: string; declaration: string; domain: ConfigDomain | null; sessionRefs: string[];
+  contracts: string; domain: ConfigDomain | null; sessionRefs: string[];
   sources: { catalogue: { status: string; digest?: string; cause?: string } } | null;
-  profiles: { safetyProfile: ConfigProfileObservation<import('hanaworlds-contracts').SafetyProfile>;
-    compilationConfig: ConfigProfileObservation<import('hanaworlds-contracts').CompilationConfig> };
+  profiles: { compilationConfig: ConfigProfileObservation<import('hanaworlds-contracts').CompilationConfig> };
   observationDigest: string; observedSequence: number; observedAt: string;
 }
 export interface ConfigSupplyReport {
-  profileVersion: 'canvas-stage1-config-supply/v1'; authority: 'hanaworlds-canvas';
+  profileVersion: 'canvas-stage1-config-supply/v2'; authority: 'hanaworlds-canvas';
   worldRef: string; current: ConfigObservation;
   history: (ConfigObservation & { supersededAt: string; supersededBy: string;
     invalidationReasons: string[] })[];
 }
-/** Host keys: hanaworldsSafetyProfile.read, hanaworldsCompilerConfig.read,
- * hanaworldsCanvasConfigSupply.read. Missing sources reject with publicError
- * CAPABILITY_UNAVAILABLE plus missingSources; an unbound World rejects WORLD_NOT_BOUND. */
+/** Host keys: hanaworldsCompilerConfig.read, hanaworldsCanvasConfigSupply.read. Canvas provides
+ * no SafetyProfile (its only source is the player's confirmed intent). Missing sources reject with
+ * publicError CAPABILITY_UNAVAILABLE plus missingSources; an unbound World rejects WORLD_NOT_BOUND. */
 export class CanvasConfigSupply {
   constructor(canvas: CanvasV5);
   read(worldRef: string): Promise<ConfigSupplyReport>;
-  readSafetyProfile(worldRef: string): Promise<import('hanaworlds-contracts').SafetyProfile>;
   readCompilerConfig(worldRef: string): Promise<{
     compilationConfig: import('hanaworlds-contracts').CompilationConfig; compilerRevision: string }>;
 }
-export const SUPPLY_PROFILE: 'canvas-stage1-config-supply/v1';
-export function assembleProfile(name: 'safetyProfile' | 'compilationConfig',
+export const SUPPLY_PROFILE: 'canvas-stage1-config-supply/v2';
+export function assembleProfile(name: 'compilationConfig',
   fields: Record<string, ConfigFieldRow>, domain: ConfigDomain): ConfigProfileObservation<unknown>;
-/** Durable form of an observation: no player geometry (INV-POSE-STAYS-IN-ENGINE). */
-export function withoutPlayerGeometry(observation: ConfigObservation): ConfigObservation;
 export function boundDomain(snapshot: any, worldRef: string):
   { domain: ConfigDomain; sessionRefs: string[] }[];
 export const name: 'hanaworlds-canvas';
