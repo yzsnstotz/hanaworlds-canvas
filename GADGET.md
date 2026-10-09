@@ -1,4 +1,4 @@
-# HanaWorlds Canvas 0.6.10 local world component
+# HanaWorlds Canvas 0.6.11 local world component
 
 The package exposes `hanaworldsCanvasV5` and consumes the public
 `hanaworldsWorldAdapterV6` port. It uses the root export of the released
@@ -12,6 +12,26 @@ For per-cell peer admission read `ctx.get('hanaworldsCanvasV5').protocolHandshak
 minor the installed Contracts declare (5.0 on 0.5.3, 5.1 on 0.5.4),
 capabilities=[] because Contracts publishes no per-cell Canvas token. Check it
 with `protocolRequirement('canvas/v5', [])` / `checkProtocolCompatibility`.
+
+Stage 1 validation configuration supply (0.6.11):
+- Canvas provides `hanaworldsSafetyProfile.read(worldRef)` → `SafetyProfile` and
+  `hanaworldsCompilerConfig.read(worldRef)` → `{compilationConfig, compilerRevision}`
+  (the exact keys/shapes Workshop 0.4.13's Host assembly reads), plus its own readback
+  `hanaworldsCanvasConfigSupply.read(worldRef)` (`canvas-stage1-config-supply/v1`).
+- Domain: the World's bound connection in Canvas's own selection table (connectionRef,
+  connectionIncarnationRef, payloadVersion, capabilityRevision). Unbound → `WORLD_NOT_BOUND`;
+  two different bound connections → `CURRENT_WORLD_MISMATCH`; a domain change during the
+  fact read → `STALE_REVISION`.
+- Every field names its source: `CONTRACT_SCHEMA` (schema `const`), `ENGINE_FACT`
+  (`worldeditRevision` = bound World's `NativeFacts.readCatalogue(worldRef).modRevisions.worldedit`).
+  `avatarDimensions` (no public fact port), the four policy fields (no declaration source in
+  Stage 1) and `backendProfileId` (no Contracts definition) have no source: the profile is
+  refused `CAPABILITY_UNAVAILABLE` with `missingSources`. No default, fixture value or
+  hand-written revision is ever used; there is no editing path.
+- Revisions are Canvas-generated from value + provenance + domain (`safety-config-…`,
+  `compiler-config-…`, the latter is `compilerRevision`). Each change of observation is
+  recorded durably in Canvas's store with `invalidationReasons`; reads are otherwise read-only
+  (no Adapter call, no World write).
 
 Session-world seam (0.6.7, active only when the installed Contracts declare canvas/v5
 minor 1, i.e. the 0.5.4 candidate; on 0.5.3 nothing below applies):

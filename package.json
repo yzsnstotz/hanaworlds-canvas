@@ -1,6 +1,6 @@
 {
   "name": "hanaworlds-canvas",
-  "version": "0.6.10",
+  "version": "0.6.11",
   "private": true,
   "type": "module",
   "license": "MIT",
@@ -33,6 +33,7 @@
     "src/local-v5.mjs",
     "src/store-v5.mjs",
     "src/region-v1.mjs",
+    "src/config-supply.mjs",
     "cordis.patch.yml",
     "GADGET.md",
     "NOTICE",
@@ -61,11 +62,12 @@
     }
   },
   "scripts": {
-    "build": "node --check src/index.mjs && node --check src/local-v5.mjs && node --check src/store-v5.mjs && node --check src/region-v1.mjs && node --check src/display-host.mjs && node --check src/display-remote.mjs && node scripts/build-display.mjs",
-    "test": "node --test test/local-world.test.mjs test/protocol-handshake.test.mjs test/region-undo.test.mjs test/g3-cell-guard.test.mjs test/session-world-selection.test.mjs test/session-world-seam.test.mjs test/native-facts-public.test.mjs test/display.test.mjs test/display-view.test.mjs",
+    "build": "node --check src/index.mjs && node --check src/local-v5.mjs && node --check src/store-v5.mjs && node --check src/region-v1.mjs && node --check src/config-supply.mjs && node --check src/display-host.mjs && node --check src/display-remote.mjs && node scripts/build-display.mjs",
+    "test": "node --test test/local-world.test.mjs test/protocol-handshake.test.mjs test/region-undo.test.mjs test/g3-cell-guard.test.mjs test/session-world-selection.test.mjs test/session-world-seam.test.mjs test/native-facts-public.test.mjs test/display.test.mjs test/display-view.test.mjs test/config-supply.test.mjs",
     "test:display:gateway": "node --test test/display-remote.test.mjs test/display-client-remote.test.mjs",
     "build:objects": "node scripts/build-objects-web.mjs",
     "dev:objects": "node scripts/objects-web-server.mjs",
+    "dev:supply": "node scripts/config-supply-web-server.mjs",
     "test:objects": "node --test test/objects-web.test.mjs",
     "prepare:objects-example": "node scripts/objects-example.mjs",
     "test:objects-example": "node --test test/objects-example.test.mjs",

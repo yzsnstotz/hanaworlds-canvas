@@ -13,8 +13,9 @@ import { checkProtocolCompatibility, contractProtocols, protocolRequirement,
   validateType } from 'hanaworlds-contracts';
 import * as contractsSdk from 'hanaworlds-contracts';
 import { CanvasRegionV1, ADAPTER_CELL_REQUIREMENT } from './region-v1.mjs';
+import { CanvasConfigSupply } from './config-supply.mjs';
 
-export { CanvasStore, CanvasRegionV1 };
+export { CanvasStore, CanvasRegionV1, CanvasConfigSupply };
 const WIRE = 'canvas/v5';
 const ADAPTER = 'world-adapter/v6';
 const SESSION = 'session/v3';
@@ -24,7 +25,7 @@ const SESSION = 'session/v3';
 const canvasProtocol = contractProtocols.find(row => row.protocol === 'canvas');
 if (!canvasProtocol) throw new Error('CANVAS_PROTOCOL_UNDECLARED');
 const SEAM = canvasProtocol.minor >= 1;
-const PACKAGE_VERSION = '0.6.10';
+const PACKAGE_VERSION = '0.6.11';
 // The public wire defines canvas major 5, minor 0. Contracts publishes no
 // per-cell Canvas capability token; regional tokens describe the region port.
 const cellRequirement = protocolRequirement(WIRE, []);
@@ -1233,6 +1234,13 @@ export function apply(ctx) {
       if (typeof current?.readScopedState !== 'function')
         throw fail('CAPABILITY_UNAVAILABLE', 'REQUIRED_FACT_UNKNOWN');
       return current.readScopedState(...args);
+    },
+    // Read-only Catalogue of the paired World (Adapter rechecks the pairing itself).
+    readCatalogue: (...args) => {
+      const current = ctx.get?.('hanaworldsLuantiNativeFacts');
+      if (typeof current?.readCatalogue !== 'function')
+        throw fail('CAPABILITY_UNAVAILABLE', 'REQUIRED_FACT_UNKNOWN');
+      return current.readCatalogue(...args);
     } } });
   ctx.provide?.('hanaworldsCanvasV5', service);
   // Host service names are Canvas's choice; the wire shapes are Contracts canvas-/world-adapter-region/v1.
@@ -1246,6 +1254,13 @@ export function apply(ctx) {
     read: request => service.readHistoryFacts(request) });
   ctx.provide?.('hanaworldsWorldRevisionOracle', {
     read: worldRef => service.readWorldRevision(worldRef) });
+  // Stage 1 validation configuration supply. The two consumer keys and shapes are the ones
+  // Workshop's published Host assembly reads; hanaworldsCanvasConfigSupply is Canvas's own
+  // provenance/revision/invalidation readback of the same observation.
+  const supply = new CanvasConfigSupply(service);
+  ctx.provide?.('hanaworldsSafetyProfile', { read: worldRef => supply.readSafetyProfile(worldRef) });
+  ctx.provide?.('hanaworldsCompilerConfig', { read: worldRef => supply.readCompilerConfig(worldRef) });
+  ctx.provide?.('hanaworldsCanvasConfigSupply', { read: worldRef => supply.read(worldRef) });
   // One Loader entry per package; the display binds inside Canvas's own fiber.
   ctx.inject?.(['typert'], async displayCtx => {
     const display = await import('./display-host.mjs');

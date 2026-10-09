@@ -6,7 +6,7 @@ const fresh = () => ({ schemaVersion: 5, sessions: {}, connections: {},
   connectionInventories: {}, objects: {},
   footprints: {}, registryRevisions: {}, worldRevisions: {}, placementSettings: {},
   placementInspections: {}, analyses: {}, transactions: {},
-  history: {}, replay: {}, pending: {} });
+  history: {}, replay: {}, pending: {}, configSupply: {} });
 
 /** One writer per local profile. An fsynced rename is the durable commit point. */
 export class CanvasStore {

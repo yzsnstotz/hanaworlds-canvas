@@ -64,6 +64,56 @@ export function encodeSnapshot(content: RegionSnapshotContent, before: RegionSum
   Promise<{ ref: RegionSnapshotRef; compressed: Uint8Array; rawByteLength: number }>;
 export function decodeSnapshot(compressed: Uint8Array, ref: RegionSnapshotRef,
   before: RegionSummary): Promise<RegionSnapshotContent>;
+/** Stage 1 validation configuration supply (Canvas-own observation; not a Contracts wire). */
+export type ConfigFieldSource = 'CONTRACT_SCHEMA' | 'ENGINE_FACT' | 'DECLARED_POLICY' |
+  'UNDEFINED_IN_CONTRACT' | 'UNMAPPED';
+export interface ConfigFieldRow {
+  status: 'SUPPLIED' | 'MISSING';
+  value: unknown;
+  provenance: { kind: ConfigFieldSource; ref: string; sourceRevision: string } | null;
+  sourceKind?: ConfigFieldSource; reason?: 'REQUIRED_FACT_UNKNOWN' | 'POLICY_UNAVAILABLE';
+  need?: string; cause?: string;
+}
+export interface ConfigDomain {
+  worldRef: string; connectionRef: string; connectionIncarnationRef: string;
+  payloadVersion: string; capabilityRevision: string | null;
+}
+export interface ConfigProfileObservation<T> {
+  type: 'SafetyProfile' | 'CompilationConfig';
+  status: 'SUPPLIED' | 'SOURCE_MISSING' | 'NOT_BOUND';
+  value: T | null; digest: string | null; revision: string | null;
+  fields: Record<string, ConfigFieldRow> | null;
+  missing: { profile: string; field: string; sourceKind: ConfigFieldSource; reason: string;
+    need: string; cause: string | null }[];
+}
+export interface ConfigObservation {
+  contracts: string; domain: ConfigDomain | null; sessionRefs: string[];
+  sources: { catalogue: { status: string; digest?: string; cause?: string } } | null;
+  profiles: { safetyProfile: ConfigProfileObservation<import('hanaworlds-contracts').SafetyProfile>;
+    compilationConfig: ConfigProfileObservation<import('hanaworlds-contracts').CompilationConfig> };
+  observationDigest: string; observedSequence: number; observedAt: string;
+}
+export interface ConfigSupplyReport {
+  profileVersion: 'canvas-stage1-config-supply/v1'; authority: 'hanaworlds-canvas';
+  worldRef: string; current: ConfigObservation;
+  history: (ConfigObservation & { supersededAt: string; supersededBy: string;
+    invalidationReasons: string[] })[];
+}
+/** Host keys: hanaworldsSafetyProfile.read, hanaworldsCompilerConfig.read,
+ * hanaworldsCanvasConfigSupply.read. Missing sources reject with publicError
+ * CAPABILITY_UNAVAILABLE plus missingSources; an unbound World rejects WORLD_NOT_BOUND. */
+export class CanvasConfigSupply {
+  constructor(canvas: CanvasV5);
+  read(worldRef: string): Promise<ConfigSupplyReport>;
+  readSafetyProfile(worldRef: string): Promise<import('hanaworlds-contracts').SafetyProfile>;
+  readCompilerConfig(worldRef: string): Promise<{
+    compilationConfig: import('hanaworlds-contracts').CompilationConfig; compilerRevision: string }>;
+}
+export const SUPPLY_PROFILE: 'canvas-stage1-config-supply/v1';
+export function assembleProfile(name: 'safetyProfile' | 'compilationConfig',
+  fields: Record<string, ConfigFieldRow>, domain: ConfigDomain): ConfigProfileObservation<unknown>;
+export function boundDomain(snapshot: any, worldRef: string):
+  { domain: ConfigDomain; sessionRefs: string[] }[];
 export const name: 'hanaworlds-canvas';
 export const inject: string[];
 export function apply(ctx: CanvasHostContext): CanvasV5;

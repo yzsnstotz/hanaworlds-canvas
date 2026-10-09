@@ -1,6 +1,6 @@
 # HanaWorlds Canvas
 
-Stage 1 local world Canvas `0.6.10` component candidate, exposing `canvas/v5`
+Stage 1 local world Canvas `0.6.11` component candidate, exposing `canvas/v5`
 and consuming the public `world-adapter/v6` port. It owns current local world
 selection, object footprints, recoverable apply/readback, durable history and
 same-transaction Undo. `0.5.0` implements Contracts 0.5.0 `canvas-region/v1`: region commits over
@@ -160,6 +160,13 @@ only that wire's ids at the Contracts-declared minor, and before any region read
 write checks the region port's and the per-cell port's (`hanaworldsWorldAdapterV6`)
 `protocolHandshake`. Nothing is dropped: an Adapter id outside both wires stops Canvas at
 load.
+
+### Stage 1 validation configuration supply (0.6.11)
+
+See GADGET.md for keys, domain, field sources and refusals. Independent preparation page:
+`node scripts/config-supply-web-server.mjs <run-dir> [port]` serves `/supply` on 127.0.0.1;
+only its peers (Adapter connection, NativeFacts Catalogue, Session identity) are FIXTURE,
+marked on the page. Canvas's supply, store and refusals are the real code.
 
 ### Released Contracts v0.5.4 (0.6.10)
 
