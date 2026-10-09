@@ -271,16 +271,20 @@ export class CanvasV5 {
     const state = await this.#durable();
     this.#currentFacts(state, request, request?.worldRef);
     const origin = state.transactions[request?.originTransactionId];
+    const head = origin ? state.history[origin.objectRef]?.at(-1) : null;
+    // The origin of a history move is either the head itself (Undo) or the transaction the
+    // head Undo row undid (Redo). historyRevision is the head's: the revision the move checks.
+    const movable = head && (head.transactionId === request.originTransactionId ||
+      head.originTransactionId === request.originTransactionId && this.#undoRow(head));
     if (!origin?.history || origin.worldRef !== request.worldRef ||
-        origin.receipt.status !== 'VERIFIED' ||
-        state.history[origin.objectRef]?.at(-1)?.transactionId !== request.originTransactionId)
+        origin.receipt.status !== 'VERIFIED' || !movable)
       throw fail('UNDO_CONFLICT', 'REVISION_CHANGED');
     const object = state.objects[request.worldRef]?.[origin.objectRef];
     const worldRevision = state.worldRevisions[request.worldRef];
     if (!object || !worldRevision) throw fail('CAPABILITY_UNAVAILABLE', 'REQUIRED_FACT_UNKNOWN');
     return structuredClone({ current: true, durable: true, worldRef: request.worldRef,
       originTransactionId: request.originTransactionId,
-      historyRevision: origin.history.historyRevision, worldRevision,
+      historyRevision: head.historyRevision, worldRevision,
       objectRevisions: { [origin.objectRef]: object.objectRevision },
       affectedObjectRefs: [...origin.history.affectedObjectRefs],
       originVerifiedReceiptDigest: origin.history.receiptDigest });
@@ -421,8 +425,19 @@ export class CanvasV5 {
     const stateProfile = this.store.snapshot.connections[body.sessionRef].capabilities.stateProfile;
     if (typeof this.nativeFacts?.readScopedState !== 'function')
       throw fail('CAPABILITY_UNAVAILABLE', 'REQUIRED_FACT_UNKNOWN');
-    const facts = await this.nativeFacts.readScopedState(
-      body.localContext.connectionRef, positions);
+    // The NativeFacts port may throw a plain Error naming its code. A known public code is kept
+    // (never re-labelled as a decode failure); anything else is the facts being unavailable.
+    // The provider's own message stays on the error as nativeCause.
+    let facts;
+    try {
+      facts = await this.nativeFacts.readScopedState(body.localContext.connectionRef, positions);
+    } catch (error) {
+      if (error?.publicError) throw error;
+      const named = typeof error?.message === 'string' &&
+        contractsSdk.schemaBundle.definitions.ErrorCode.enum.includes(error.message);
+      throw Object.assign(fail(named ? error.message : 'TARGET_FACTS_INCOMPLETE',
+        'REQUIRED_FACT_UNKNOWN'), { nativeCause: String(error?.message ?? error) });
+    }
     if (facts?.worldRef !== body.worldRef || !same(facts.stateProfile, stateProfile) ||
         !Array.isArray(facts.cells) ||
         !same(facts.cells.map(cell => cell.position), positions) ||

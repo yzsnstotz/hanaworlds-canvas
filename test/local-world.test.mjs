@@ -514,8 +514,15 @@ test('build commits only after complete readback and stores one durable history 
     assert.equal(await undoneCanvas.readWorldRevision(worldRef), 'world-3');
     assert.deepEqual((await undoneCanvas.readFootprints(worldRef, [objectRef], {
       sessionRef, worldRef, localContext })).objects[0].positions, []);
+    // Redo seam (real-GO finding): after Undo, the Adapter's history Prepare reads these facts
+    // for the undone origin; the head is the Undo row, whose revision the Redo checks.
+    const redoFacts = await undoneCanvas.readHistoryFacts({ sessionRef, worldRef,
+      localContext, originTransactionId: 'build-1' });
+    assert.equal(redoFacts.historyRevision, afterUndo.snapshot.history[objectRef].at(-1).historyRevision);
+    assert.equal(redoFacts.originVerifiedReceiptDigest,
+      afterUndo.snapshot.transactions['build-1'].history.receiptDigest);
     await assert.rejects(() => undoneCanvas.readHistoryFacts({ sessionRef, worldRef,
-      localContext, originTransactionId: 'build-1' }), /UNDO_CONFLICT/);
+      localContext, originTransactionId: 'not-a-transaction' }), /UNDO_CONFLICT/);
     const wrongWorld = await canvas.call('AnalyzeAffectedObjects', {
       contractVersion: 'canvas/v6', sessionRef, requestId: 'wrong-world',
       worldRef, transactionId: 'wrong-world-tx', operations, operationDigest,

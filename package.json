@@ -45,7 +45,10 @@
     "src/display-host.mjs",
     "src/display-remote.mjs",
     "lib/client.js",
-    "LICENSES/"
+    "LICENSES/",
+    "scripts/real-supply/server.mjs",
+    "scripts/real-supply/page.html",
+    "scripts/fixture-sessions.mjs"
   ],
   "dsh": {
     "bundle": {
@@ -72,7 +75,8 @@
     "prepare:objects-example": "node scripts/objects-example.mjs",
     "test:objects-example": "node --test test/objects-example.test.mjs",
     "prepare:undo-example": "node scripts/undo-example.mjs",
-    "test:undo": "node --test test/undo-redo.test.mjs test/objects-web.test.mjs"
+    "test:undo": "node --test test/undo-redo.test.mjs test/objects-web.test.mjs",
+    "real:supply": "node scripts/real-supply/server.mjs"
   },
   "dependencies": {
     "canonicalize": "5.1.0",

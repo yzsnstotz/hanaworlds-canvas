@@ -354,3 +354,21 @@ test('rc.4 relay: canvas/v6 envelopes carry engine guard refusals unchanged, nul
     validateResponse('canvas/v6', 'RecoverPendingUndo', recovery);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
+
+test('a NativeFacts read that throws a plain coded Error keeps its code (never SCHEMA_INVALID)', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'canvas-native-error-'));
+  try {
+    const env = await boot(directory);
+    const build = await buildRequest(env, 'native-error-1', [[8, 2, 8]]);
+    const original = env.canvas.nativeFacts.readScopedState;
+    for (const [thrown, code] of [['TARGET_FACTS_INCOMPLETE', 'TARGET_FACTS_INCOMPLETE'],
+      ['CURRENT_WORLD_MISMATCH', 'CURRENT_WORLD_MISMATCH'], ['engine said no', 'TARGET_FACTS_INCOMPLETE']]) {
+      env.canvas.nativeFacts.readScopedState = async () => { throw new Error(thrown); };
+      const response = await env.canvas.call('ApplyRecoverableCommit', { ...build, requestId: `native-${thrown}` });
+      assert.equal(response.error.code, code, thrown);
+      assert.equal(response.error.reason, 'REQUIRED_FACT_UNKNOWN');
+      assert.deepEqual(Object.keys(env.canvas.store.snapshot.pending), []);
+    }
+    env.canvas.nativeFacts.readScopedState = original;
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
