@@ -10,13 +10,9 @@ icu 2.3.1 is Unicode-3.0. Their notices and license texts remain with the
 separately installed npm packages. WorldEdit (AGPL-3.0) and the Luanti Adapter
 are separate origins and are not bundled or relicensed by Canvas.
 
-Canvas includes a byte-identical runtime and test-fixture subset of
-hanaworlds-contracts@0.3.4 from public revision
-c00a489a6118fda68b80c7c1eee9a2aa90b6ddc0 (admitted npm pack SHA256
-9157fac5942b3604c8b145922c526f7ae6bdafc681ac8ac75feb2489bdddb8a2).
-That HanaWorlds-owned source is MIT. Its LICENSE, NOTICE, canonicalize Apache-2.0
-license copy, exact file hashes and import closure are retained in
-vendor/contracts/. Canvas continues to install canonicalize separately.
+hanaworlds-contracts (MIT, HanaWorlds-owned) is a separately installed
+dependency from https://github.com/yzsnstotz/hanaworlds-contracts
+(git range #semver:^0.5.6); no Contracts bytes are copied into this repository.
 
 Canvas 0.6.0 display bundle includes Zod 4.6.5 (MIT) from the official DSH runtime,
 https://github.com/colinhacks/zod, for the public Remote schemas. Host peers:

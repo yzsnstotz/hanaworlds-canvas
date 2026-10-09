@@ -4,9 +4,8 @@ Status: component candidate. `canvas/v4` is the public Canvas port;
 `world-adapter/v4` is the only world transport port consumed. The v4 runtime
 uses Contracts 0.3.9 from public revision
 `a4675a4edd7b4a8a7aa4861a7949713a218d8b31`, pinned by URL and integrity
-in the package lock. The older byte-exact Contracts 0.3.4 subset remains in
-`vendor/contracts/` for legacy consumers; its provenance and verifier remain
-unchanged.
+in the package lock. The older vendored Contracts 0.3.4 subset and the v3 legacy
+module that used it were removed (MERGE-CANVAS-MAIN-01).
 No sibling source path or developer profile is a runtime dependency. Stage 1
 composition and human validation remain `UNPROVEN` and `ACCEPTED` unset.
 

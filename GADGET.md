@@ -1,10 +1,11 @@
 # HanaWorlds Canvas 0.6.15 local world component
 
 The package exposes `hanaworldsCanvasV5` and consumes the public
-`hanaworldsWorldAdapterV6` port. It uses the root export of the released
-Contracts candidate `v0.5.5-rc.1` (peeled tag commit
-`dcbe648576de5f666bed11a90d015cc30bdf2bc9`;
-exact handshake `hanaworlds-contracts@0.5.5-rc.1`). There is no
+`hanaworldsWorldAdapterV6` port. It uses the root export of Contracts, referenced
+from the contracts source as `git+https://github.com/yzsnstotz/hanaworlds-contracts.git#semver:^0.5.6`
+(lower bound: first release carrying `ConfigEngineFacts`; the lockfile resolves
+`v0.5.6` commit `f84974eb07e30b683f4c1b1712145b756d5671ed`). The contracts
+package handshake is decided by the Contracts same-major predicate. There is no
 account, grant, epoch, authorization, or protected region dependency in this
 local MVP protocol.
 
@@ -260,11 +261,12 @@ Sample mode and the 47601 `/objects` page stay read-only. Redo stays out of the 
 
 ## Stage 1 configuration supply · 0.6.15 candidate
 
-Contracts is pinned to `dcbe648576de5f666bed11a90d015cc30bdf2bc9`, the peeled
-annotated `v0.5.5-rc.1` tag (`3f2411ce0e25ea967107285df62ee69f4c7dbed7`).
-The supplied candidate npm pack is 166226 bytes, SHA256
-`31ebd3c09f4cb2bfd2efdd3402a97ee198a29c705aea259386a631d46b6bac34`.
-This is candidate SOURCE/FIXTURE consistency, not a live provider or product gate.
+The 0.6.15 candidate was supplied against `dcbe648576de5f666bed11a90d015cc30bdf2bc9`
+(`v0.5.5-rc.1` candidate pack 166226 bytes, SHA256
+`31ebd3c09f4cb2bfd2efdd3402a97ee198a29c705aea259386a631d46b6bac34`). Contracts is now
+referenced by the git range `#semver:^0.5.6`; `v0.5.6` releases the same
+config-engine-facts types (+0 types, +0 wire against 0.5.5-rc.1).
+This is SOURCE/FIXTURE consistency, not a live provider or product gate.
 
 The existing public keys remain `hanaworldsCanvasConfigSupply.read(worldRef)`,
 `hanaworldsSafetyProfile.read(worldRef)` and `hanaworldsCompilerConfig.read(worldRef)`
