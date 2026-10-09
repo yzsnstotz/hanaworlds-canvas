@@ -35,7 +35,7 @@ Stage 1 validation configuration supply (v1 batch; earlier 0.6.11–0.6.15 notes
   `invalidationReasons`; reads are otherwise read-only (no Adapter call, no World write).
 - Store: the 1.x store lives in `<dsh home>/data/hanaworlds-canvas-v1/canvas-v6.json`
   (schemaVersion 6). A 0.x store is never read, migrated or accepted.
-- Contracts `#semver:^1.0.0-rc.4` (0.10.0): canvas/v6, world-adapter/v7, session/v4,
+- Contracts `#semver:^1.0.0` (0.10.1; formal v1.0.0, same content as rc.4): canvas/v6, world-adapter/v7, session/v4,
   canvas-region/v2, world-adapter-region/v2; the session-world seam is unconditional. Host
   service keys are unchanged (`hanaworldsCanvasV5`, `hanaworldsCanvasRegionV1`,
   `hanaworldsWorldAdapterV6`, `hanaworldsWorldAdapterRegionV1`, `hanaworldsWorkshopV3`, ...).
