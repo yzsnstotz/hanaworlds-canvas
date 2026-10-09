@@ -25,7 +25,7 @@ const SESSION = 'session/v3';
 const canvasProtocol = contractProtocols.find(row => row.protocol === 'canvas');
 if (!canvasProtocol) throw new Error('CANVAS_PROTOCOL_UNDECLARED');
 const SEAM = canvasProtocol.minor >= 1;
-const PACKAGE_VERSION = '0.6.14';
+const PACKAGE_VERSION = '0.6.15';
 // The public wire defines canvas major 5, minor 0. Contracts publishes no
 // per-cell Canvas capability token; regional tokens describe the region port.
 const cellRequirement = protocolRequirement(WIRE, []);

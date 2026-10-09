@@ -142,7 +142,7 @@ test('bound World: every field names its source; sourceless fields are refused b
     assert.equal(body.provenance.basis.id, 'INV-BODY-RECHECK-AT-PREPARE');
     assert.equal(current.declaration, STAGE1_POLICY_REVISION);
     assert.deepEqual(compile.missing.map(row => [row.field, row.sourceKind]),
-      [['backendProfileId', 'UNDEFINED_IN_CONTRACT']]);
+      [['backendProfileId', 'ENGINE_FACT']]);
     for (const profile of [safety, compile]) {
       assert.equal(profile.status, 'SOURCE_MISSING');
       assert.equal(profile.value, null);
@@ -337,4 +337,177 @@ test('INV-POSE: Canvas never persists player geometry, even when a source suppli
   assert.equal(stored.profiles.safetyProfile.fields.avatarDimensions.provenance.sourceRevision, 'f-1');
   // The caller's own observation is untouched (the live read still returns the profile).
   assert.deepEqual({ ...observation.profiles.safetyProfile.value.avatarDimensions }, envelope);
+});
+
+// Candidate public fixture inputs only; no Adapter implementation or live engine is used.
+const configFixture = JSON.parse(await readFile(new URL(import.meta.resolve(
+  'hanaworlds-contracts/fixtures/config-engine-facts'))));
+function fixtureEngine(world, input = configFixture.consumer.assemble[0].facts) {
+  const facts = structuredClone(input);
+  facts.connection.worldRef = 'local-world';
+  facts.catalogueDigest = digestValue('catalogue', world.catalogue).sha256;
+  const { sourceRevision, ...projection } = facts;
+  facts.sourceRevision = digestValue('config-engine-facts', projection).sha256;
+  world.nativeFacts.readConfigEngineFacts = async () => structuredClone(facts);
+  return facts;
+}
+
+test('candidate backend uses only the public loaded payload declaration, with provenance', async () => {
+  const directory = await temp();
+  try {
+    const world = fixtureWorld();
+    const facts = fixtureEngine(world);
+    const supply = new CanvasConfigSupply(await boundCanvas(directory, world));
+    world.adapterCalls.length = 0;
+    const report = await supply.read('local-world');
+    const row = report.current.profiles.compilationConfig.fields.backendProfileId;
+    assert.equal(row.status, 'SUPPLIED');
+    assert.equal(row.value, facts.writeBackend.backendProfileId);
+    assert.equal(row.provenance.kind, 'ENGINE_FACT');
+    assert.equal(row.provenance.sourceRevision, facts.sourceRevision);
+    assert.equal(row.provenance.basis, 'LOADED_PAYLOAD_DECLARATION');
+    const result = await supply.readCompilerConfig('local-world');
+    validateType('CompilationConfig', result.compilationConfig);
+    assert.equal(result.compilationConfig.backendProfileId, row.value);
+    const avatar = report.current.profiles.safetyProfile.fields.avatarDimensions;
+    assert.equal(avatar.value, null);
+    assert.equal(avatar.factReason, 'NO_PUBLIC_SOURCE');
+    assert.equal(avatar.availability, 'UNAVAILABLE');
+    assert.deepEqual(world.adapterCalls, []);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test('candidate backend refusal, absence and corrupt facts never default and expose legal errors', async () => {
+  const directory = await temp();
+  try {
+    const world = fixtureWorld();
+    const supply = new CanvasConfigSupply(await boundCanvas(directory, world));
+    for (const input of configFixture.consumer.assemble) {
+      const facts = fixtureEngine(world, input.facts);
+      if (facts.writeBackend.availability === 'KNOWN') continue;
+      const row = (await supply.read('local-world')).current.profiles.compilationConfig.fields.backendProfileId;
+      assert.equal(row.value, null);
+      assert.equal(row.cause, facts.writeBackend.reason);
+      await assert.rejects(supply.readCompilerConfig('local-world'), e => {
+        const error = publicError(e); validateType('Error', error);
+        return error.code === 'CAPABILITY_UNAVAILABLE' && error.reason === 'REQUIRED_FACT_UNKNOWN';
+      });
+    }
+    const facts = fixtureEngine(world);
+    facts.sourceRevision = '0'.repeat(64);
+    const row = (await supply.read('local-world')).current.profiles.compilationConfig.fields.backendProfileId;
+    assert.equal(row.value, null);
+    assert.equal(row.cause, 'NON_CANONICAL_AMBIGUITY');
+    delete world.nativeFacts.readConfigEngineFacts;
+    const absent = (await supply.read('local-world')).current.profiles.compilationConfig.fields.backendProfileId;
+    assert.equal(absent.sourceKind, 'ENGINE_FACT');
+    assert.equal(absent.cause, 'CONFIG_ENGINE_FACTS_PORT_ABSENT');
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test('candidate declaration revision changes invalidate compiler supply and survive reopening', async () => {
+  const directory = await temp();
+  try {
+    const world = fixtureWorld();
+    fixtureEngine(world, configFixture.consumer.lifecycle[0].previous);
+    const canvas = await boundCanvas(directory, world);
+    const supply = new CanvasConfigSupply(canvas);
+    const first = await supply.readCompilerConfig('local-world');
+    fixtureEngine(world, configFixture.consumer.lifecycle[0].current);
+    const second = await supply.readCompilerConfig('local-world');
+    assert.notEqual(second.compilerRevision, first.compilerRevision);
+    const report = await supply.read('local-world');
+    assert.ok(report.history.at(-1).invalidationReasons.includes('SOURCE_REVISION_CHANGED'));
+    const reopened = new CanvasConfigSupply(new CanvasV5({ store: await CanvasStore.open(directory),
+      nativeFacts: world.nativeFacts, adapter: world.adapter, sessions: fixtureSessions() }));
+    assert.equal((await reopened.readCompilerConfig('local-world')).compilerRevision, second.compilerRevision);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test('candidate connection and Catalogue mismatches are stale, never usable backend values', async () => {
+  const directory = await temp();
+  try {
+    const world = fixtureWorld();
+    const facts = fixtureEngine(world);
+    const supply = new CanvasConfigSupply(await boundCanvas(directory, world));
+    for (const mismatch of ['connection', 'catalogueDigest']) {
+      const altered = structuredClone(facts);
+      if (mismatch === 'connection') altered.connection.connectionIncarnationRef = 'retired';
+      else altered.catalogueDigest = '0'.repeat(64);
+      world.nativeFacts.readConfigEngineFacts = async () => altered;
+      assert.equal((await supply.read('local-world')).current.profiles.compilationConfig
+        .fields.backendProfileId.value, null);
+      await assert.rejects(supply.readCompilerConfig('local-world'), e => {
+        const error = publicError(e); validateType('Error', error);
+        return error.code === 'STALE_REVISION' && error.reason === 'REVISION_CHANGED';
+      });
+    }
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test('single and multiple missing-source refusals validate as public Error, without schema fallback', async () => {
+  // Only the refusal projection is isolated here; policy values are never installed or changed.
+  for (const missing of [
+    [{ field: 'avatarDimensions', reason: 'REQUIRED_FACT_UNKNOWN' }],
+    [{ field: 'backendProfileId', reason: 'REQUIRED_FACT_UNKNOWN' }],
+    [{ field: 'worldeditRevision', reason: 'REQUIRED_FACT_UNKNOWN' }],
+    [{ field: 'hazardPolicy', reason: 'POLICY_UNAVAILABLE' }],
+    [{ field: 'avatarDimensions', reason: 'REQUIRED_FACT_UNKNOWN' },
+      { field: 'hazardPolicy', reason: 'POLICY_UNAVAILABLE' }],
+    [{ field: 'backendProfileId', reason: 'REQUIRED_FACT_UNKNOWN' },
+      { field: 'worldeditRevision', reason: 'REQUIRED_FACT_UNKNOWN' }],
+  ]) {
+    const supply = new CanvasConfigSupply(null);
+    supply.read = async () => ({ current: { observationDigest: 'FIXTURE-refusal', profiles:
+      Object.fromEntries(['safetyProfile', 'compilationConfig'].map(name => [name,
+        { status: 'SOURCE_MISSING', missing }])) } });
+    for (const read of [() => supply.readSafetyProfile('w'), () => supply.readCompilerConfig('w')]) {
+      await assert.rejects(read, e => {
+        const error = publicError(e); validateType('Error', error);
+        return error.code === 'CAPABILITY_UNAVAILABLE' && error.phase === 'validate' &&
+          error.mutationState === 'NONE' && e.missingSources === missing;
+      });
+    }
+  }
+});
+
+test('candidate public fixture shape failures are refused through the consumer without schema fallback', async () => {
+  const directory = await temp();
+  try {
+    const world = fixtureWorld();
+    const supply = new CanvasConfigSupply(await boundCanvas(directory, world));
+    for (const item of configFixture.provider.invalid) {
+      // Rebind public fixture to this fixture World; intentionally do not repair its bad shape.
+      const facts = structuredClone(item.facts);
+      facts.connection.worldRef = 'local-world';
+      world.nativeFacts.readConfigEngineFacts = async () => facts;
+      await assert.rejects(supply.readCompilerConfig('local-world'), error => {
+        const projected = publicError(error); validateType('Error', projected);
+        return ['CAPABILITY_UNAVAILABLE', 'STALE_REVISION'].includes(projected.code) &&
+          error.missingSources.some(row => row.field === 'backendProfileId');
+      }, item.title);
+    }
+    const stored = await readFile(join(directory, 'canvas-v5.json'), 'utf8');
+    assert.equal(stored.includes('collisionBox'), false);
+    assert.equal(stored.includes('playerNames'), false);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test('config fact read changing the selected connection is rejected before recording supply', async () => {
+  const directory = await temp();
+  try {
+    const world = fixtureWorld();
+    const facts = fixtureEngine(world);
+    const canvas = await boundCanvas(directory, world);
+    world.nativeFacts.readConfigEngineFacts = async () => {
+      world.incarnation = 'socket-open-2';
+      await select(canvas, world, 'session-1');
+      return facts;
+    };
+    await assert.rejects(new CanvasConfigSupply(canvas).read('local-world'), e => {
+      const error = publicError(e); validateType('Error', error);
+      return error.code === 'STALE_REVISION' && error.reason === 'REVISION_CHANGED';
+    });
+    assert.equal(canvas.store.snapshot.configSupply?.['local-world'], undefined);
+  } finally { await rm(directory, { recursive: true, force: true }); }
 });

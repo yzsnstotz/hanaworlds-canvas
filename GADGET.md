@@ -1,9 +1,10 @@
-# HanaWorlds Canvas 0.6.14 local world component
+# HanaWorlds Canvas 0.6.15 local world component
 
 The package exposes `hanaworldsCanvasV5` and consumes the public
 `hanaworldsWorldAdapterV6` port. It uses the root export of the released
-Contracts `v0.5.3` (tag commit `3457493da209178f815d6950e323e1dc462e8d6c`;
-exact handshake `hanaworlds-contracts@0.5.3`). There is no
+Contracts candidate `v0.5.5-rc.1` (peeled tag commit
+`dcbe648576de5f666bed11a90d015cc30bdf2bc9`;
+exact handshake `hanaworlds-contracts@0.5.5-rc.1`). There is no
 account, grant, epoch, authorization, or protected region dependency in this
 local MVP protocol.
 
@@ -29,8 +30,8 @@ Stage 1 validation configuration supply (0.6.11):
   revision in every observation). `requireBodyClearance=true` cites the non-switchable project
   rule INV-BODY-RECHECK-AT-PREPARE; `requireEntranceConnectivity`, `hazardPolicy` and
   `optionalLightRule` are UNDETERMINED (no current rule fixes them; each row states its impact).
-  `avatarDimensions` (no public fact port), the undetermined policy fields and
-  `backendProfileId` (no Contracts definition) have no source: the profile is refused
+  `avatarDimensions` (no public geometry source), the undetermined policy fields and
+  a missing backend payload declaration have no source: the profile is refused
   `CAPABILITY_UNAVAILABLE` with `missingSources`. No default, fixture value or
   hand-written revision is ever used; there is no editing path.
 - Revisions are Canvas-generated from value + provenance + domain (`safety-config-…`,
@@ -256,3 +257,32 @@ Sample mode and the 47601 `/objects` page stay read-only. Redo stays out of the 
 启动：Node24.13.1下 `npm run build:objects` 生成本卡run两项资源，首次在全新隔离目录运行 `npm run prepare:objects-example`，再 `npm run dev:objects`。资源与本服务data位于本卡 `objects-web/`；停止服务使用正常SIGINT/SIGTERM，不清data。页面关闭/重开保留示例开关，服务重开重新读取本origin存储。API仅GET/HEAD，其他方法返回READ_ONLY；没有世界写入端点。
 
 本轮独立网页的示例不再使用客户端硬编码记录。`objects-web/isolated-example` 的记录经本插件公开会话选择、区域提交、逐格提交与区域Undo实际产生，环境/Adapter/输入为显式fixture，Canvas事务与耐久存储为真实运行时。准备命令仅允许全新目录，服务只读该目录且重开不重建记录。示例始终醒目标注，名称未保存时如实显示未命名；真实数据目录`objects-web/data`与其分离，不写真实世界。App面板及封存060tar不变。
+
+## Stage 1 configuration supply · 0.6.15 candidate
+
+Contracts is pinned to `dcbe648576de5f666bed11a90d015cc30bdf2bc9`, the peeled
+annotated `v0.5.5-rc.1` tag (`3f2411ce0e25ea967107285df62ee69f4c7dbed7`).
+The supplied candidate npm pack is 166226 bytes, SHA256
+`31ebd3c09f4cb2bfd2efdd3402a97ee198a29c705aea259386a631d46b6bac34`.
+This is candidate SOURCE/FIXTURE consistency, not a live provider or product gate.
+
+The existing public keys remain `hanaworldsCanvasConfigSupply.read(worldRef)`,
+`hanaworldsSafetyProfile.read(worldRef)` and `hanaworldsCompilerConfig.read(worldRef)`
+(the last returns `{compilationConfig, compilerRevision}`). Canvas consumes the
+public `hanaworldsLuantiNativeFacts.readConfigEngineFacts(worldRef)` alongside
+`readCatalogue(worldRef)`. `validateConfigEngineFacts` checks the selected connection
+triple, fresh Catalogue digest and canonical sourceRevision. Only a KNOWN backend
+with `LOADED_PAYLOAD_DECLARATION` supplies backendProfileId; adapter identity,
+payload/package version and defaults are never sources. Provenance names the public
+port, actual sourceRevision and basis. A declaration change invalidates the compiler
+revision and is recorded in the existing durable observation history.
+
+Missing/unreadable backend facts are named in the supply report and refuse through
+ContractError with CAPABILITY_UNAVAILABLE/REQUIRED_FACT_UNKNOWN. Connection or
+Catalogue mismatch refuses STALE_REVISION/REVISION_CHANGED. Multiple missing fields
+keep legal public ErrorReason values; engine fact reason names are retained only as
+cause/factReason metadata. Avatar stays UNAVAILABLE/NO_PUBLIC_SOURCE with the
+INV-POSE-STAYS-IN-ENGINE cause; no geometry is read, supplied or persisted. The three
+undetermined Stage 1 policies remain undetermined. The independent tests use the
+public `hanaworlds-contracts/fixtures/config-engine-facts` input and explicitly prove
+only FIXTURE behavior. The older 47613 page still runs 0.6.14 and was not replaced.

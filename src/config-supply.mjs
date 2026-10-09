@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import canonicalize from 'canonicalize';
-import { ContractError, contractHandshake, digestValue, schemaBundle, validateType }
+import { ContractError, contractHandshake, digestValue, schemaBundle, validateType,
+  validateConfigEngineFacts, requireKnownWriteBackend, configEngineFacts }
   from 'hanaworlds-contracts';
 import { STAGE1_POLICY_DECLARATION, STAGE1_POLICY_REVISION } from './stage1-policy.mjs';
 
@@ -27,13 +28,13 @@ const definitions = schemaBundle.definitions;
 const MISSING_SOURCE = {
   // INV-POSE-STAYS-IN-ENGINE keeps players' collision boxes inside the Adapter; no public
   // non-pose envelope fact exists. Canvas never derives, defaults or persists player geometry.
-  avatarDimensions: { sourceKind: 'ENGINE_FACT', reason: 'REQUIRED_FACT_UNKNOWN',
-    cause: 'INV-POSE-STAYS-IN-ENGINE',
+  avatarDimensions: { sourceKind: 'ENGINE_FACT',
+    cause: configEngineFacts.avatarDimensions.cause,
+    availability: configEngineFacts.avatarDimensions.record.availability,
+    factReason: configEngineFacts.avatarDimensions.record.reason,
+    reason: configEngineFacts.avatarDimensions.refusal.reason,
     need: 'a public non-pose collision envelope fact allowed under INV-POSE-STAYS-IN-ENGINE ' +
       '(C-STAGE1-CONFIG-SEAM-01 / hanaworlds-adapter-luanti-SUPPLY-01); none exists' },
-  // Contracts 0.5.4 names the field but defines no source or derivation for it.
-  backendProfileId: { sourceKind: 'UNDEFINED_IN_CONTRACT', reason: 'REQUIRED_FACT_UNKNOWN',
-    need: 'Contracts definition of what backendProfileId identifies and which port supplies it' },
 };
 const WORLDEDIT_MOD = 'worldedit';
 const PROFILES = {
@@ -93,6 +94,22 @@ function resolveField(type, field, facts) {
     return { status: 'SUPPLIED', value, provenance: { kind: 'ENGINE_FACT',
       ref: `hanaworldsLuantiNativeFacts.readCatalogue(worldRef).modRevisions.${WORLDEDIT_MOD}`,
       sourceRevision: facts.catalogue.digest } };
+  }
+  if (type === 'CompilationConfig' && field === 'backendProfileId') {
+    const engine = facts.configEngine;
+    const need = 'hanaworldsLuantiNativeFacts.readConfigEngineFacts(worldRef).writeBackend ' +
+      'from the actual loaded payload declaration';
+    if (engine.status !== 'READ') return { status: 'MISSING', value: null,
+      provenance: null, sourceKind: 'ENGINE_FACT', reason: engine.stale ?
+        'REVISION_CHANGED' : 'REQUIRED_FACT_UNKNOWN', cause: engine.cause, need };
+    if (engine.value.writeBackend.availability !== 'KNOWN') return { status: 'MISSING',
+      value: null, provenance: null, sourceKind: 'ENGINE_FACT', reason: 'REQUIRED_FACT_UNKNOWN',
+      cause: engine.value.writeBackend.reason, need };
+    return { status: 'SUPPLIED', value: requireKnownWriteBackend(engine.value),
+      provenance: { kind: 'ENGINE_FACT',
+        ref: 'hanaworldsLuantiNativeFacts.readConfigEngineFacts(worldRef).writeBackend',
+        sourceRevision: engine.value.sourceRevision,
+        basis: engine.value.writeBackend.basis } };
   }
   const declared = type === 'SafetyProfile' ? STAGE1_POLICY_DECLARATION.fields[field] : null;
   if (declared?.status === 'DECLARED') return { status: 'SUPPLIED', value: declared.value,
@@ -185,6 +202,24 @@ export class CanvasConfigSupply {
       return { status: 'UNAVAILABLE', cause: error.publicError?.code ?? error.message ?? 'READ_FAILED' };
     }
   }
+  async #configEngine(worldRef, catalogue, domain) {
+    const port = this.canvas.nativeFacts;
+    if (typeof port?.readConfigEngineFacts !== 'function')
+      return { status: 'UNAVAILABLE', cause: 'CONFIG_ENGINE_FACTS_PORT_ABSENT' };
+    if (catalogue.status !== 'READ')
+      return { status: 'UNAVAILABLE', cause: 'CATALOGUE_UNRESOLVED' };
+    const { connectionRef, connectionIncarnationRef } = domain;
+    try {
+      const value = validateConfigEngineFacts(await port.readConfigEngineFacts(worldRef),
+        catalogue.value, { worldRef, connectionRef, connectionIncarnationRef });
+      return { status: 'READ', value };
+    } catch (error) {
+      // Preserve only the typed code, never a provider exception or rejected raw facts.
+      const cause = error instanceof ContractError ? error.code : 'ENGINE_FACT_UNREADABLE';
+      return { status: 'UNAVAILABLE', cause,
+        stale: cause === 'CURRENT_WORLD_MISMATCH' || cause === 'CATALOGUE_MISMATCH' };
+    }
+  }
   /** Observe the current supply for one World; records any change durably in Canvas's store. */
   async read(worldRef) {
     validateType('Ref', worldRef);
@@ -201,10 +236,11 @@ export class CanvasConfigSupply {
             missing: [] }])) };
     } else {
       const catalogue = await this.#catalogue(worldRef);
+      const configEngine = await this.#configEngine(worldRef, catalogue, before.domain);
       const after = this.#domain(worldRef);
       // The bound connection must not change while its facts are read.
       if (!same(before, after)) throw supplyError('STALE_REVISION', 'REVISION_CHANGED');
-      const facts = { catalogue };
+      const facts = { catalogue, configEngine };
       const profiles = {};
       for (const [name, { type }] of Object.entries(PROFILES)) {
         const fields = Object.fromEntries(definitions[type].required
@@ -213,7 +249,9 @@ export class CanvasConfigSupply {
       }
       observation = { contracts: CONTRACTS_REF, declaration: STAGE1_POLICY_REVISION, domain: before.domain,
         sessionRefs: [...before.sessionRefs].sort(), profiles,
-        sources: { catalogue: catalogue.status === 'READ' ?
+        sources: { configEngineFacts: configEngine.status === 'READ' ?
+          { status: 'READ', sourceRevision: configEngine.value.sourceRevision } :
+          { status: configEngine.status, cause: configEngine.cause }, catalogue: catalogue.status === 'READ' ?
           { status: 'READ', digest: catalogue.digest } :
           { status: catalogue.status, cause: catalogue.cause } } };
     }
@@ -239,6 +277,9 @@ export class CanvasConfigSupply {
   #require(report, name) {
     const profile = report.current.profiles[name];
     if (profile.status === 'NOT_BOUND') throw supplyError('WORLD_NOT_BOUND', 'SCOPE_DENIED');
+    if (profile.status !== 'SUPPLIED' && profile.missing.some(row => row.reason === 'REVISION_CHANGED'))
+      throw supplyError('STALE_REVISION', 'REVISION_CHANGED',
+        { missingSources: profile.missing, observationDigest: report.current.observationDigest });
     if (profile.status !== 'SUPPLIED') throw supplyError('CAPABILITY_UNAVAILABLE',
       profile.missing.some(row => row.reason === 'POLICY_UNAVAILABLE') ?
         'POLICY_UNAVAILABLE' : 'REQUIRED_FACT_UNKNOWN',
