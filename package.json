@@ -48,7 +48,8 @@
     "LICENSES/",
     "scripts/real-supply/server.mjs",
     "scripts/real-supply/page.html",
-    "scripts/fixture-sessions.mjs"
+    "scripts/fixture-sessions.mjs",
+    "scripts/real-supply/start.sh"
   ],
   "dsh": {
     "bundle": {
