@@ -3,7 +3,7 @@ import { checkProtocolCompatibility, protocolRequirement } from 'hanaworlds-cont
 declare const publicService: CanvasV5ProtocolSource;
 declare const canvas: CanvasV5;
 declare const region: CanvasRegionV1;
-const requirement = protocolRequirement('canvas/v6', []);
+const requirement = protocolRequirement('canvas/v7', []);
 checkProtocolCompatibility(publicService.protocolHandshake, [requirement]);
 checkProtocolCompatibility(canvas.protocolHandshake, [requirement]);
 checkProtocolCompatibility(region.protocolHandshake, [protocolRequirement('canvas-region/v2', [])]);

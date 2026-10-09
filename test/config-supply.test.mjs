@@ -60,11 +60,11 @@ async function boundCanvas(directory, world, sessionRef = 'session-1') {
   return canvas;
 }
 async function select(canvas, world, sessionRef) {
-  const context = await canvas.call('ReadWorldSelectionContext', { contractVersion: 'canvas/v6',
+  const context = await canvas.call('ReadWorldSelectionContext', { contractVersion: 'canvas/v7',
     sessionRef, requestId: `${sessionRef}-context-${world.incarnation}`, worldRef: 'local-world' });
   const selection = context.result.selection;
   const bound = selection.status === 'BOUND';
-  const response = await canvas.call('SelectWorldConnection', { contractVersion: 'canvas/v6',
+  const response = await canvas.call('SelectWorldConnection', { contractVersion: 'canvas/v7',
     sessionRef, requestId: `${sessionRef}-select-${world.incarnation}`, worldRef: 'local-world',
     connectionRef: 'local-connection', connectionIncarnationRef: world.incarnation,
     expectedRevision: bound ? selection.context.selectionRevision : selection.sessionRevision,
@@ -181,9 +181,9 @@ test('changes and invalidation are recorded durably and read back after restart'
     assert.equal(rebound.current.domain.connectionIncarnationRef, 'socket-open-2');
     assert.ok(rebound.history.at(-1).invalidationReasons.includes('CONNECTION_DOMAIN_CHANGED'));
     // Unbinding invalidates the supply for the World.
-    const context = await canvas.call('ReadWorldSelectionContext', { contractVersion: 'canvas/v6',
+    const context = await canvas.call('ReadWorldSelectionContext', { contractVersion: 'canvas/v7',
       sessionRef: 'session-1', requestId: 'context-unbind', worldRef: 'local-world' });
-    const unbound = await canvas.call('UnselectWorldConnection', { contractVersion: 'canvas/v6',
+    const unbound = await canvas.call('UnselectWorldConnection', { contractVersion: 'canvas/v7',
       sessionRef: 'session-1', requestId: 'unbind-1', worldRef: 'local-world',
       expectedRevision: context.result.selection.context.selectionRevision,
       expectedContext: context.result.selection.context.localContext });
@@ -272,7 +272,7 @@ test('v1: no Safety declaration or player geometry in the supply or its durable 
     await supply.read('local-world');
     world.catalogue = withWorldedit('fixture-worldedit-2');
     await supply.read('local-world');
-    const stored = await readFile(join(directory, 'canvas-v6.json'), 'utf8');
+    const stored = await readFile(join(directory, 'canvas-v7.json'), 'utf8');
     for (const word of ['SafetyProfile', 'safetyProfile', 'avatarDimensions',
       'requireBodyClearance', 'requireEntranceConnectivity', 'hazardPolicy', 'optionalLightRule',
       'stage1-policy', '"declaration"', 'bodyOccupiedPositions'])
@@ -280,18 +280,21 @@ test('v1: no Safety declaration or player geometry in the supply or its durable 
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
-test('v1 store: a new root; a 0.x store is never read, migrated or accepted', async () => {
+test('v2 store: a new root; previous stores are never read, migrated or accepted', async () => {
   const directory = await temp();
   try {
-    assert.equal(STORE_ROOT, 'hanaworlds-canvas-v1');
+    assert.equal(STORE_ROOT, 'hanaworlds-canvas-v2');
     const { writeFile } = await import('node:fs/promises');
-    // A 0.x file left in the directory is ignored; a 0.x schema in the 1.x file is refused.
+    // Previous files in the directory are ignored; old schemas in the new file are refused.
     await writeFile(join(directory, 'canvas-v5.json'), JSON.stringify({ schemaVersion: 5,
       placementInspections: { old: { inspection: { bodyOccupiedPositions: [[0, 0, 0]] } } } }));
+    await writeFile(join(directory, 'canvas-v6.json'), JSON.stringify({ schemaVersion: 6, pending: { protected: true } }));
     const fresh = await CanvasStore.open(directory);
-    assert.equal(fresh.snapshot.schemaVersion, 6);
+    assert.equal(fresh.snapshot.schemaVersion, 7);
     assert.deepEqual(fresh.snapshot.placementInspections, {});
-    await writeFile(join(directory, 'canvas-v6.json'), JSON.stringify({ schemaVersion: 5 }));
+    assert.deepEqual(fresh.snapshot.pending, {});
+    assert.deepEqual(JSON.parse(await readFile(join(directory, 'canvas-v6.json'), 'utf8')), { schemaVersion: 6, pending: { protected: true } });
+    await writeFile(join(directory, 'canvas-v7.json'), JSON.stringify({ schemaVersion: 5 }));
     await assert.rejects(CanvasStore.open(directory), /CANVAS_STORAGE_VERSION_UNSUPPORTED/);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
@@ -433,7 +436,7 @@ test('candidate public fixture shape failures are refused through the consumer w
           error.missingSources.some(row => row.field === 'backendProfileId');
       }, item.title);
     }
-    const stored = await readFile(join(directory, 'canvas-v6.json'), 'utf8');
+    const stored = await readFile(join(directory, 'canvas-v7.json'), 'utf8');
     assert.equal(stored.includes('collisionBox'), false);
     assert.equal(stored.includes('playerNames'), false);
   } finally { await rm(directory, { recursive: true, force: true }); }

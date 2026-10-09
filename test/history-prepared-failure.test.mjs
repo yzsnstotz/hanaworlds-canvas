@@ -19,7 +19,7 @@ test('a definitely pre-write History failure aborts its exact prepared transacti
    if(op==='PrepareHistoryTransaction') { const r=await original(op,q);prepared=r.result;request=q;return r; }
    if(op==='ApplyHistoryTransaction') return {...answer(null),guardRefusal:null,error:{code:'TARGET_FACTS_INCOMPLETE',phase:'validate',retryability:'NEVER',mutationState:'NONE',transactionRef:q.transactionId,causeCode:null,reason:'REQUIRED_FACT_UNKNOWN'}};
    if(op==='RestoreTransaction') {restores++;throw new Error('STALE_TRANSACTION');}
-   if(op==='QueryTransaction') return answer({contractVersion:'canvas/v6',transactionId:q.transactionId,operationDigest:prepared.historyOperationDigest,transactionPayloadDigest:prepared.transactionPayloadDigest,status:'REJECTED',previousWorldRevision:request.expectedWorldRevision,observedWorldRevision:null,readbackDigest:null,restoreStatus:'UNKNOWN',error:null,guardRefusal:null,applyFailure:null,localContext:q.localContext});
+   if(op==='QueryTransaction') return answer({contractVersion:'canvas/v7',transactionId:q.transactionId,operationDigest:prepared.historyOperationDigest,transactionPayloadDigest:prepared.transactionPayloadDigest,status:'REJECTED',previousWorldRevision:request.expectedWorldRevision,observedWorldRevision:null,readbackDigest:null,restoreStatus:'UNKNOWN',error:null,guardRefusal:null,applyFailure:null,localContext:q.localContext});
    if(op==='QueryPreparedHistoryTransaction') return answer(prepared);
    if(op==='AbortPreparedHistoryTransaction') {aborted++;return answer({transactionId:q.transactionId,status:'ABORTED_PREPARED',mutationState:'NONE'});}
    return original(op,q);
@@ -51,7 +51,7 @@ test('an unknown History outcome stays pending until same-transaction Query and 
    if(op==='PrepareHistoryTransaction'){const r=await original(op,q);prepared=r.result;request=q;return r;}
    if(op==='ApplyHistoryTransaction') return {...answer(null),guardRefusal:null,error:{code:'RECOVERY_PENDING',phase:'apply',retryability:'SAME_TRANSACTION_QUERY',mutationState:'UNKNOWN',transactionRef:q.transactionId,causeCode:null,reason:'TRANSPORT_OUTCOME_UNKNOWN'}};
    if(op==='RestoreTransaction'){restores++;throw new Error('STALE_TRANSACTION');}
-   if(op==='QueryTransaction')return answer({contractVersion:'canvas/v6',transactionId:q.transactionId,operationDigest:prepared.historyOperationDigest,transactionPayloadDigest:prepared.transactionPayloadDigest,status:unknown?'RECOVERY_PENDING':'REJECTED',previousWorldRevision:request.expectedWorldRevision,observedWorldRevision:null,readbackDigest:null,restoreStatus:'UNKNOWN',error:unknown?{code:'RECOVERY_PENDING',phase:'apply',retryability:'SAME_TRANSACTION_QUERY',mutationState:'UNKNOWN',transactionRef:q.transactionId,causeCode:null,reason:'TRANSPORT_OUTCOME_UNKNOWN'}:null,guardRefusal:null,applyFailure:null,localContext:q.localContext});
+   if(op==='QueryTransaction')return answer({contractVersion:'canvas/v7',transactionId:q.transactionId,operationDigest:prepared.historyOperationDigest,transactionPayloadDigest:prepared.transactionPayloadDigest,status:unknown?'RECOVERY_PENDING':'REJECTED',previousWorldRevision:request.expectedWorldRevision,observedWorldRevision:null,readbackDigest:null,restoreStatus:'UNKNOWN',error:unknown?{code:'RECOVERY_PENDING',phase:'apply',retryability:'SAME_TRANSACTION_QUERY',mutationState:'UNKNOWN',transactionRef:q.transactionId,causeCode:null,reason:'TRANSPORT_OUTCOME_UNKNOWN'}:null,guardRefusal:null,applyFailure:null,localContext:q.localContext});
    if(op==='QueryPreparedHistoryTransaction')return answer(prepared);
    if(op==='AbortPreparedHistoryTransaction'){abort++;return answer({transactionId:q.transactionId,status:'ABORTED_PREPARED',mutationState:'NONE'});}
    return original(op,q);
@@ -119,7 +119,7 @@ test('lost Abort reply replays its durable request after reopening, then concurr
    const answer=result=>({contractVersion:'world-adapter/v7',requestId:q.requestId,result,error:null});
    if(op==='PrepareHistoryTransaction'){const r=await original(op,q);prepared=r.result;request=q;return r;}
    if(op==='ApplyHistoryTransaction')return {...answer(null),guardRefusal:null,error:{code:'TARGET_FACTS_INCOMPLETE',phase:'validate',retryability:'AFTER_NEW_FACTS',mutationState:'NONE',transactionRef:q.transactionId,causeCode:null,reason:'REQUIRED_FACT_UNKNOWN'}};
-   if(op==='QueryTransaction')return answer({contractVersion:'canvas/v6',transactionId:q.transactionId,operationDigest:prepared.historyOperationDigest,transactionPayloadDigest:prepared.transactionPayloadDigest,status:'REJECTED',previousWorldRevision:request.expectedWorldRevision,observedWorldRevision:null,readbackDigest:null,restoreStatus:'UNKNOWN',error:null,guardRefusal:null,applyFailure:null,localContext:q.localContext});
+   if(op==='QueryTransaction')return answer({contractVersion:'canvas/v7',transactionId:q.transactionId,operationDigest:prepared.historyOperationDigest,transactionPayloadDigest:prepared.transactionPayloadDigest,status:'REJECTED',previousWorldRevision:request.expectedWorldRevision,observedWorldRevision:null,readbackDigest:null,restoreStatus:'UNKNOWN',error:null,guardRefusal:null,applyFailure:null,localContext:q.localContext});
    if(op==='QueryPreparedHistoryTransaction')return answer(prepared);
    if(op==='AbortPreparedHistoryTransaction') {
     abortCalls++;if(!abortId){abortId=q.requestId;abortWrites++;}else assert.equal(q.requestId,abortId,'same Abort request must replay');
@@ -186,7 +186,7 @@ test('queried RESTORE_FAILED keeps both failure causes and the original restore 
    if(op==='PrepareHistoryTransaction'){const r=await original(op,q);prepared=r.result;request=q;return r;}
    if(op==='ApplyHistoryTransaction')return {...answer(null),guardRefusal:null,error:{code:'RESTORE_FAILED',phase:'restore',retryability:'AFTER_MANUAL_RECOVERY',mutationState:'UNKNOWN',transactionRef:q.transactionId,causeCode:'APPLY_FAILED',reason:'REQUIRED_FACT_UNKNOWN'}};
    if(op==='QueryTransaction') {
-    receipt={contractVersion:'canvas/v6',transactionId:q.transactionId,operationDigest:prepared.historyOperationDigest,transactionPayloadDigest:prepared.transactionPayloadDigest,status:'RESTORE_FAILED',previousWorldRevision:request.expectedWorldRevision,observedWorldRevision:null,readbackDigest:null,restoreStatus:'FAILED',error:guardRefusalError(guard,{transactionRef:q.transactionId,cause:'APPLY_FAILED'}),guardRefusal:guard,applyFailure:{error:{code:'APPLY_FAILED',phase:'apply',retryability:'NEVER',mutationState:'UNKNOWN',transactionRef:q.transactionId,causeCode:null,reason:'REQUIRED_FACT_UNKNOWN'},guardRefusal:null},localContext:q.localContext};return answer(receipt);
+    receipt={contractVersion:'canvas/v7',transactionId:q.transactionId,operationDigest:prepared.historyOperationDigest,transactionPayloadDigest:prepared.transactionPayloadDigest,status:'RESTORE_FAILED',previousWorldRevision:request.expectedWorldRevision,observedWorldRevision:null,readbackDigest:null,restoreStatus:'FAILED',error:guardRefusalError(guard,{transactionRef:q.transactionId,cause:'APPLY_FAILED'}),guardRefusal:guard,applyFailure:{error:{code:'APPLY_FAILED',phase:'apply',retryability:'NEVER',mutationState:'UNKNOWN',transactionRef:q.transactionId,causeCode:null,reason:'REQUIRED_FACT_UNKNOWN'},guardRefusal:null},localContext:q.localContext};return answer(receipt);
    }
    if(op==='RestoreTransaction'){restores++;throw Error('NO_FORCED_RESTORE');}
    return original(op,q);
@@ -209,7 +209,7 @@ test('a valid ROLLED_BACK History reply is queried and read back without leaking
    const answer=result=>({contractVersion:'world-adapter/v7',requestId:q.requestId,result,error:null});
    if(op==='ApplyHistoryTransaction'){
     const before=host.canvas.store.snapshot.pending[q.transactionId].before;
-    receipt={contractVersion:'canvas/v6',transactionId:q.transactionId,operationDigest:q.historyOperationDigest,transactionPayloadDigest:q.preparedHistoryTransaction.transactionPayloadDigest,status:'ROLLED_BACK',previousWorldRevision:q.expectedWorldRevision,observedWorldRevision:q.expectedWorldRevision,readbackDigest:digestValue('readback',before).sha256,restoreStatus:'VERIFIED_RESTORED',error:null,guardRefusal:null,applyFailure:null,localContext:q.localContext};return answer(receipt);
+    receipt={contractVersion:'canvas/v7',transactionId:q.transactionId,operationDigest:q.historyOperationDigest,transactionPayloadDigest:q.preparedHistoryTransaction.transactionPayloadDigest,status:'ROLLED_BACK',previousWorldRevision:q.expectedWorldRevision,observedWorldRevision:q.expectedWorldRevision,readbackDigest:digestValue('readback',before).sha256,restoreStatus:'VERIFIED_RESTORED',error:null,guardRefusal:null,applyFailure:null,localContext:q.localContext};return answer(receipt);
    }
    if(op==='QueryTransaction')return answer(receipt);
    if(op==='RestoreTransaction'){restores++;throw Error('ALREADY_ROLLED_BACK');}

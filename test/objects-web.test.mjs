@@ -23,7 +23,7 @@ test('independent objects web reads Canvas durable records, separates samples an
       state.history.house = [{ transactionId: 'fixture-build', originTransactionId: null }];
       state.transactions['fixture-build'] = { objectRef: 'house', worldRef: 'fixture-world', displayMetadata: { committedAt: '2026-10-07T08:00:00Z', mode: 'CELL', affectedCells: 1 } };
     });
-    const before = await readFile(join(data, 'canvas-v6.json'));
+    const before = await readFile(join(data, 'canvas-v7.json'));
     server = await createObjectsWebServer({ storeDirectory: data, assetsDirectory: assets });
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     const base = `http://127.0.0.1:${server.address().port}`;
@@ -40,8 +40,8 @@ test('independent objects web reads Canvas durable records, separates samples an
     assert.equal((await fetch(base + '/api/objects', { method: 'POST', body: '{}' })).status, 405);
     assert.equal((await fetch(base + '/api/objects?session=a&session=b')).status, 400);
     assert.equal((await fetch(base + '/api/sample')).status, 404, 'sample is client-only, not live Canvas data');
-    assert.equal((await fetch(base + '/data/canvas-v6.json')).status, 404);
-    assert.deepEqual(await readFile(join(data, 'canvas-v6.json')), before, 'all web reads must leave durable bytes unchanged');
+    assert.equal((await fetch(base + '/data/canvas-v7.json')).status, 404);
+    assert.deepEqual(await readFile(join(data, 'canvas-v7.json')), before, 'all web reads must leave durable bytes unchanged');
   } finally {
     if (server) await new Promise(resolve => server.close(resolve));
     await rm(scratch, { recursive: true, force: true });

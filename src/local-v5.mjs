@@ -8,7 +8,7 @@ import { admitRequest, validateRequest, validateResponse, validateBoundResponse,
   validateCurrentRequest, validateWorldSelection, validateCommitReadback,
   projectScopedPreparedTransaction, checkContractHandshake, contractHandshake,
   digestValue, requestDigest, publicError, validateExactEffects,
-  validateRegionInspection } from 'hanaworlds-contracts';
+  validateRegionInspection, checkConfirmedPlacementApply } from 'hanaworlds-contracts';
 import { checkProtocolCompatibility, contractProtocols, protocolRequirement,
   validateType } from 'hanaworlds-contracts';
 import * as contractsSdk from 'hanaworlds-contracts';
@@ -18,20 +18,20 @@ import { CanvasConfigSupply } from './config-supply.mjs';
 import { resolveHistoryOutcome } from './history-recovery.mjs';
 
 export { CanvasStore, CanvasRegionV1, CanvasConfigSupply };
-const WIRE = 'canvas/v6';
+const WIRE = 'canvas/v7';
 const ADAPTER = 'world-adapter/v7';
-const SESSION = 'session/v4';
-// canvas/v6 (Contracts 1.x) carries the session-world seam operations at minor 0; there is no
+const SESSION = 'session/v5';
+// canvas/v7 (Contracts 2.x) carries the session-world seam operations at minor 0; there is no
 // pre-seam canvas behaviour left to switch to.
 const canvasProtocol = contractProtocols.find(row => row.protocol === 'canvas');
-if (!canvasProtocol || canvasProtocol.major !== 6) throw new Error('CANVAS_PROTOCOL_UNDECLARED');
-const PACKAGE_VERSION = '0.10.5';
-// The public wire defines canvas major 6, minor 0. Contracts publishes no
+if (!canvasProtocol || canvasProtocol.major !== 7) throw new Error('CANVAS_PROTOCOL_UNDECLARED');
+const PACKAGE_VERSION = '0.11.0';
+// The public wire defines canvas major 7, minor 0. Contracts publishes no
 // per-cell Canvas capability token; regional tokens describe the region port.
 const cellRequirement = protocolRequirement(WIRE, []);
 const cellProtocolHandshake = validateType('ProtocolHandshake', {
   profileVersion: 'protocol-handshake/v1', component: 'hanaworlds-canvas',
-  // The advertised minor is the one the installed Contracts declare for canvas/v6: Canvas
+  // The advertised minor is the one the installed Contracts declare for canvas/v7: Canvas
   // implements every operation of that minor (including the session-world seam).
   protocols: [{ protocol: cellRequirement.protocol, major: cellRequirement.major,
     minor: canvasProtocol.minor }], capabilities: [...cellRequirement.capabilities],
@@ -57,7 +57,7 @@ function boxCells(box) {
 function answer(body, result, error = null) {
   return { contractVersion: WIRE, requestId: body.requestId, result, error };
 }
-// canvas/v6 envelopes that carry guardRefusal beside error (Contracts 1.0.0-rc.4 relay): null
+// canvas/v7 envelopes that carry guardRefusal beside error (guard-refusal relay): null
 // unless the error is a guard refusal (Canvas's pre-flight GUARD_UNAVAILABLE or an engine
 // refusal Canvas forwards unchanged).
 const GUARDED_OPERATIONS = new Set(contractsSdk.operationContracts[WIRE]
@@ -80,7 +80,7 @@ export class CanvasV5 {
     checkContractHandshake(contractHandshake);
     this.store = store;
     this.adapter = adapter;
-    // Host-bound session/v4 port (Workshop). Its ReadSessionIdentity is the only evidence
+    // Host-bound session/v5 port (Workshop). Its ReadSessionIdentity is the only evidence
     // that a Session exists; Canvas never infers that from a Ref.
     this.sessions = sessions;
     this.nativeFacts = nativeFacts;
@@ -139,7 +139,7 @@ export class CanvasV5 {
   }
   /**
    * G3 write-before guard for the per-cell port: its ProtocolHandshake must name
-   * world-adapter major 6 at the Contracts-declared minor with every world-adapter/v7
+   * world-adapter major 7 at the Contracts-declared minor with every world-adapter/v7
    * Adapter capability (callback-free-write, write-path-state-facts). Runs before any
    * reservation or Adapter call of a BUILD, Undo, Redo or region write.
    */
@@ -457,9 +457,11 @@ export class CanvasV5 {
         body.regionInspectionBinding.inspectionId];
       const inspection = recorded?.inspection;
       if (!inspection || recorded.sessionRef !== body.sessionRef ||
-          recorded.worldRef !== body.worldRef ||
-          recorded.worldRevision !== body.expectedWorldRevision ||
-          !same(recorded.localContext, body.localContext) ||
+          recorded.worldRef !== body.worldRef || !same(recorded.localContext, body.localContext))
+        throw fail('INSPECTION_FAILED', 'REQUIRED_FACT_UNKNOWN');
+      // Use Canvas's own retained source, before scoped reads, reservation or any Adapter write.
+      checkConfirmedPlacementApply(body, inspection, this.store.snapshot.worldRevisions[body.worldRef]);
+      if (recorded.worldRevision !== body.expectedWorldRevision ||
           inspection.targetFactsDigest !== body.operations.targetFactsDigest ||
           build.targetFactsDigest !== inspection.targetFactsDigest ||
           !same(build.coordinateFrame, inspection.frame) ||
@@ -663,7 +665,7 @@ export class CanvasV5 {
       }
       const causeCode = applyFailure.error.code;
       // An engine RESTORE_FAILED (phase restore, e.g. a guard at RESTORE) is answered with the
-      // canvas/v6 RESTORE_FAILED receipt pending manual recovery: error.causeCode names the
+      // canvas/v7 RESTORE_FAILED receipt pending manual recovery: error.causeCode names the
       // failure that made the restore necessary, guardRefusal the restore's own reason and
       // applyFailure that causing failure in full. A receipt the Contracts reject is not repaired
       // and falls through to RECOVERY_PENDING below, with the rejection recorded.
@@ -1097,7 +1099,7 @@ export class CanvasV5 {
     return response;
   }
   /**
-   * canvas/v6 SwitchWorldConnection: the bound Session moves from its current world to
+   * canvas/v7 SwitchWorldConnection: the bound Session moves from its current world to
    * `toWorldRef` over `toConnectionRef`. Canvas alone decides it: CAS on the published
    * selectionRevision (the same convention as SelectWorldConnection) and on the current
    * localContext (`expectedContext`), the target connection's actual readback and
@@ -1180,7 +1182,7 @@ export class CanvasV5 {
       state.replay[replayKey] = { digest: admission.requestDigest, response };
     });
   }
-  /** G-S: the Session's identity from Workshop's Host-bound session/v4 port. */
+  /** G-S: the Session's identity from Workshop's Host-bound session/v5 port. */
   async #identity(body) {
     if (typeof this.sessions?.call !== 'function')
       throw fail('CAPABILITY_UNAVAILABLE', 'REQUIRED_FACT_UNKNOWN');
@@ -1373,7 +1375,7 @@ export class CanvasV5 {
 
 export const name = 'hanaworlds-canvas';
 export const inject = [];
-export const STORE_ROOT = 'hanaworlds-canvas-v1';
+export const STORE_ROOT = 'hanaworlds-canvas-v2';
 async function nativeDirectory(ctx) {
   const homePath = ctx.get?.('dshHomePath');
   if (typeof homePath !== 'function') throw new Error('CANVAS_STORAGE_UNAVAILABLE');
@@ -1386,7 +1388,7 @@ async function nativeDirectory(ctx) {
       join(homedir(), configured.slice(2)) : configured;
     if (root !== resolve(expanded)) throw new Error('CANVAS_STORAGE_UNAVAILABLE');
   }
-  // New root for the 1.x store; the 0.x root (data/hanaworlds-canvas) is left untouched.
+  // New root for the 2.x store; earlier roots are left untouched.
   const directory = join(root, 'data', STORE_ROOT);
   if (homePath('data', STORE_ROOT) !== directory)
     throw new Error('CANVAS_STORAGE_UNAVAILABLE');
@@ -1406,7 +1408,7 @@ export function apply(ctx) {
     adapter: {
       get protocolHandshake() { return ctx.get?.('hanaworldsWorldAdapterV6')?.protocolHandshake; },
       call: (...args) => ctx.get?.('hanaworldsWorldAdapterV6')?.call(...args) },
-    // Workshop's published session/v4 provider (public service key hanaworldsWorkshopV3,
+    // Workshop's published session/v5 provider (public service key hanaworldsWorkshopV3,
     // one WorkshopV3 instance; Workshop 0.4.12 4547f3cf). Read on every call, so a disposed
     // provider is absent → fail closed. No other key is tried.
     sessions: { call: (...args) => {

@@ -33,9 +33,9 @@ Stage 1 validation configuration supply (v1 batch; earlier 0.6.11–0.6.15 notes
 - Revisions are Canvas-generated from value + provenance + domain (`compiler-config-…` =
   `compilerRevision`). Each change of observation is recorded durably in Canvas's store with
   `invalidationReasons`; reads are otherwise read-only (no Adapter call, no World write).
-- Store: the 1.x store lives in `<dsh home>/data/hanaworlds-canvas-v1/canvas-v6.json`
-  (schemaVersion 6). A 0.x store is never read, migrated or accepted.
-- Contracts `#semver:^1.0.0` (0.10.1; formal v1.0.0, same content as rc.4): canvas/v6, world-adapter/v7, session/v4,
+- Store: the 2.x store lives in `<dsh home>/data/hanaworlds-canvas-v2/canvas-v7.json`
+  (schemaVersion 7). Any earlier store is never read, migrated or accepted.
+- Contracts `#semver:^2.0.0-rc.1` (0.11.0 candidate; formal 2.0.0 not supplied): canvas/v7, world-adapter/v7, session/v5,
   canvas-region/v2, world-adapter-region/v2; the session-world seam is unconditional. Host
   service keys are unchanged (`hanaworldsCanvasV5`, `hanaworldsCanvasRegionV1`,
   `hanaworldsWorldAdapterV6`, `hanaworldsWorldAdapterRegionV1`, `hanaworldsWorkshopV3`, ...).
@@ -52,7 +52,7 @@ Stage 1 validation configuration supply (v1 batch; earlier 0.6.11–0.6.15 notes
   `CanvasV5.readEngineSafety(sessionRef)` lists, per operation, the requirements and the uncovered
   ones; the `/supply` page shows it.
 - Transaction role (G1): when the engine refuses a rollback (phase restore: the transaction form
-  `RESTORE_FAILED`, or rc.3's engine form = a `GuardRefusal` with no cause and nothing written), BUILD/Undo/Redo answer the canvas/v6 `RESTORE_FAILED`
+  `RESTORE_FAILED`, or rc.3's engine form = a `GuardRefusal` with no cause and nothing written), BUILD/Undo/Redo answer the canvas/v7 `RESTORE_FAILED`
   receipt and region commit/undo the canvas-region/v2 response with `result: null`: error =
   the restore failure with `causeCode` = the failure that made the restore necessary,
   `guardRefusal` = the restore's own reason, `applyFailure` = that causing failure in full
@@ -60,7 +60,7 @@ Stage 1 validation configuration supply (v1 batch; earlier 0.6.11–0.6.15 notes
   restore) answers `RECOVERY_PENDING`. Either way the transaction stays a durable
   `RESTORE_PENDING` row (restoreCode/causeCode/receiptStatus/guardRefusal), blocks the World,
   replays exactly, and `readHistoryActions(sessionRef).recovery` lists it; it is never success.
-- Guard refusal relay (rc.4): the canvas/v6 envelopes of ApplyRecoverableCommit, Undo, Redo,
+- Guard refusal relay (rc.4): the canvas/v7 envelopes of ApplyRecoverableCommit, Undo, Redo,
   InspectPlacementRegion, RecoverPendingUndo and ReadPendingUndoResult carry `guardRefusal`
   beside `error`: null normally; Canvas's pre-flight refusal = the first uncovered guard x stage
   (GUARD_UNAVAILABLE) with `CAPABILITY_UNAVAILABLE/validate`; an Adapter refusal (Prepare,
@@ -340,3 +340,16 @@ as a fabricated TRANSACTION_MISMATCH error and never leaves PREPARED stranded.
 pending until the complete original before image is read back. A lost Abort reply is still
 `UNKNOWN`. The trial page shows this same projection. These are existing Canvas-owned
 evidence, not additional engine facts or a new transaction outcome.
+
+### Confirmed placement (0.11.0 candidate)
+
+Canvas uses the public Contracts `checkConfirmedPlacementApply` against its own retained
+inspection and current world revision before scoped facts, reservation or Adapter writes.
+Its public `canvas/v7` apply binding must carry the exact confirmed placement when confirmed;
+Workshop's submission validator owns omission checks because Canvas has no separate intent source.
+The cell admission checks exact effects/extent, source identity, world/frame/revision and digests.
+
+REGION on rc.1 is an open contract gap: `canvas-region/v2` cannot carry this binding, and an official
+confirmed-A/shifted-B negative fixture reaches a VERIFIED six-chunk fixture write. No shadow field
+is introduced. CR-REGION-CONFIRMED-PLACEMENT-01 requests a formal candidate update. This candidate
+is SOURCE/FIXTURE only; original real World/pending/owner acceptance remain separate.

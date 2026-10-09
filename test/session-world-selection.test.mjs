@@ -13,15 +13,15 @@ import { fixtureSessions } from '../scripts/fixture-sessions.mjs';
 import { guardSlot } from '../scripts/fixture-engine-guards.mjs';
 
 /*
- * Canvas is the only Session↔World selection authority (canvas/v6
+ * Canvas is the only Session↔World selection authority (canvas/v7
  * ReadWorldSelectionContext / SelectWorldConnection / SwitchWorldConnection);
  * selectionRevision is generated here only. FIXTURE: the Adapter below is an
  * in-memory contracts-shaped peer with two live connections (world A, world B); it is
  * not the real Adapter and proves nothing about real multi-connection support.
  */
 // Store values are null-prototype objects; compare canonical JSON.
-// canvas/v6 (Contracts 1.x) always carries the session-world seam.
-const SEAM = contractProtocols.find(row => row.protocol === 'canvas').major === 6;
+// canvas/v7 (Contracts 1.x) always carries the session-world seam.
+const SEAM = contractProtocols.find(row => row.protocol === 'canvas').major === 7;
 const same = (a, b, message) => assert.equal(canonicalJSON(a), canonicalJSON(b), message);
 const stateProfile = { profileVersion: 'state-profile/v2',
   nodeFields: ['nodeName', 'param1', 'param2'], metadataMode: 'exact',
@@ -55,7 +55,7 @@ function fixtureAdapter() {
     } };
   return adapter;
 }
-const base = sessionRef => ({ contractVersion: 'canvas/v6', sessionRef });
+const base = sessionRef => ({ contractVersion: 'canvas/v7', sessionRef });
 async function boot(t) {
   const directory = await mkdtemp(join(tmpdir(), 'canvas-session-world-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
@@ -216,7 +216,7 @@ test('a Session switch is refused while one of its own transactions is unfinishe
 });
 
 /*
- * I-K2 typed selected-object / objectRevision snapshot over EXISTING public canvas/v6
+ * I-K2 typed selected-object / objectRevision snapshot over EXISTING public canvas/v7
  * routes only (no new wire, nothing read from display, request echo, a first ref or a
  * private map): R1 = ReadWorldSelectionContext (typed CurrentContext: currentSession,
  * activeWorldRef, orderedSelectedObjectRefs 0..n, selectionRevision, sessionRevision,
@@ -227,13 +227,13 @@ test('a Session switch is refused while one of its own transactions is unfinishe
  */
 
 async function selectedSnapshot(canvas, sessionRef, worldRef, id) {
-  const read = async n => canvas.call('ReadWorldSelectionContext', { contractVersion: 'canvas/v6',
+  const read = async n => canvas.call('ReadWorldSelectionContext', { contractVersion: 'canvas/v7',
     sessionRef, requestId: `${id}-read-${n}`, worldRef });
   const r1 = await read(1);
   if (r1.error) return { refused: r1.error.code };
   if (r1.result.selection.status === 'UNBOUND') return { unbound: r1.result.selection };
   const context = r1.result.selection.context;
-  const listed = await canvas.call('ListObjects', { contractVersion: 'canvas/v6', sessionRef,
+  const listed = await canvas.call('ListObjects', { contractVersion: 'canvas/v7', sessionRef,
     requestId: `${id}-list`, worldRef, expectedRevision: null, localContext: context.localContext });
   if (listed.error) return { refused: listed.error.code };
   const r2 = await read(2);
@@ -261,16 +261,16 @@ test('I-K2 snapshot: zero and multi selection, objectRevision, Session/world/inc
     assert.deepEqual(zero.snapshot?.selected, [], JSON.stringify(zero));
     assert.equal(zero.snapshot.connectionIncarnationRef, 'undo-fixture-incarnation');
     // Multi selection, in the caller's order, each with its current objectRevision.
-    const listed = await canvas.call('ListObjects', { contractVersion: 'canvas/v6',
+    const listed = await canvas.call('ListObjects', { contractVersion: 'canvas/v7',
       sessionRef: undoSessionRef, requestId: 'all', worldRef: undoWorldRef, expectedRevision: null,
-      localContext: (await canvas.call('ReadWorldSelectionContext', { contractVersion: 'canvas/v6',
+      localContext: (await canvas.call('ReadWorldSelectionContext', { contractVersion: 'canvas/v7',
         sessionRef: undoSessionRef, requestId: 'ctx', worldRef: undoWorldRef }))
         .result.selection.context.localContext });
     const refs = listed.result.objects.map(row => row.objectRef).reverse();
     assert.equal(refs.length, 2);
-    const before = (await canvas.call('ReadWorldSelectionContext', { contractVersion: 'canvas/v6',
+    const before = (await canvas.call('ReadWorldSelectionContext', { contractVersion: 'canvas/v7',
       sessionRef: undoSessionRef, requestId: 'ctx-2', worldRef: undoWorldRef })).result.selection.context;
-    const set = await canvas.call('SetObjectSelection', { contractVersion: 'canvas/v6',
+    const set = await canvas.call('SetObjectSelection', { contractVersion: 'canvas/v7',
       sessionRef: undoSessionRef, requestId: 'select-two', worldRef: undoWorldRef, objectRefs: refs,
       expectedSelectionRevision: before.selectionRevision, localContext: before.localContext });
     assert.equal(set.error, null, JSON.stringify(set.error));
@@ -281,7 +281,7 @@ test('I-K2 snapshot: zero and multi selection, objectRevision, Session/world/inc
         .objectRevision);
     assert.notEqual(multi.snapshot.selectionRevision, zero.snapshot.selectionRevision);
     // A stale localContext (old selectionRevision) is refused by Canvas admission.
-    const stale = await canvas.call('ListObjects', { contractVersion: 'canvas/v6',
+    const stale = await canvas.call('ListObjects', { contractVersion: 'canvas/v7',
       sessionRef: undoSessionRef, requestId: 'stale', worldRef: undoWorldRef, expectedRevision: null,
       localContext: before.localContext });
     assert.equal(stale.error?.code, 'CURRENT_WORLD_MISMATCH');

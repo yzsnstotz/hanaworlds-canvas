@@ -7,11 +7,11 @@ import { openRuntime } from './support/cordis-runtime.mjs';
 
 const consumer = await import(process.env.CANVAS_CONSUMER_ENTRY ?? 'hanaworlds-contracts');
 const { protocolRequirement, checkProtocolCompatibility, regionCapabilities } = consumer;
-const cellRequirement = protocolRequirement('canvas/v6', []);
+const cellRequirement = protocolRequirement('canvas/v7', []);
 const regionRequirement = protocolRequirement('canvas-region/v2', regionCapabilities
   .filter(c => c.owner === 'hanaworlds-canvas').map(c => c.id));
 
-test('real Cordis Canvas publicly advertises canvas/v6 and retains its region declaration', async () => {
+test('real Cordis Canvas publicly advertises canvas/v7 and retains its region declaration', async () => {
   const profile = await mkdtemp(join(tmpdir(), 'canvas-protocol-'));
   const runtime = await openRuntime(profile);
   try {
@@ -20,11 +20,11 @@ test('real Cordis Canvas publicly advertises canvas/v6 and retains its region de
     const advertised = service.protocolHandshake;
     assert.ok(advertised, 'MISSING_PUBLIC_CANVAS_V5_PROTOCOL_HANDSHAKE');
     assert.equal(advertised.profileVersion, 'protocol-handshake/v1');
-    // Canvas advertises the canvas/v6 minor the installed Contracts declare (6.0 on 1.x).
+    // Canvas advertises the canvas/v7 minor the installed Contracts declare (7.0 on 2.x).
     const declared = consumer.contractProtocols.find(row => row.protocol === 'canvas');
-    assert.deepEqual(advertised.protocols, [{ protocol: 'canvas', major: 6, minor: declared.minor }]);
+    assert.deepEqual(advertised.protocols, [{ protocol: 'canvas', major: 7, minor: declared.minor }]);
     assert.equal(checkProtocolCompatibility(advertised,
-      [protocolRequirement('canvas/v6', [], declared.minor)]).result, 'PROTOCOL_COMPATIBLE');
+      [protocolRequirement('canvas/v7', [], declared.minor)]).result, 'PROTOCOL_COMPATIBLE');
     assert.deepEqual(advertised.capabilities, []); // No published per-cell Canvas token exists.
     assert.equal(checkProtocolCompatibility(advertised, [cellRequirement]).result,
       'PROTOCOL_COMPATIBLE');

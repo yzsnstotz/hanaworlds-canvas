@@ -73,7 +73,7 @@ const sha = text => createHash('sha256').update(text).digest('hex');
 let chain = Promise.resolve();
 const serial = fn => { const run = chain.then(fn); chain = run.catch(() => {}); return run; };
 const fail = (code, details = null) => { throw Object.assign(new Error(code), { details }); };
-const W = 'canvas/v6';
+const W = 'canvas/v7';
 async function call(operation, body) {
   const response = await canvas.call(operation, { contractVersion: W, requestId: randomUUID(), ...body });
   event('CANVAS_CALL', { operation, error: response.error, guardRefusal: response.guardRefusal ?? null,

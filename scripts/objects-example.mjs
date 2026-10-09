@@ -81,7 +81,7 @@ function fixtureEnvironment() {
       const previousWorldRevision = await env.readWorldRevision();
       for (const effect of request.operations.effects) nodes.set(key(effect.position),{...record(effect.position),nodeName:effect.nodeName,param2:effect.param2});
       env.writes.push({port:'cell',transactionId:request.transactionId});
-      return answer({contractVersion:'canvas/v6',transactionId:request.transactionId,operationDigest:request.operationDigest,
+      return answer({contractVersion:'canvas/v7',transactionId:request.transactionId,operationDigest:request.operationDigest,
         transactionPayloadDigest:request.preparedTransaction.transactionPayloadDigest,status:'VERIFIED',previousWorldRevision,
         observedWorldRevision:'fixture-cell-world-1',readbackDigest:D('readback',projection(request)),
         restoreStatus:'NOT_REQUIRED',error:null,guardRefusal:null,applyFailure:null,localContext:request.localContext});
@@ -135,7 +135,7 @@ const regionInput = (origin,size) => {
 
 export async function createObjectsExample(directory) {
   // This is an explicit one-time fixture producer, never a server read side effect.
-  try { await readFile(join(directory,'canvas-v6.json')); throw new Error('EXAMPLE_ALREADY_EXISTS'); }
+  try { await readFile(join(directory,'canvas-v7.json')); throw new Error('EXAMPLE_ALREADY_EXISTS'); }
   catch (error) { if (error.code!=='ENOENT') throw error; }
   const env=fixtureEnvironment();
   const canvas=new CanvasV5({store:await CanvasStore.open(directory),adapter:env.adapter,nativeFacts:env.nativeFacts,sessions:fixtureSessions()});
@@ -146,7 +146,7 @@ export async function createObjectsExample(directory) {
     const response=await service.call(operation,body); trace.push({operation,request:body,response});
     checked(response); return response.result;
   };
-  const base={contractVersion:'canvas/v6',sessionRef:exampleSessionRef,worldRef};
+  const base={contractVersion:'canvas/v7',sessionRef:exampleSessionRef,worldRef};
   const context=await call(canvas,'ReadWorldSelectionContext',{...base,requestId:'fixture-context'});
   const selected=await call(canvas,'SelectWorldConnection',{...base,requestId:'fixture-select',connectionRef:connection.connectionRef,
     connectionIncarnationRef:connection.connectionIncarnationRef,expectedRevision:context.selection.sessionRevision,expectedContext:null});

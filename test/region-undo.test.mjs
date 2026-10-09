@@ -222,10 +222,10 @@ async function boot(directory, world) {
 }
 async function select(canvas, selectedWorld = WORLD) {
   // Normal caller path: read the public UNBOUND fact, bind with its published revision.
-  const context = await canvas.call('ReadWorldSelectionContext', { contractVersion: 'canvas/v6',
+  const context = await canvas.call('ReadWorldSelectionContext', { contractVersion: 'canvas/v7',
     sessionRef: 'session-1', requestId: 'context-1', worldRef: selectedWorld });
   assert.equal(context.result.selection.status, 'UNBOUND');
-  const selected = await canvas.call('SelectWorldConnection', { contractVersion: 'canvas/v6',
+  const selected = await canvas.call('SelectWorldConnection', { contractVersion: 'canvas/v7',
     sessionRef: 'session-1', requestId: 'select-1', worldRef: selectedWorld,
     connectionRef: connection.connectionRef,
     connectionIncarnationRef: connection.connectionIncarnationRef,
@@ -288,12 +288,12 @@ test('cross-mapblock fill and air carve commit once, survive reopen and undo the
 
       // shared history; per-cell Undo refuses a region transaction
       const objectRef = Object.keys(canvas.store.snapshot.objects[worldRef])[0];
-      const history = await canvas.call('HistoryQuery', { contractVersion: 'canvas/v6',
+      const history = await canvas.call('HistoryQuery', { contractVersion: 'canvas/v7',
         sessionRef: 'session-1', requestId: 'history-1', worldRef, localContext, objectRef,
         expectedHistoryRevision: null });
       assert.equal(history.error, null, JSON.stringify(history.error));
       assert.equal(history.result.historyRevision, result.historyRevision);
-      const cellUndo = await canvas.call('Undo', { contractVersion: 'canvas/v6',
+      const cellUndo = await canvas.call('Undo', { contractVersion: 'canvas/v7',
         sessionRef: 'session-1', requestId: 'cell-undo', worldRef, localContext,
         transactionId: 'cell-undo-tx', historyTransactionId: 'region-tx-1', objectRef,
         expectedHistoryRevision: result.historyRevision,
@@ -653,11 +653,11 @@ test('protocol major + capabilities decide compatibility; patch and provenance d
         'PROTOCOL_COMPATIBLE');
       assert.throws(() => checkProtocolCompatibility(canvasProtocolHandshake,
         [protocolRequirement('canvas-region/v3')]), e => e.code === 'UNSUPPORTED_VERSION');
-      assert.equal(canvas.status().version, '0.10.5');
+      assert.equal(canvas.status().version, '0.11.0');
     } finally { await rm(directory, { recursive: true, force: true }); }
   });
 
-test('host provides the region port, its handshake and tool description beside canvas/v6',
+test('host provides the region port, its handshake and tool description beside canvas/v7',
   async () => {
     const directory = await mkdtemp(join(tmpdir(), 'canvas-region-host-'));
     try {

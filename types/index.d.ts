@@ -41,8 +41,8 @@ export class CanvasV5 implements CanvasV5ProtocolSource {
   }>;
   /** G3 write-before guard on the per-cell port; throws a public decode error when incompatible. */
   adapterCompatible(): ReturnType<typeof import('hanaworlds-contracts').checkProtocolCompatibility>;
-  call<N extends keyof OperationMap['canvas/v6']>(operation: N,
-    request: unknown): Promise<OperationMap['canvas/v6'][N]['response']>;
+  call<N extends keyof OperationMap['canvas/v7']>(operation: N,
+    request: unknown): Promise<OperationMap['canvas/v7'][N]['response']>;
   readObjectsHistory(sessionRef: string | null): Promise<ObjectsHistoryDisplay>;
   readFootprints(worldRef: string, objectRefs: string[], request: unknown): Promise<any>;
   readHistoryFacts(request: unknown): Promise<any>;
@@ -56,7 +56,7 @@ export class CanvasV5 implements CanvasV5ProtocolSource {
 }
 export interface RecoveryRow {
   transactionId: string; mode: 'CELL' | 'REGION'; phase: string; recoveryPending: boolean;
-  /** CELL: RESTORE_FAILED (canvas/v6 receipt, manual recovery) or RECOVERY_PENDING (unknown). */
+  /** CELL: RESTORE_FAILED (canvas/v7 receipt, manual recovery) or RECOVERY_PENDING (unknown). */
   receiptStatus: 'RESTORE_FAILED' | 'RECOVERY_PENDING' | null;
   guardRefusal: import('hanaworlds-contracts').GuardRefusal | null;
   restoreCode: string | null; causeCode: string | null;
@@ -84,8 +84,8 @@ export interface EngineSafetyReadback {
   operations: { operation: EngineGuardOperation; required: GuardRequirement[];
     unmet: import('hanaworlds-contracts').GuardRefusal[]; status: 'COVERED' | 'CAPABILITY_UNAVAILABLE' }[];
 }
-/** Data directory name under `<dsh home>/data` for the 1.x store; 0.x data is never read. */
-export const STORE_ROOT: 'hanaworlds-canvas-v1';
+/** Data directory name under `<dsh home>/data` for the 2.x store; earlier data is never read. */
+export const STORE_ROOT: 'hanaworlds-canvas-v2';
 export class CanvasRegionV1 {
   constructor(canvas: CanvasV5, regionAdapter: any);
   readonly protocolHandshake: ProtocolHandshake;
@@ -94,7 +94,7 @@ export class CanvasRegionV1 {
     request: unknown): Promise<OperationMap['canvas-region/v2'][N]['response']>;
   recoverPending(): Promise<any>;
 }
-/** Region-only canvas-region major 1/minor 0; not the per-cell declaration. */
+/** Region-only canvas-region major 2/minor 0; not the per-cell declaration. */
 export const canvasProtocolHandshake: ProtocolHandshake;
 export const REGION_WIRE: 'canvas-region/v2';
 export const REGION_ADAPTER: 'world-adapter-region/v2';

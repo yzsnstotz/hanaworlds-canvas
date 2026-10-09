@@ -46,8 +46,8 @@ export async function resolveHistoryOutcome(canvas, { sessionRef, transactionId 
  if(receipt.previousWorldRevision!==body.expectedWorldRevision)
   throw pendingError(transactionId,'STALE_REVISION');
  if(receipt.status==='RESTORE_FAILED') {
-  const response=validateResponse('canvas/v6',row.direction==='REDO'?'Redo':'Undo',
-   {contractVersion:'canvas/v6',requestId:body.requestId,result:receipt,error:null,guardRefusal:null});
+  const response=validateResponse('canvas/v7',row.direction==='REDO'?'Redo':'Undo',
+   {contractVersion:'canvas/v7',requestId:body.requestId,result:receipt,error:null,guardRefusal:null});
   await canvas.store.commit(next=>{
    const pending=next.pending[transactionId];
    if(!same(pending?.prepared,prepared)) throw pendingError(transactionId,'STALE_TRANSACTION');
@@ -55,7 +55,7 @@ export async function resolveHistoryOutcome(canvas, { sessionRef, transactionId 
     applyFailure:receipt.applyFailure,restoreCode:receipt.error.code,
     causeCode:receipt.applyFailure.error.code,receiptStatus:'RESTORE_FAILED',phase:'RESTORE_PENDING'});
    const operation=row.direction==='REDO'?'Redo':'Undo';
-   next.replay[`${sessionRef}\0${operation}\0${body.requestId}`]={digest:requestDigest('canvas/v6',operation,body),response};
+   next.replay[`${sessionRef}\0${operation}\0${body.requestId}`]={digest:requestDigest('canvas/v7',operation,body),response};
   });
   return {transactionId,status:'RESTORE_FAILED',recoveryPending:true,receipt,response};
  }
@@ -70,7 +70,7 @@ export async function resolveHistoryOutcome(canvas, { sessionRef, transactionId 
    throw pendingError(transactionId,'READBACK_MISMATCH');
   validateCommitReadback(receipt,expected,actual.projection,history);
   const operation=row.direction==='REDO'?'Redo':'Undo';
-  const response=validateResponse('canvas/v6',operation,{contractVersion:'canvas/v6',requestId:body.requestId,result:receipt,error:null,guardRefusal:null});
+  const response=validateResponse('canvas/v7',operation,{contractVersion:'canvas/v7',requestId:body.requestId,result:receipt,error:null,guardRefusal:null});
   const resolution={transactionId,status:receipt.status,mutationState:verified?'VERIFIED':'ROLLED_BACK',readbackDigest:actual.readbackDigest,receipt,response};
   await canvas.store.commit(next=>{
    if(!same(next.pending[transactionId]?.prepared,prepared) || !same(next.sessions[sessionRef]?.localContext,body.localContext))
@@ -89,7 +89,7 @@ export async function resolveHistoryOutcome(canvas, { sessionRef, transactionId 
     objectRef:body.objectRef,worldRef:body.worldRef,before:row.before,after:actual.projection,
     originTransactionId:row.originTransactionId,displayMetadata:{committedAt:new Date().toISOString(),mode:'CELL',affectedCells:expected.coveredPositions.length},recoveryResolution:resolution};
    next.worldRevisions[body.worldRef]=receipt.observedWorldRevision;
-   next.replay[`${sessionRef}\0${operation}\0${body.requestId}`]={digest:requestDigest('canvas/v6',operation,body),response};
+   next.replay[`${sessionRef}\0${operation}\0${body.requestId}`]={digest:requestDigest('canvas/v7',operation,body),response};
    delete next.pending[transactionId];
   });
   return resolution;
@@ -128,7 +128,7 @@ export async function resolveHistoryOutcome(canvas, { sessionRef, transactionId 
  const error=original ? {...original,mutationState:'NONE'} : {
   code:row.causeCode??'TARGET_FACTS_INCOMPLETE',phase:'validate',retryability:'AFTER_NEW_FACTS',
   mutationState:'NONE',transactionRef:transactionId,causeCode:null,reason:'REQUIRED_FACT_UNKNOWN'};
- const response=validateResponse('canvas/v6',operation,{contractVersion:'canvas/v6',requestId:body.requestId,
+ const response=validateResponse('canvas/v7',operation,{contractVersion:'canvas/v7',requestId:body.requestId,
   result:null,error,guardRefusal:row.failure?.guardRefusal??null});
  const resolution={transactionId,status:'ABORTED_PREPARED',mutationState:'NONE',
   readbackDigest:read.readbackDigest,receipt,response};
@@ -137,7 +137,7 @@ export async function resolveHistoryOutcome(canvas, { sessionRef, transactionId 
   if(!same(live?.prepared,prepared) || !same(next.sessions[sessionRef]?.localContext,body.localContext))
    throw pendingError(transactionId,'CURRENT_WORLD_MISMATCH');
   next.transactions[transactionId]={receipt,body,worldRef:body.worldRef,recoveryResolution:resolution};
-  next.replay[`${sessionRef}\0${operation}\0${body.requestId}`]={digest:requestDigest('canvas/v6',operation,body),response};
+  next.replay[`${sessionRef}\0${operation}\0${body.requestId}`]={digest:requestDigest('canvas/v7',operation,body),response};
   delete next.pending[transactionId];
  });
  return resolution;

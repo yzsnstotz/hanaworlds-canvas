@@ -34,7 +34,7 @@ function loadClientBundle(source) {
 
 async function compose(seed, { fixtureWorld = false } = {}) {
   const profile = await mkdtemp(join(tmpdir(), 'canvas-client-remote-'));
-  const store = join(profile, 'data', 'hanaworlds-canvas-v1');
+  const store = join(profile, 'data', 'hanaworlds-canvas-v2');
   if (seed) await seed(store);
   const host = new Context();
   await host.plugin(TypertRegistry);
@@ -134,7 +134,7 @@ const panel = (registered, sessionRef) => registered.find(entry => entry.meta.na
 const historyWrites = world => world.calls.filter(call => /History/.test(call.operation)).length;
 const reasonOf = async promise => { try { await promise; } catch (error) { return error.details?.reason ?? error.code; } return 'RESOLVED'; };
 
-test('shipped client undoes exactly the clicked latest entry through canvas/v6 Undo (FIXTURE world)', async () => {
+test('shipped client undoes exactly the clicked latest entry through canvas/v7 Undo (FIXTURE world)', async () => {
   const { createUndoExample } = await import('../scripts/undo-example.mjs');
   const { undoSessionRef } = await import('../scripts/undo-fixture-world.mjs');
   const { gateway, wire, registered, close, world, canvas } = await compose(directory => createUndoExample(directory), { fixtureWorld: true });

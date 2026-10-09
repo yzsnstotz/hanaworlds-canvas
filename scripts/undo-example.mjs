@@ -13,11 +13,11 @@ const D = (kind, value) => digestValue(kind, value).sha256;
 
 /**
  * One-time producer of the isolated /undo example: two per-cell commits made
- * through Canvas's public canvas/v6 operations. It refuses an existing directory
+ * through Canvas's public canvas/v7 operations. It refuses an existing directory
  * and is never run by the server.
  */
 export async function createUndoExample(directory) {
-  try { await readFile(join(directory, 'canvas-v6.json')); throw new Error('EXAMPLE_ALREADY_EXISTS'); }
+  try { await readFile(join(directory, 'canvas-v7.json')); throw new Error('EXAMPLE_ALREADY_EXISTS'); }
   catch (error) { if (error.code !== 'ENOENT') throw error; }
   const store = await CanvasStore.open(directory);
   const world = await openUndoFixtureWorld(undoWorldFile(directory), { create: true });
@@ -30,13 +30,13 @@ export async function createUndoExample(directory) {
     if (response.error) throw new Error(`EXAMPLE_TRANSACTION_FAILED:${JSON.stringify(response.error)}`);
     return response.result;
   };
-  const base = { contractVersion: 'canvas/v6', sessionRef: undoSessionRef, worldRef: undoWorldRef };
+  const base = { contractVersion: 'canvas/v7', sessionRef: undoSessionRef, worldRef: undoWorldRef };
   const context = await call(canvas, 'ReadWorldSelectionContext', { ...base, requestId: 'undo-fixture-context' });
   const selected = await call(canvas, 'SelectWorldConnection', { ...base, requestId: 'undo-fixture-select',
     connectionRef: undoConnection.connectionRef, connectionIncarnationRef: undoConnection.connectionIncarnationRef,
     expectedRevision: context.selection.sessionRevision, expectedContext: null });
   const localContext = selected.localContext;
-  // Two per-cell commits through canvas/v6's reversible public path. Every Undo Canvas
+  // Two per-cell commits through canvas/v7's reversible public path. Every Undo Canvas
   // offers here has a Redo for the same entry; no region example (canvas-region/v2 has no Redo).
   const commitCells = async (transactionId, nodeName, positions) => {
     const operations = { contractVersion: 'operations/v3', buildDigest: 'b'.repeat(64), compilerRevision: 'undo-fixture-brush-cell-1',

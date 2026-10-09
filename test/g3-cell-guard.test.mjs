@@ -18,7 +18,7 @@ import { fixtureSessions } from '../scripts/fixture-sessions.mjs';
  * G3 write-before guard on the per-cell port (world-adapter/v7) for BUILD, Undo and
  * Redo, and on both ports for a region write. FIXTURE: the isolated undo fixture
  * world and its two port handshakes stand in for the Adapter; Canvas, its durable
- * Store and the public canvas/v6 / canvas-region/v2 calls are the real component.
+ * Store and the public canvas/v7 / canvas-region/v2 calls are the real component.
  * "Before any write" is checked as: no mutating Adapter call (Prepare/Apply/Restore,
  * WriteRegion) during the refused call, only the named read-only admission reads,
  * no pending row, unchanged history, and the fixture world file bytes unchanged.
@@ -28,7 +28,7 @@ const MUTATING = new Set(['PrepareRecoverableTransaction', 'ApplyCompiledTransac
 // Canvas's current-world admission (#bound) reads the connection before the guard.
 const ADMISSION_READS = new Set(['ReadLocalConnection']);
 const D = (kind, value) => digestValue(kind, value).sha256;
-const base = { contractVersion: 'canvas/v6', sessionRef: undoSessionRef, worldRef: undoWorldRef };
+const base = { contractVersion: 'canvas/v7', sessionRef: undoSessionRef, worldRef: undoWorldRef };
 const g3 = ADAPTER_CELL_REQUIREMENT.capabilities.length > 0;
 
 async function boot(directory) {
@@ -141,7 +141,7 @@ async function guardRefusedBeforeWrite(env, operation, request, declaration, sen
     const [first] = unmetEngineGuards(declaration, ENGINE_GUARD_REQUIREMENTS[operation]);
     assert.deepEqual({ ...response.guardRefusal }, { ...first }, operation);
     assert.deepEqual({ ...response.error }, { ...guardRefusalError(first, { preflight: true }) });
-    validateResponse(send ? 'canvas-region/v2' : 'canvas/v6', operation, response);
+    validateResponse(send ? 'canvas-region/v2' : 'canvas/v7', operation, response);
   } finally { delete env.world.engineGuards; }
 }
 
@@ -309,7 +309,7 @@ test('apply() reads the per-cell handshake from the public hanaworldsWorldAdapte
     } finally { await rm(directory, { recursive: true, force: true }); }
   });
 
-test('rc.4 relay: canvas/v6 envelopes carry engine guard refusals unchanged, null otherwise', async () => {
+test('rc.4 relay: canvas/v7 envelopes carry engine guard refusals unchanged, null otherwise', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'canvas-relay-'));
   try {
     const env = await boot(directory);
@@ -319,7 +319,7 @@ test('rc.4 relay: canvas/v6 envelopes carry engine guard refusals unchanged, nul
     env.world.refuse = { operation: 'PrepareRecoverableTransaction', refusal: prepareRefusal };
     const build = await buildRequest(env, 'relay-build-1', [[8, 2, 8]]);
     const prepared = await env.canvas.call('ApplyRecoverableCommit', build);
-    validateResponse('canvas/v6', 'ApplyRecoverableCommit', prepared);
+    validateResponse('canvas/v7', 'ApplyRecoverableCommit', prepared);
     assert.equal(prepared.result, null);
     assert.deepEqual({ ...prepared.guardRefusal }, prepareRefusal);
     assert.deepEqual({ ...prepared.error, transactionRef: null },
@@ -332,7 +332,7 @@ test('rc.4 relay: canvas/v6 envelopes carry engine guard refusals unchanged, nul
     env.world.refuse = { operation: 'ApplyCompiledTransaction', refusal: applyRefusal };
     const build2 = await buildRequest(env, 'relay-build-2', [[8, 2, 8]]);
     const applied = await env.canvas.call('ApplyRecoverableCommit', build2);
-    validateResponse('canvas/v6', 'ApplyRecoverableCommit', applied);
+    validateResponse('canvas/v7', 'ApplyRecoverableCommit', applied);
     assert.equal(applied.error, null, JSON.stringify(applied));
     assert.equal(applied.guardRefusal, null);
     assert.equal(applied.result.status, 'ROLLED_BACK');
@@ -347,11 +347,11 @@ test('rc.4 relay: canvas/v6 envelopes carry engine guard refusals unchanged, nul
     assert.equal(ok.guardRefusal, null);
     assert.equal(ok.result.guardRefusal, null);
     // Pending-Undo envelopes (Canvas does not provide these operations): null, valid shape.
-    const recovery = await env.canvas.call('RecoverPendingUndo', { contractVersion: 'canvas/v6',
+    const recovery = await env.canvas.call('RecoverPendingUndo', { contractVersion: 'canvas/v7',
       sessionRef: undoSessionRef, requestId: 'relay-recover', worldRef: undoWorldRef });
     assert.equal(recovery.guardRefusal, null);
     assert.notEqual(recovery.error, null);
-    validateResponse('canvas/v6', 'RecoverPendingUndo', recovery);
+    validateResponse('canvas/v7', 'RecoverPendingUndo', recovery);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 

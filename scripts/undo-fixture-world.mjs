@@ -119,7 +119,7 @@ export async function openUndoFixtureWorld(file, { create = false } = {}) {
       image.after = image.positions.map(record);
       const observedWorldRevision = nextRevision();
       await save();
-      return answer({ contractVersion:'canvas/v6', transactionId:request.transactionId, operationDigest:request.operationDigest,
+      return answer({ contractVersion:'canvas/v7', transactionId:request.transactionId, operationDigest:request.operationDigest,
         transactionPayloadDigest:request.preparedTransaction.transactionPayloadDigest, status:'VERIFIED', previousWorldRevision,
         observedWorldRevision, readbackDigest:D('readback', projection(image.positions)), restoreStatus:'NOT_REQUIRED', error:null,guardRefusal:null,applyFailure:null,
         localContext:request.localContext });
@@ -131,7 +131,7 @@ export async function openUndoFixtureWorld(file, { create = false } = {}) {
       image.before.forEach(put);
       const observedWorldRevision = nextRevision();
       await save();
-      return answer({ contractVersion:'canvas/v6', transactionId:request.originTransactionId, operationDigest:request.operationDigest,
+      return answer({ contractVersion:'canvas/v7', transactionId:request.originTransactionId, operationDigest:request.operationDigest,
         transactionPayloadDigest:'5'.repeat(64), status:'ROLLED_BACK', previousWorldRevision, observedWorldRevision,
         readbackDigest:D('readback', projection(image.positions)), restoreStatus:'VERIFIED_RESTORED', error:null,guardRefusal:null,applyFailure:null, localContext:request.localContext });
     }
@@ -161,7 +161,7 @@ export async function openUndoFixtureWorld(file, { create = false } = {}) {
       image.after = image.positions.map(record);
       const observedWorldRevision = nextRevision();
       await save();
-      return answer({ contractVersion:'canvas/v6', transactionId:request.transactionId, operationDigest:request.historyOperationDigest,
+      return answer({ contractVersion:'canvas/v7', transactionId:request.transactionId, operationDigest:request.historyOperationDigest,
         transactionPayloadDigest:request.preparedHistoryTransaction.transactionPayloadDigest, status:'VERIFIED',
         previousWorldRevision:await env.readWorldRevision(), observedWorldRevision,
         readbackDigest:D('readback', projection(image.positions)), restoreStatus:'NOT_REQUIRED', error:null,guardRefusal:null,applyFailure:null, localContext:request.localContext });
