@@ -26,7 +26,7 @@ const DECLARED_PORT = 47621;
 const state = process.env.HW_CR_STATE, assembly = process.env.HW_CR_ASSEMBLY,
   luanti = process.env.HW_CR_LUANTI, port = Number(process.env.HW_CR_PORT ?? DECLARED_PORT);
 if (!state || !assembly || !luanti) throw new Error('HW_CR_STATE, HW_CR_ASSEMBLY and HW_CR_LUANTI are required');
-if (port !== DECLARED_PORT) throw new Error('DECLARED_PORT_REQUIRED');
+if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('INVALID_LOOPBACK_PORT');
 // Run from the installed package inside the assembly: these bare imports resolve through the
 // assembly's single node_modules (one contracts instance shared with the Adapter and Canvas).
 const C = await import('hanaworlds-contracts');

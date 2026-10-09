@@ -137,6 +137,8 @@ test('build commits only after complete readback and stores one durable history 
     let restores = 0;
     let mismatchAfterApply = false;
     let restoreFails = false;
+    let queryRequest = null;
+    let queryBadPayload = false;
     let inspectionExtra = null;
     let inspectionRefusal = null;
     const preparedTransactions = new Set();
@@ -225,6 +227,10 @@ test('build commits only after complete readback and stores one durable history 
             worldRef, coveredPositions: [position], records: [record], stateProfile }) });
       }
       if (operation === 'ApplyCompiledTransaction') {
+        if (restoreFails === 'QUERY_G1') throw Object.assign(new Error('RESTORE_FAILED'),
+          { publicError: { code: 'RESTORE_FAILED', phase: 'apply', retryability: 'NEVER',
+            mutationState: 'UNKNOWN', transactionRef: request.transactionId,
+            causeCode: null, reason: 'REQUIRED_FACT_UNKNOWN' } });
         writes++;
         record = { ...record, nodeName: mismatchAfterApply ? 'fixture:wrong' : 'fixture:stone' };
         const projection = { worldRef, coveredPositions: [position], records: [record],
@@ -238,8 +244,24 @@ test('build commits only after complete readback and stores one durable history 
           readbackDigest: D('readback', projection),
           restoreStatus: 'NOT_REQUIRED', error: null, guardRefusal: null, applyFailure: null, localContext: request.localContext });
       }
+      if (operation === 'QueryTransaction' && restoreFails === 'QUERY_G1') {
+        return respond({ contractVersion: 'canvas/v6', transactionId: request.transactionId,
+          operationDigest: queryRequest.operationDigest,
+          transactionPayloadDigest: queryBadPayload ? '9'.repeat(64) : request.transactionPayloadDigest, status: 'RESTORE_FAILED',
+          previousWorldRevision: queryRequest.expectedWorldRevision, observedWorldRevision: null,
+          readbackDigest: null, restoreStatus: 'FAILED',
+          error: guardRefusalError(G1_REFUSAL, { transactionRef: request.transactionId, cause: 'READBACK_MISMATCH' }),
+          guardRefusal: G1_REFUSAL, applyFailure: { error: { code: 'READBACK_MISMATCH',
+            phase: 'apply', retryability: 'NEVER', mutationState: 'UNKNOWN',
+            transactionRef: request.transactionId, causeCode: null, reason: 'REQUIRED_FACT_UNKNOWN' },
+            guardRefusal: null }, localContext: request.localContext });
+      }
       if (operation === 'RestoreTransaction') {
         restores++;
+        if (restoreFails === 'QUERY_G1') throw Object.assign(new Error('RESTORE_FAILED'),
+          { publicError: { code: 'RESTORE_FAILED', phase: 'apply', retryability: 'NEVER',
+            mutationState: 'UNKNOWN', transactionRef: request.originTransactionId,
+            causeCode: null, reason: 'REQUIRED_FACT_UNKNOWN' } });
         // G1 FIXTURE: the engine's BODY_CLEARANCE guard refuses the restore (a real body blocks a
         // solid target), with the public GuardRefusal beside the Contracts restore error. The
         // Adapter does not know why Canvas restores.
@@ -681,6 +703,40 @@ test('build commits only after complete readback and stores one durable history 
     const blockedRequest = { ...g1Request, requestId: 'apply-blocked', transactionId: 'build-4' };
     assert.notEqual((await canvas.call('ApplyRecoverableCommit', blockedRequest)).error, null);
     assert.equal(writes, writesBefore);
+    // Real Adapter 0.12.1 throws a simplified RESTORE_FAILED from rollback. The full,
+    // durable error + guard + original failure are available through QueryTransaction.
+    const queryStore = await CanvasStore.open(directory);
+    await queryStore.commit(state => { delete state.pending['build-3']; });
+    await runtime.dispose();
+    runtime = await openRuntime(profile, { adapter, nativeFacts });
+    canvas = runtime.canvas;
+    restoreFails = 'QUERY_G1';
+    queryRequest = await attempt('build-query-g1', 'confirmed-query-g1');
+    const queryResult = await canvas.call('ApplyRecoverableCommit', queryRequest);
+    assert.equal(queryResult.error, null, JSON.stringify(queryResult));
+    assert.equal(queryResult.result.status, 'RESTORE_FAILED');
+    assert.equal(queryResult.result.error.causeCode, 'READBACK_MISMATCH');
+    assert.equal(queryResult.result.applyFailure.error.code, 'READBACK_MISMATCH');
+    assert.deepEqual({ ...queryResult.result.guardRefusal }, G1_REFUSAL);
+    const queryView = await canvas.readHistoryActions(sessionRef);
+    assert.equal(queryView.recovery[0].receiptStatus, 'RESTORE_FAILED');
+    assert.equal(queryView.recovery[0].causeCode, 'READBACK_MISMATCH');
+    assert.deepEqual(queryView.recovery[0].guardRefusal, G1_REFUSAL);
+    const queryCount = calls.filter(op => op === 'QueryTransaction').length;
+    assert.equal(queryCount, 1);
+    assert.deepEqual(await canvas.call('ApplyRecoverableCommit', queryRequest), queryResult);
+    assert.equal(calls.filter(op => op === 'QueryTransaction').length, queryCount);
+    await canvas.store.commit(state => { delete state.pending['build-query-g1']; });
+    queryBadPayload = true;
+    queryRequest = await attempt('build-query-mismatch', 'confirmed-query-mismatch');
+    const queryMismatch = await canvas.call('ApplyRecoverableCommit', queryRequest);
+    assert.equal(queryMismatch.result, null);
+    assert.equal(queryMismatch.error.code, 'RECOVERY_PENDING');
+    assert.equal(canvas.store.snapshot.pending['build-query-mismatch'].receiptStatus, 'RECOVERY_PENDING');
+    assert.ok(canvas.store.snapshot.pending['build-query-mismatch'].receiptRejected);
+    await canvas.store.commit(state => { delete state.pending['build-query-mismatch']; });
+    queryBadPayload = false;
+
     // An unknown restore outcome (transport lost) is RECOVERY_PENDING, not a receipt.
     const unknownDirectory = await mkdtemp(join(tmpdir(), 'canvas-g1-unknown-'));
     await rm(unknownDirectory, { recursive: true, force: true });
@@ -723,7 +779,7 @@ test('host exposes durable Canvas facts as separate public ports', async () => {
     const entry = process.env.CANVAS_ENTRY ?? new URL('../src/index.mjs', import.meta.url).href;
     const running = createRequire(entry)('hanaworlds-contracts/package.json');
     assert.equal(advertised.contracts, `hanaworlds-contracts@${running.version}`);
-    assert.equal(ports.get('hanaworldsCanvasV5').status().version, '0.10.2');
+    assert.equal(ports.get('hanaworldsCanvasV5').status().version, '0.10.3');
     assert.doesNotThrow(() => checkContractHandshake(advertised));
     // Public Contracts conformance cases, each patched over Canvas's advertised handshake.
     const patched = c => { const h = { ...advertised, ...c.patch };

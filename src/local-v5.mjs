@@ -24,7 +24,7 @@ const SESSION = 'session/v4';
 // pre-seam canvas behaviour left to switch to.
 const canvasProtocol = contractProtocols.find(row => row.protocol === 'canvas');
 if (!canvasProtocol || canvasProtocol.major !== 6) throw new Error('CANVAS_PROTOCOL_UNDECLARED');
-const PACKAGE_VERSION = '0.10.2';
+const PACKAGE_VERSION = '0.10.3';
 // The public wire defines canvas major 6, minor 0. Contracts publishes no
 // per-cell Canvas capability token; regional tokens describe the region port.
 const cellRequirement = protocolRequirement(WIRE, []);
@@ -587,14 +587,37 @@ export class CanvasV5 {
       // blocks a solid target cell) is never reported as success or swallowed. The reservation
       // stays as an explicit, durable recovery-pending row and blocks the World.
       const restoreCode = restoreError?.publicError?.code ?? restoreError?.code ?? 'RESTORE_FAILED';
-      const causeCode = cause?.publicError?.code ?? cause?.code ?? null;
+      let applyFailure = failureDetail(cause);
+      // Adapter may report only RESTORE_FAILED on the write/restore call. Its durable
+      // QueryTransaction receipt retains the restore guard and the original write failure.
+      // Query once for this prepared payload; never infer those facts from the error code.
+      if (restoreCode === 'RESTORE_FAILED') {
+        try {
+          const queried = await this.#adapter('QueryTransaction', {
+            contractVersion: ADAPTER, sessionRef: body.sessionRef,
+            requestId: `${body.requestId}:restore-receipt`, worldRef: body.worldRef,
+            transactionId: body.transactionId,
+            transactionPayloadDigest: prepared.transactionPayloadDigest,
+            localContext: body.localContext });
+          if (queried.status !== 'RESTORE_FAILED' ||
+              queried.transactionId !== body.transactionId ||
+              queried.operationDigest !== body.operationDigest ||
+              queried.transactionPayloadDigest !== prepared.transactionPayloadDigest ||
+              !same(queried.localContext, body.localContext))
+            throw fail('TRANSACTION_MISMATCH', 'PAYLOAD_CHANGED');
+          restoreError = engineRefusal(queried);
+          applyFailure = queried.applyFailure;
+        } catch (queryError) {
+          restoreError.receiptRejected = queryError.publicError?.code ?? queryError.message;
+        }
+      }
+      const causeCode = applyFailure.error.code;
       // An engine RESTORE_FAILED (phase restore, e.g. a guard at RESTORE) is answered with the
       // canvas/v6 RESTORE_FAILED receipt pending manual recovery: error.causeCode names the
       // failure that made the restore necessary, guardRefusal the restore's own reason and
       // applyFailure that causing failure in full. A receipt the Contracts reject is not repaired
       // and falls through to RECOVERY_PENDING below, with the rejection recorded.
       let response = null;
-      const applyFailure = failureDetail(cause);
       const failure = restoreFailure(restoreError, applyFailure, body.transactionId);
       if (failure) {
         try {
