@@ -10,6 +10,7 @@ const { CanvasV5, CanvasStore, CanvasConfigSupply, assembleProfile, STORE_ROOT,
   await import(process.env.CANVAS_ENTRY ?? new URL('../src/index.mjs', import.meta.url).href);
 import { g3CellHandshake } from './support/g3-adapter-handshake.mjs';
 import { fixtureSessions } from '../scripts/fixture-sessions.mjs';
+import { guardSlot } from '../scripts/fixture-engine-guards.mjs';
 
 // FIXTURE peer inputs only (contracts-shaped Adapter, NativeFacts Catalogue and Session port).
 // Canvas's assembly, provenance, revision and invalidation are what is under test.
@@ -30,10 +31,10 @@ function fixtureWorld({ catalogue = withWorldedit('fixture-worldedit-1') } = {})
     capabilities: { providerRef: 'adapter', capabilityRevision: 'cap-1', worldRef: 'local-world',
       engineBounds: { min: [0, 0, 0], max: [9, 9, 9] }, limits: [],
       recoveryGuarantee: 'RECOVERABLE_VERIFIED', stateProfile,
-      sessionDeleteSupported: true, imageMediaTypes: [], model: null } });
+      sessionDeleteSupported: true, imageMediaTypes: [], model: null, engineGuards: null } });
   env.adapter = { protocolHandshake: g3CellHandshake(), async call(operation, request) {
     env.adapterCalls.push(operation);
-    const answer = result => ({ contractVersion: 'world-adapter/v7', requestId: request.requestId,
+    const answer = result => guardSlot('world-adapter/v7', operation, { contractVersion: 'world-adapter/v7', requestId: request.requestId,
       result, error: null });
     if (operation === 'DiscoverConnections') return answer({ capabilityRevision: 'cap-1',
       connections: [{ adapterId: 'hanaworlds-world-adapter', connectionRef: 'local-connection',

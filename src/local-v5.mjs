@@ -12,8 +12,8 @@ import { admitRequest, validateRequest, validateResponse, validateBoundResponse,
 import { checkProtocolCompatibility, contractProtocols, protocolRequirement,
   validateType } from 'hanaworlds-contracts';
 import * as contractsSdk from 'hanaworlds-contracts';
-import { CanvasRegionV1, ADAPTER_CELL_REQUIREMENT, ENGINE_SAFETY_REQUIREMENTS, requireEngineSafety,
-  unmetEngineSafety } from './region-v1.mjs';
+import { CanvasRegionV1, ADAPTER_CELL_REQUIREMENT, ENGINE_GUARD_REQUIREMENTS, requireGuards,
+  unmetGuards, failureDetail, restoreFailure } from './region-v1.mjs';
 import { CanvasConfigSupply } from './config-supply.mjs';
 
 export { CanvasStore, CanvasRegionV1, CanvasConfigSupply };
@@ -24,7 +24,7 @@ const SESSION = 'session/v4';
 // pre-seam canvas behaviour left to switch to.
 const canvasProtocol = contractProtocols.find(row => row.protocol === 'canvas');
 if (!canvasProtocol || canvasProtocol.major !== 6) throw new Error('CANVAS_PROTOCOL_UNDECLARED');
-const PACKAGE_VERSION = '0.7.0';
+const PACKAGE_VERSION = '0.8.0';
 // The public wire defines canvas major 6, minor 0. Contracts publishes no
 // per-cell Canvas capability token; regional tokens describe the region port.
 const cellRequirement = protocolRequirement(WIRE, []);
@@ -92,20 +92,19 @@ export class CanvasV5 {
     return checkProtocolCompatibility(advertised, [ADAPTER_CELL_REQUIREMENT]);
   }
   /**
-   * Canvas-own readback: for every write operation, the engine safety capabilities it needs from
-   * which port and which of them the bound ports do not advertise. Read-only.
+   * Canvas-own readback for one Session: for every write operation, the engine guard x stage
+   * requirements and which of them the bound connection's declaration (engine-guards/v1, as last
+   * read back at selection) does not cover. Read-only; each write re-reads the connection.
    */
-  readEngineSafety(regionHandshake = this.regionHandshake?.()) {
-    const handshakes = { [ADAPTER]: this.adapter?.protocolHandshake,
-      'world-adapter-region/v1': regionHandshake };
-    return structuredClone(Object.entries(ENGINE_SAFETY_REQUIREMENTS)
-      .map(([operation, { port, ids }]) => {
-        let unmet;
-        try { unmet = unmetEngineSafety(handshakes[port], operation); }
-        catch { unmet = ids.map(id => ({ id, cause: 'HANDSHAKE_INVALID' })); }
-        return { operation, port, required: [...ids], unmet,
-          status: unmet.length ? 'CAPABILITY_UNAVAILABLE' : 'ADVERTISED' };
-      }));
+  readEngineSafety(sessionRef) {
+    const capabilities = this.store?.snapshot.connections?.[sessionRef]?.capabilities ?? null;
+    const declaration = capabilities?.engineGuards ?? null;
+    return structuredClone({ sessionRef, bound: capabilities !== null, declaration,
+      operations: Object.entries(ENGINE_GUARD_REQUIREMENTS).map(([operation, required]) => {
+        const unmet = unmetGuards(declaration, operation);
+        return { operation, required: required.map(row => ({ ...row })), unmet,
+          status: unmet.length ? 'CAPABILITY_UNAVAILABLE' : 'COVERED' };
+      }) });
   }
   async #durable() {
     await this.ready;
@@ -211,7 +210,7 @@ export class CanvasV5 {
       .filter(([, row]) => (row.body?.worldRef ?? row.worldRef) === worldRef)
       .map(([transactionId, row]) => ({ transactionId, mode: row.kind === 'REGION' ? 'REGION' : 'CELL',
         phase: row.phase, recoveryPending: row.phase === 'RESTORE_PENDING',
-        receiptStatus: row.receiptStatus ?? null,
+        receiptStatus: row.receiptStatus ?? null, guardRefusal: row.guardRefusal ?? null,
         restoreCode: row.restoreCode ?? null, causeCode: row.causeCode ?? null }))
       .sort((a, b) => a.transactionId.localeCompare(b.transactionId));
     const pending = recovery.length > 0;
@@ -225,7 +224,7 @@ export class CanvasV5 {
         const blocked = pending ? 'TRANSACTION_PENDING' : null;
         let undo, redo;
         if (region) {
-          // canvas-region/v1 publishes ApplyRegionCommit and UndoRegionCommit only. A move is
+          // canvas-region/v2 publishes ApplyRegionCommit and UndoRegionCommit only. A move is
           // offered only when the same entry can be moved back, so region Undo is named, not offered.
           undo = { available: false, reason: undone ? 'NOTHING_TO_UNDO' : 'REGION_UNDO_HAS_NO_REDO' };
           redo = { available: false, reason: undone ? 'REGION_REDO_NOT_IN_PROTOCOL' : 'NOTHING_TO_REDO' };
@@ -284,7 +283,7 @@ export class CanvasV5 {
     const response = await this.adapter.call(operation, body);
     validateBoundResponse(ADAPTER, operation, body, response);
     if (response.error) throw Object.assign(new Error(response.error.code),
-      { publicError: response.error });
+      { publicError: response.error, guardRefusal: response.guardRefusal ?? null });
     return response.result;
   }
   #facts(body, operation) {
@@ -317,7 +316,7 @@ export class CanvasV5 {
     if (connection.worldRef !== body.worldRef ||
         connection.connectionIncarnationRef !== body.localContext.connectionIncarnationRef)
       throw fail('CURRENT_WORLD_MISMATCH', 'SCOPE_DENIED');
-    return { replayKey, prior, admission };
+    return { replayKey, prior, admission, connection };
   }
   #positions(operations) {
     const positions = operations.effects.map(effect => effect.position);
@@ -370,10 +369,10 @@ export class CanvasV5 {
     return result.projection;
   }
   async #apply(body) {
-    const { replayKey, prior, admission } = await this.#bound('ApplyRecoverableCommit', body);
+    const { replayKey, prior, admission, connection } = await this.#bound('ApplyRecoverableCommit', body);
     if (prior) return prior.response;
     this.adapterCompatible();
-    requireEngineSafety(this.adapter.protocolHandshake, 'ApplyRecoverableCommit');
+    requireGuards(connection.capabilities.engineGuards, 'ApplyRecoverableCommit');
     const analysis = this.store.snapshot.analyses[body.transactionId];
     if (!analysis || analysis.affectedObjectRefs.length ||
         analysis.worldRef !== body.worldRef || analysis.operationDigest !== body.operationDigest ||
@@ -472,6 +471,7 @@ export class CanvasV5 {
         operationDigest: body.operationDigest,
         transactionPayloadDigest: prepared.transactionPayloadDigest,
         status: 'VERIFIED', restoreStatus: 'NOT_REQUIRED', error: null,
+        guardRefusal: null, applyFailure: null,
         readbackDigest: hash('readback', actual), localContext: body.localContext };
       const objectRef = rev('object');
       const history = { transactionId: body.transactionId, originTransactionId: null,
@@ -535,6 +535,7 @@ export class CanvasV5 {
         transactionId: body.transactionId, operationDigest: body.operationDigest,
         transactionPayloadDigest: prepared.transactionPayloadDigest,
         status: 'ROLLED_BACK', restoreStatus: 'VERIFIED_RESTORED',
+        guardRefusal: null, applyFailure: null,
         readbackDigest: hash('readback', actual), localContext: body.localContext };
       validateCommitReadback(receipt, before, actual, null);
       const response = validateResponse(WIRE, operation, answer(body, receipt));
@@ -553,21 +554,24 @@ export class CanvasV5 {
       // stays as an explicit, durable recovery-pending row and blocks the World.
       const restoreCode = restoreError?.publicError?.code ?? restoreError?.code ?? 'RESTORE_FAILED';
       const causeCode = cause?.publicError?.code ?? cause?.code ?? null;
-      // An engine RESTORE_FAILED is answered with the canvas/v6 RESTORE_FAILED receipt (pending
-      // manual recovery). The Adapter's public error is carried as is; one that does not meet the
-      // receipt rule is not repaired and falls through to RECOVERY_PENDING below.
+      // An engine RESTORE_FAILED (phase restore, e.g. a guard at RESTORE) is answered with the
+      // canvas/v6 RESTORE_FAILED receipt pending manual recovery: error.causeCode names the
+      // failure that made the restore necessary, guardRefusal the restore's own reason and
+      // applyFailure that causing failure in full. A receipt the Contracts reject is not repaired
+      // and falls through to RECOVERY_PENDING below, with the rejection recorded.
       let response = null;
-      if (restoreError?.publicError?.code === 'RESTORE_FAILED') {
+      const applyFailure = failureDetail(cause);
+      const failure = restoreFailure(restoreError, applyFailure, body.transactionId);
+      if (failure) {
         try {
           response = validateResponse(WIRE, operation, answer(body, {
             contractVersion: WIRE, transactionId: body.transactionId,
             operationDigest: body.operationDigest,
             transactionPayloadDigest: prepared.transactionPayloadDigest, status: 'RESTORE_FAILED',
             previousWorldRevision: body.expectedWorldRevision, observedWorldRevision: null,
-            readbackDigest: null, restoreStatus: restoreError.publicError.mutationState === 'UNKNOWN' ?
-              'UNKNOWN' : 'FAILED',
-            error: { ...restoreError.publicError, transactionRef: body.transactionId },
-            localContext: body.localContext }));
+            readbackDigest: null, restoreStatus: failure.error.mutationState === 'UNKNOWN' ?
+              'UNKNOWN' : 'FAILED', error: failure.error, guardRefusal: failure.guardRefusal,
+            applyFailure, localContext: body.localContext }));
         } catch (shapeError) {
           response = null;
           restoreError.receiptRejected = shapeError.publicError?.code ?? shapeError.message;
@@ -577,6 +581,7 @@ export class CanvasV5 {
         const row = state.pending[body.transactionId];
         if (row) Object.assign(row, { phase: 'RESTORE_PENDING', restoreCode, causeCode,
           receiptStatus: response ? 'RESTORE_FAILED' : 'RECOVERY_PENDING',
+          guardRefusal: restoreError?.guardRefusal ?? null,
           receiptRejected: restoreError?.receiptRejected ?? null });
         if (response) state.replay[replayKey] = { digest: requestHash, response };
       });
@@ -592,10 +597,10 @@ export class CanvasV5 {
   }
   /** Undo and Redo share one history-transaction path; only the target image differs. */
   async #history(operation, body) {
-    const { replayKey, prior, admission } = await this.#bound(operation, body);
+    const { replayKey, prior, admission, connection } = await this.#bound(operation, body);
     if (prior) return prior.response;
     this.adapterCompatible();
-    requireEngineSafety(this.adapter.protocolHandshake, operation);
+    requireGuards(connection.capabilities.engineGuards, operation);
     const redo = operation === 'Redo';
     const state = this.store.snapshot;
     const origin = state.transactions[body.historyTransactionId];
@@ -603,7 +608,7 @@ export class CanvasV5 {
     const historyRows = state.history[body.objectRef] ?? [];
     const head = historyRows.at(-1);
     // A region transaction is undone as a whole region through hanaworldsCanvasRegionV1;
-    // canvas-region/v1 defines no region Redo.
+    // canvas-region/v2 defines no region Redo.
     if (origin?.kind === 'REGION') throw fail(redo ? 'REDO_UNAVAILABLE' : 'UNDO_CONFLICT',
       redo ? 'POLICY_UNAVAILABLE' : 'REVISION_CHANGED');
     if (!origin?.history || origin.objectRef !== body.objectRef ||
@@ -683,6 +688,7 @@ export class CanvasV5 {
         transactionId: body.transactionId, operationDigest: historyOperationDigest,
         transactionPayloadDigest: prepared.transactionPayloadDigest,
         status: 'VERIFIED', restoreStatus: 'NOT_REQUIRED', error: null,
+        guardRefusal: null, applyFailure: null,
         readbackDigest: hash('readback', actual), localContext: body.localContext };
       const history = { transactionId: body.transactionId,
         originTransactionId: body.historyTransactionId,
@@ -1298,7 +1304,7 @@ export function apply(ctx) {
       return current.readCatalogue(...args);
     } } });
   ctx.provide?.('hanaworldsCanvasV5', service);
-  // Host service names are Canvas's choice; the wire shapes are Contracts canvas-/world-adapter-region/v1.
+  // Host service names are Canvas's choice; the wire shapes are Contracts canvas-/world-adapter-region/v2.
   ctx.provide?.('hanaworldsCanvasRegionV1', new CanvasRegionV1(service, {
     get protocolHandshake() {
       return ctx.get?.('hanaworldsWorldAdapterRegionV1')?.protocolHandshake; },

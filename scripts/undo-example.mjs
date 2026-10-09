@@ -37,7 +37,7 @@ export async function createUndoExample(directory) {
     expectedRevision: context.selection.sessionRevision, expectedContext: null });
   const localContext = selected.localContext;
   // Two per-cell commits through canvas/v6's reversible public path. Every Undo Canvas
-  // offers here has a Redo for the same entry; no region example (canvas-region/v1 has no Redo).
+  // offers here has a Redo for the same entry; no region example (canvas-region/v2 has no Redo).
   const commitCells = async (transactionId, nodeName, positions) => {
     const operations = { contractVersion: 'operations/v3', buildDigest: 'b'.repeat(64), compilerRevision: 'undo-fixture-brush-cell-1',
       compilationConfigDigest: 'a'.repeat(64), worldRef: undoWorldRef, frameDigest: 'f'.repeat(64), catalogueDigest: 'c'.repeat(64),

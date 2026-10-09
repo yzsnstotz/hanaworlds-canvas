@@ -35,24 +35,31 @@ Stage 1 validation configuration supply (v1 batch; earlier 0.6.11–0.6.15 notes
   `invalidationReasons`; reads are otherwise read-only (no Adapter call, no World write).
 - Store: the 1.x store lives in `<dsh home>/data/hanaworlds-canvas-v1/canvas-v6.json`
   (schemaVersion 6). A 0.x store is never read, migrated or accepted.
-- Contracts `#semver:^1.0.0-rc.1` (0.7.0): canvas/v6, world-adapter/v7, session/v4; the
-  session-world seam is unconditional (canvas/v6 minor 0). Host service keys are unchanged
-  (`hanaworldsCanvasV5`, `hanaworldsWorldAdapterV6`, `hanaworldsWorkshopV3`, ...).
-- Engine safety per write operation (Contracts `safetyCapabilities`, G1 restore-body-recheck,
-  G2 cell-protection, G3 no-body-enclosure): BUILD, Undo and Redo need all three
-  `world-adapter/v7:` ids on the per-cell port; ApplyRegionCommit, UndoRegionCommit and region
-  recovery need all three `world-adapter-region/v1:` ids on the region port (every write
-  operation can roll back through a restore). A missing id refuses that operation with the
-  Contracts absent-capability error (`CAPABILITY_UNAVAILABLE/validate/REQUIRED_FACT_UNKNOWN`)
-  before any reservation or write; an id on one wire never stands in for the other.
-  `CanvasV5.readEngineSafety()` lists, per operation, the required ids and the missing ones with
-  their cause; the `/supply` page shows it.
-- Transaction role (G1): when the engine refuses a rollback with `RESTORE_FAILED` (Contracts
-  `safetyCheckFailure`), BUILD/Undo/Redo answer the canvas/v6 `RESTORE_FAILED` receipt
-  (restoreStatus FAILED/UNKNOWN, `AFTER_MANUAL_RECOVERY`, the Adapter's error as is); an unknown
-  restore outcome answers `RECOVERY_PENDING`. Either way the transaction stays a durable
-  `RESTORE_PENDING` row with `restoreCode`/`causeCode`/`receiptStatus`, blocks the World, replays
-  exactly, and `readHistoryActions(sessionRef).recovery` lists it; it is never reported as success.
+- Contracts `#semver:^1.0.0-rc.2` (0.8.0): canvas/v6, world-adapter/v7, session/v4,
+  canvas-region/v2, world-adapter-region/v2; the session-world seam is unconditional. Host
+  service keys are unchanged (`hanaworldsCanvasV5`, `hanaworldsCanvasRegionV1`,
+  `hanaworldsWorldAdapterV6`, `hanaworldsWorldAdapterRegionV1`, `hanaworldsWorkshopV3`, ...).
+- Engine guards (Contracts engine-guards/v1): each write re-reads the current connection and
+  requires guard x stage coverage from its `PublicCapabilities.engineGuards` before any
+  reservation or write (Canvas's choice of stages):
+  BUILD = all three guards at PREPARE_RECOVERABLE/APPLY_COMPILED + BODY_CLEARANCE and
+  CELL_PROTECTION at RESTORE; Undo/Redo = all three at PREPARE_HISTORY/APPLY_HISTORY + the two at
+  RESTORE; ApplyRegionCommit = all three at REGION_APPLY + the two at REGION_RESTORE;
+  UndoRegionCommit = all three at REGION_RESTORE (a forward action); region recovery = the two at
+  REGION_RESTORE. CELL_PROTECTION accepts the declared principal (ANONYMOUS included). An
+  uncovered pair refuses with `guardRefusalError(GUARD_UNAVAILABLE, preflight)`
+  (`CAPABILITY_UNAVAILABLE/validate`); a region response also carries that `guardRefusal`.
+  `CanvasV5.readEngineSafety(sessionRef)` lists, per operation, the requirements and the uncovered
+  ones; the `/supply` page shows it.
+- Transaction role (G1): when the engine refuses a rollback (`RESTORE_FAILED`, phase restore,
+  with or without a `GuardRefusal`), BUILD/Undo/Redo answer the canvas/v6 `RESTORE_FAILED`
+  receipt and region commit/undo the canvas-region/v2 response with `result: null`: error =
+  the restore failure with `causeCode` = the failure that made the restore necessary,
+  `guardRefusal` = the restore's own reason, `applyFailure` = that causing failure in full
+  (`AFTER_MANUAL_RECOVERY`). An unknown restore outcome (transport lost, Canvas's own unverified
+  restore) answers `RECOVERY_PENDING`. Either way the transaction stays a durable
+  `RESTORE_PENDING` row (restoreCode/causeCode/receiptStatus/guardRefusal), blocks the World,
+  replays exactly, and `readHistoryActions(sessionRef).recovery` lists it; it is never success.
 - Refusals are Contracts `ContractError`s (0.6.12), so a consumer that maps errors through
   `publicError()` (Workshop) keeps the exact code/reason; `missingSources` is on the thrown
   object and in `hanaworldsCanvasConfigSupply.read`, not in the public Error shape.

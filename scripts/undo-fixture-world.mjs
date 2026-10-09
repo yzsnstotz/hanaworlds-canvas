@@ -1,8 +1,9 @@
 import { open, readFile, rename, rm } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import canonicalize from 'canonicalize';
-import { digestValue, encodeRegionBlock, expandRegionBlock, regionChunksOfBox, safetyCapabilities }
+import { digestValue, encodeRegionBlock, expandRegionBlock, regionChunksOfBox }
   from 'hanaworlds-contracts';
+import { fixtureEngineGuards, guardSlot } from './fixture-engine-guards.mjs';
 
 // Explicit, isolated fixture world for the /undo development page. Only the world and
 // its Adapter are fixtures: Canvas decides, verifies, reads back and stores every
@@ -11,16 +12,13 @@ import { digestValue, encodeRegionBlock, expandRegionBlock, regionChunksOfBox, s
 export const undoSessionRef = 'undo-fixture-session';
 export const undoWorldRef = 'undo-fixture-world';
 const D = (kind, value) => digestValue(kind, value).sha256;
-// FIXTURE claim: the fixture Adapter advertises the Contracts engine safety capabilities of each
-// wire so the dev pages can exercise Canvas writes; it implements no engine check.
-const fixtureSafety = wire => safetyCapabilities.filter(c => c.id.startsWith(`${wire}:`) &&
-  ['G1', 'G2', 'G3'].includes(c.gap)).map(c => c.id);
 export const undoStateProfile = { profileVersion:'state-profile/v2', nodeFields:['nodeName','param1','param2'],
   metadataMode:'exact', inventoryMode:'exact', timerMode:'exact', derivedLightMode:'recompute-with-readback' };
 export const undoConnection = { connectionRef:'undo-fixture-connection', connectionIncarnationRef:'undo-fixture-incarnation',
   worldRef:undoWorldRef, payloadVersion:'local-world/v1', payloadDigest:'1'.repeat(64), capabilities:{ providerRef:'undo-fixture-adapter',
     capabilityRevision:'undo-fixture-cap-1', worldRef:undoWorldRef, engineBounds:{min:[-64,-64,-64],max:[64,64,64]}, limits:[],
-    recoveryGuarantee:'RECOVERABLE_VERIFIED', stateProfile:undoStateProfile, sessionDeleteSupported:true, imageMediaTypes:[], model:null } };
+    recoveryGuarantee:'RECOVERABLE_VERIFIED', stateProfile:undoStateProfile, sessionDeleteSupported:true, imageMediaTypes:[], model:null,
+    engineGuards: fixtureEngineGuards() } };
 const key = p => p.join(',');
 const fresh = () => ({ profileVersion:'undo-fixture-world/v1', worldRef:undoWorldRef, revisionCounter:0, nodes:{}, images:{} });
 
@@ -77,19 +75,20 @@ export async function openUndoFixtureWorld(file, { create = false } = {}) {
   // FIXTURE per-cell port handshake: what a G3 Adapter advertises on world-adapter/v7.
   env.adapter = { protocolHandshake:{ profileVersion:'protocol-handshake/v1', component:'undo-fixture-adapter',
     protocols:[{ protocol:'world-adapter', major:7, minor:0 }],
-    capabilities:['world-adapter/v7:callback-free-write','world-adapter/v7:write-path-state-facts',
-      ...fixtureSafety('world-adapter/v7')].sort(),
+    capabilities:['world-adapter/v7:callback-free-write','world-adapter/v7:write-path-state-facts'].sort(),
     provenance:{ packageName:'undo-fixture-adapter', packageVersion:'1.0.0', sourceRevision:null, artifactDigest:null } },
     async call(operation, request) {
     env.calls.push({ port:'world-adapter/v7', operation, transactionId:request.transactionId ?? null });
-    const answer = result => ({ contractVersion:'world-adapter/v7', requestId:request.requestId, result, error:null });
+    const answer = result => guardSlot('world-adapter/v7', operation, { contractVersion: 'world-adapter/v7', requestId:request.requestId, result, error:null });
     const refuse = (code, reason) => ({ contractVersion:'world-adapter/v7', requestId:request.requestId, result:null,
       error:{ code, phase:'validate', retryability:'AFTER_NEW_FACTS', mutationState:'NONE', transactionRef:null, causeCode:null, reason } });
     if (operation === 'DiscoverConnections') return answer({ capabilityRevision:'undo-fixture-cap-1', connections:[{
       adapterId:'hanaworlds-world-adapter', connectionRef:undoConnection.connectionRef, worldRef:undoWorldRef,
       displayName:'隔离示例世界（撤回与重做）', capabilityRevision:'undo-fixture-cap-1', payloadVersion:undoConnection.payloadVersion,
       readiness:'READY', connectionIncarnationRef:undoConnection.connectionIncarnationRef }] });
-    if (operation === 'ReadLocalConnection') return answer(undoConnection);
+    // env.engineGuards (FIXTURE) replaces the declared engine guards when a test sets it.
+    if (operation === 'ReadLocalConnection') return answer(env.engineGuards === undefined ? undoConnection :
+      { ...undoConnection, capabilities: { ...undoConnection.capabilities, engineGuards: env.engineGuards } });
     if (operation === 'Readback') {
       if (!prepared.has(request.transactionId) && !world.images[request.transactionId]) throw new Error('FIXTURE_UNPREPARED_READ');
       const p = projection(request.coveredPositions);
@@ -116,7 +115,7 @@ export async function openUndoFixtureWorld(file, { create = false } = {}) {
       await save();
       return answer({ contractVersion:'canvas/v6', transactionId:request.transactionId, operationDigest:request.operationDigest,
         transactionPayloadDigest:request.preparedTransaction.transactionPayloadDigest, status:'VERIFIED', previousWorldRevision,
-        observedWorldRevision, readbackDigest:D('readback', projection(image.positions)), restoreStatus:'NOT_REQUIRED', error:null,
+        observedWorldRevision, readbackDigest:D('readback', projection(image.positions)), restoreStatus:'NOT_REQUIRED', error:null,guardRefusal:null,applyFailure:null,
         localContext:request.localContext });
     }
     if (operation === 'RestoreTransaction') {
@@ -128,7 +127,7 @@ export async function openUndoFixtureWorld(file, { create = false } = {}) {
       await save();
       return answer({ contractVersion:'canvas/v6', transactionId:request.originTransactionId, operationDigest:request.operationDigest,
         transactionPayloadDigest:'5'.repeat(64), status:'ROLLED_BACK', previousWorldRevision, observedWorldRevision,
-        readbackDigest:D('readback', projection(image.positions)), restoreStatus:'VERIFIED_RESTORED', error:null, localContext:request.localContext });
+        readbackDigest:D('readback', projection(image.positions)), restoreStatus:'VERIFIED_RESTORED', error:null,guardRefusal:null,applyFailure:null, localContext:request.localContext });
     }
     if (operation === 'PrepareHistoryTransaction') {
       const origin = world.images[request.originTransactionId];
@@ -159,20 +158,19 @@ export async function openUndoFixtureWorld(file, { create = false } = {}) {
       return answer({ contractVersion:'canvas/v6', transactionId:request.transactionId, operationDigest:request.historyOperationDigest,
         transactionPayloadDigest:request.preparedHistoryTransaction.transactionPayloadDigest, status:'VERIFIED',
         previousWorldRevision:await env.readWorldRevision(), observedWorldRevision,
-        readbackDigest:D('readback', projection(image.positions)), restoreStatus:'NOT_REQUIRED', error:null, localContext:request.localContext });
+        readbackDigest:D('readback', projection(image.positions)), restoreStatus:'NOT_REQUIRED', error:null,guardRefusal:null,applyFailure:null, localContext:request.localContext });
     }
     throw new Error(`FIXTURE_UNSUPPORTED_CELL_OPERATION:${operation}`);
   } };
   env.regionAdapter = { protocolHandshake:{ profileVersion:'protocol-handshake/v1', component:'undo-fixture-adapter',
-    protocols:[{ protocol:'world-adapter-region', major:1, minor:1 }], capabilities:[
-      'world-adapter-region/v1:callback-free-write',
-      'world-adapter-region/v1:chunked-read','world-adapter-region/v1:chunked-write','world-adapter-region/v1:lighting-complete',
-      'world-adapter-region/v1:load-then-know','world-adapter-region/v1:restore-state',
-      ...fixtureSafety('world-adapter-region/v1')].sort(),
+    protocols:[{ protocol:'world-adapter-region', major:2, minor:0 }], capabilities:[
+      'world-adapter-region/v2:callback-free-write',
+      'world-adapter-region/v2:chunked-read','world-adapter-region/v2:chunked-write','world-adapter-region/v2:lighting-complete',
+      'world-adapter-region/v2:load-then-know','world-adapter-region/v2:restore-state'].sort(),
     provenance:{ packageName:'undo-fixture-adapter', packageVersion:'1.0.0', sourceRevision:null, artifactDigest:null } },
     async call(operation, request) {
-      env.calls.push({ port:'world-adapter-region/v1', operation, transactionId:request.transactionId ?? null });
-      const answer = result => ({ contractVersion:'world-adapter-region/v1', requestId:request.requestId, result, error:null });
+      env.calls.push({ port:'world-adapter-region/v2', operation, transactionId:request.transactionId ?? null });
+      const answer = result => guardSlot('world-adapter-region/v2', operation, { contractVersion: 'world-adapter-region/v2', requestId:request.requestId, result, error:null });
       if (operation === 'ReadRegion') return answer({ worldRef:undoWorldRef, box:request.box, localContext:request.localContext,
         chunks:regionChunksOfBox(request.box).map(({ chunkPos, box }) => {
           const state = regionState(box);

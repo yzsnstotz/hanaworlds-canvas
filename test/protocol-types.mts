@@ -6,4 +6,4 @@ declare const region: CanvasRegionV1;
 const requirement = protocolRequirement('canvas/v6', []);
 checkProtocolCompatibility(publicService.protocolHandshake, [requirement]);
 checkProtocolCompatibility(canvas.protocolHandshake, [requirement]);
-checkProtocolCompatibility(region.protocolHandshake, [protocolRequirement('canvas-region/v1', [])]);
+checkProtocolCompatibility(region.protocolHandshake, [protocolRequirement('canvas-region/v2', [])]);

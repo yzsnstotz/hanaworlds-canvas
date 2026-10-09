@@ -10,6 +10,7 @@ import { createUndoExample } from '../scripts/undo-example.mjs';
 import { openUndoHost } from '../scripts/undo-host.mjs';
 import { undoSessionRef, undoWorldRef } from '../scripts/undo-fixture-world.mjs';
 import { fixtureSessions } from '../scripts/fixture-sessions.mjs';
+import { guardSlot } from '../scripts/fixture-engine-guards.mjs';
 
 /*
  * Canvas is the only Session↔World selection authority (canvas/v6
@@ -31,7 +32,7 @@ const readback = (connectionRef, worldRef, incarnation) => ({ connectionRef,
   capabilities: { providerRef: 'adapter', capabilityRevision: 'cap-1', worldRef,
     engineBounds: { min: [-64, -64, -64], max: [64, 64, 64] }, limits: [],
     recoveryGuarantee: 'RECOVERABLE_VERIFIED', stateProfile,
-    sessionDeleteSupported: true, imageMediaTypes: [], model: null } });
+    sessionDeleteSupported: true, imageMediaTypes: [], model: null, engineGuards: null } });
 
 function fixtureAdapter() {
   const live = { 'conn-a': { worldRef: 'world-a', incarnation: 'open-a-1' },
@@ -39,8 +40,7 @@ function fixtureAdapter() {
   const adapter = { live, calls: [], protocolHandshake: g3CellHandshake(),
     async call(operation, request) {
       adapter.calls.push(operation);
-      const respond = result => ({ contractVersion: 'world-adapter/v7',
-        requestId: request.requestId, result, error: null });
+      const respond = result => guardSlot('world-adapter/v7', operation, { contractVersion: 'world-adapter/v7', requestId: request.requestId, result, error: null });
       if (operation === 'DiscoverConnections') return respond({ capabilityRevision: 'cap-1',
         connections: Object.entries(live).map(([connectionRef, row]) => ({
           adapterId: 'hanaworlds-world-adapter', connectionRef, worldRef: row.worldRef,

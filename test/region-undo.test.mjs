@@ -6,22 +6,23 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
 import { canonicalJSON, checkProtocolCompatibility, comparePosition, contractHandshake, digestValue,
+  guardRefusalError,
   encodeRegionBlock, expandRegionBlock, protocolRequirement, regionChunksOfBox,
   validateRegionSnapshotContent } from 'hanaworlds-contracts';
 import { CanvasV5, CanvasStore, CanvasRegionV1, canvasProtocolHandshake,
   ADAPTER_REGION_REQUIREMENT, ADAPTER_CELL_REQUIREMENT, apply as applyCanvas } from '../src/index.mjs';
 import { fixtureSessions } from '../scripts/fixture-sessions.mjs';
-import { CELL_SAFETY_CAPABILITIES, REGION_SAFETY_CAPABILITIES } from './support/g3-adapter-handshake.mjs';
+import { fixtureEngineGuards, guardSlot } from '../scripts/fixture-engine-guards.mjs';
 
 /*
  * FIXTURE: the Adapter below (world-adapter/v7 connection reads plus a
- * world-adapter-region/v1 ReadRegion/WriteRegion port and its ProtocolHandshake)
+ * world-adapter-region/v2 ReadRegion/WriteRegion port and its ProtocolHandshake)
  * is an explicit in-memory peer fixture built from the public Contracts 0.5.0
  * shapes, not the real Luanti Adapter. Its two ProtocolHandshakes advertise what a
  * G3 Adapter publishes (Contracts 0.5.1+): world-adapter-region 1.1 with its six
- * region capabilities on the region port, world-adapter 7.0 with callback-free-write
- * and write-path-state-facts on the per-cell port, and (Contracts 1.x) the three engine safety
- * capabilities of each wire. Advertising them here says nothing about a real engine. Brush compilation is likewise a test
+ * region capabilities on the region port (world-adapter-region 2.0), world-adapter 7.0 with
+ * callback-free-write and write-path-state-facts on the per-cell port, and a FIXTURE
+ * engine-guards/v1 declaration on the connection. It says nothing about a real engine. Brush compilation is likewise a test
  * helper over public encodeRegionBlock. Canvas, its durable store, compressed
  * snapshot files and reopen path are the real component runtime.
  */
@@ -36,15 +37,15 @@ const connectionOf = worldRef => ({ connectionRef: 'local-connection', connectio
   capabilities: { providerRef: 'adapter', capabilityRevision: 'cap-1', worldRef,
     engineBounds: { min: [-64, -64, -64], max: [64, 64, 64] }, limits: [],
     recoveryGuarantee: 'RECOVERABLE_VERIFIED', stateProfile,
-    sessionDeleteSupported: true, imageMediaTypes: [], model: null } });
+    sessionDeleteSupported: true, imageMediaTypes: [], model: null,
+    engineGuards: fixtureEngineGuards() } });
 const connection = connectionOf(WORLD);
-const ADAPTER_CAPS = ['world-adapter-region/v1:callback-free-write',
-  'world-adapter-region/v1:chunked-read', 'world-adapter-region/v1:chunked-write',
-  'world-adapter-region/v1:lighting-complete', 'world-adapter-region/v1:load-then-know',
-  'world-adapter-region/v1:restore-state', ...REGION_SAFETY_CAPABILITIES];
-const CELL_CAPS = ['world-adapter/v7:callback-free-write', 'world-adapter/v7:write-path-state-facts',
-  ...CELL_SAFETY_CAPABILITIES];
-const handshake = (major = 1, minor = 1, capabilities = ADAPTER_CAPS, version = '0.4.9',
+const ADAPTER_CAPS = ['world-adapter-region/v2:callback-free-write',
+  'world-adapter-region/v2:chunked-read', 'world-adapter-region/v2:chunked-write',
+  'world-adapter-region/v2:lighting-complete', 'world-adapter-region/v2:load-then-know',
+  'world-adapter-region/v2:restore-state'];
+const CELL_CAPS = ['world-adapter/v7:callback-free-write', 'world-adapter/v7:write-path-state-facts'];
+const handshake = (major = 2, minor = 0, capabilities = ADAPTER_CAPS, version = '0.4.9',
   protocol = 'world-adapter-region') => ({
   profileVersion: 'protocol-handshake/v1', component: 'fixture-adapter',
   protocols: [{ protocol, major, minor }], capabilities: [...capabilities].sort(),
@@ -53,6 +54,7 @@ const handshake = (major = 1, minor = 1, capabilities = ADAPTER_CAPS, version = 
 const cellHandshake = (major = 7, minor = 0, capabilities = CELL_CAPS) =>
   handshake(major, minor, capabilities, '0.4.9', 'world-adapter');
 const k = p => p.join(',');
+const REGION_G1 = { guard: 'BODY_CLEARANCE', stage: 'REGION_RESTORE', finding: 'BODY_OCCUPIED' };
 
 function fixtureWorld({ protocolHandshake = handshake(), worldRef = WORLD } = {}) {
   const connection = connectionOf(worldRef);
@@ -92,8 +94,7 @@ function fixtureWorld({ protocolHandshake = handshake(), worldRef = WORLD } = {}
   };
   world.adapter = { protocolHandshake: cellHandshake(), async call(operation, request) {
     world.calls.push(operation);
-    const respond = result => ({ contractVersion: 'world-adapter/v7',
-      requestId: request.requestId, result, error: null });
+    const respond = result => guardSlot('world-adapter/v7', operation, { contractVersion: 'world-adapter/v7', requestId: request.requestId, result, error: null });
     if (operation === 'DiscoverConnections') return respond({ capabilityRevision: 'cap-1',
       connections: [{ adapterId: 'hanaworlds-world-adapter', connectionRef: connection.connectionRef,
         worldRef, displayName: 'Fixture local world', capabilityRevision: 'cap-1',
@@ -105,8 +106,7 @@ function fixtureWorld({ protocolHandshake = handshake(), worldRef = WORLD } = {}
   } };
   world.region = { protocolHandshake, async call(operation, request) {
     world.calls.push(`${operation}:${request.purpose}`);
-    const respond = result => ({ contractVersion: 'world-adapter-region/v1',
-      requestId: request.requestId, result, error: null });
+    const respond = result => guardSlot('world-adapter-region/v2', operation, { contractVersion: 'world-adapter-region/v2', requestId: request.requestId, result, error: null });
     if (operation === 'ReadRegion') return respond({ worldRef, box: request.box,
       localContext: request.localContext,
       chunks: regionChunksOfBox(request.box).map(({ chunkPos, box }) => {
@@ -121,6 +121,11 @@ function fixtureWorld({ protocolHandshake = handshake(), worldRef = WORLD } = {}
       }) });
     if (operation === 'WriteRegion') {
       world.writes.push({ purpose: request.purpose, chunks: request.writes.length });
+      // G1 FIXTURE: the engine's BODY_CLEARANCE guard refuses the region restore, writes nothing.
+      if (request.purpose === 'RESTORE' && world.guardRestore) return { contractVersion:
+        'world-adapter-region/v2', requestId: request.requestId, result: null,
+        guardRefusal: REGION_G1, error: guardRefusalError(REGION_G1,
+          { transactionRef: request.transactionId, cause: 'RESTORE_FAILED' }) };
       const boxes = [];
       const chunks = request.writes.map((w, i) => {
         const block = w.ops ?? w.state.block;
@@ -221,10 +226,10 @@ async function select(canvas, selectedWorld = WORLD) {
   assert.equal(selected.error, null);
   return selected.result.localContext;
 }
-const commit = (localContext, compiled, extra = {}) => ({ contractVersion: 'canvas-region/v1',
+const commit = (localContext, compiled, extra = {}) => ({ contractVersion: 'canvas-region/v2',
   sessionRef: 'session-1', requestId: 'region-1', worldRef, transactionId: 'region-tx-1',
   ...compiled, guarantee: 'RECOVERABLE_VERIFIED', localContext, ...extra });
-const undo = (localContext, historyRevision, extra = {}) => ({ contractVersion: 'canvas-region/v1',
+const undo = (localContext, historyRevision, extra = {}) => ({ contractVersion: 'canvas-region/v2',
   sessionRef: 'session-1', requestId: 'undo-1', worldRef, originTransactionId: 'region-tx-1',
   undoTransactionId: 'region-undo-1', expectedHistoryRevision: historyRevision, localContext,
   ...extra });
@@ -388,6 +393,41 @@ test('unverified restore stays durably pending and normal reopen recovers from t
     } finally { await rm(directory, { recursive: true, force: true }); }
   });
 
+test('a region rollback the engine guard refuses is pending manual recovery with both causes',
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'canvas-region-g1-'));
+    try {
+      const world = fixtureWorld();
+      const { canvas, region } = await boot(directory, world);
+      const localContext = await select(canvas);
+      world.failApply = 1;
+      world.guardRestore = true;
+      const body = commit(localContext, terrain());
+      const result = await region.call('ApplyRegionCommit', body);
+      assert.equal(result.result, null);
+      assert.deepEqual({ ...result.guardRefusal }, REGION_G1);
+      // causeCode = the failure that made the restore necessary, kept in full in applyFailure.
+      assert.equal(result.applyFailure.error.code, 'APPLY_FAILED');
+      assert.deepEqual({ ...result.error }, { ...guardRefusalError(REGION_G1,
+        { transactionRef: 'region-tx-1', cause: 'APPLY_FAILED' }) });
+      assert.equal(result.error.retryability, 'AFTER_MANUAL_RECOVERY');
+      const row = canvas.store.snapshot.pending['region-tx-1'];
+      assert.equal(row.phase, 'RESTORE_PENDING');
+      assert.equal(row.receiptStatus, 'RESTORE_FAILED');
+      assert.deepEqual(row.guardRefusal, REGION_G1);
+      assert.equal(canvas.store.snapshot.transactions['region-tx-1'], undefined);
+      // Exact replay, no second write; the World stays blocked.
+      const writes = world.writes.length;
+      assert.deepEqual(await region.call('ApplyRegionCommit', body), result);
+      assert.equal(world.writes.length, writes);
+      const blocked = await region.call('ApplyRegionCommit', commit(localContext, terrain(),
+        { requestId: 'region-g1-2', transactionId: 'region-tx-g1-2' }));
+      assert.equal(blocked.error.code, 'TRANSACTION_CONFLICT');
+      const actions = await canvas.readHistoryActions('session-1');
+      assert.equal(actions.recovery[0].receiptStatus, 'RESTORE_FAILED');
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+
 test('unknown, wrong world, footprint conflict and external edits never write', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'canvas-region-reject-'));
   try {
@@ -458,22 +498,23 @@ test('protocol major + capabilities decide compatibility; patch and provenance d
       const run = async (protocolHandshake, extra = {}) => new CanvasRegionV1(canvas,
         { ...world.region, protocolHandshake }).call('ApplyRegionCommit',
         commit(localContext, terrain(), { requestId: `p-${Math.random()}`, ...extra }));
-      assert.equal((await run(handshake(2))).error.code, 'UNSUPPORTED_VERSION');
+      assert.equal((await run(handshake(1, 1))).error.code, 'UNSUPPORTED_VERSION');
+      assert.equal((await run(handshake(3))).error.code, 'UNSUPPORTED_VERSION');
       assert.equal((await run(undefined)).error.code, 'UNSUPPORTED_VERSION');
       assert.equal((await run(contractHandshake)).error.code, 'UNSUPPORTED_VERSION');
-      const lacking = await run(handshake(1, 1, ADAPTER_CAPS.filter(c => !c.endsWith('restore-state'))));
+      const lacking = await run(handshake(2, 0, ADAPTER_CAPS.filter(c => !c.endsWith('restore-state'))));
       assert.equal(lacking.error.code, 'CAPABILITY_UNAVAILABLE');
       // G3 write-path scope: region port needs callback-free-write at the declared minor,
       // the per-cell port needs its own two ids; v6 ids are never asked of the region port.
       const regionG3 = ADAPTER_REGION_REQUIREMENT.capabilities.includes(
-        'world-adapter-region/v1:callback-free-write');
+        'world-adapter-region/v2:callback-free-write');
       if (regionG3) {
-        assert.equal((await run(handshake(1, 1, ADAPTER_CAPS.filter(c =>
+        assert.equal((await run(handshake(2, 0, ADAPTER_CAPS.filter(c =>
           !c.endsWith('callback-free-write'))))).error.code, 'CAPABILITY_UNAVAILABLE');
-        assert.equal((await run(handshake(1, 0))).error.code, 'UNSUPPORTED_VERSION');
+        assert.equal((await run(handshake(1, 0))).error.code, 'UNSUPPORTED_VERSION'); // the 0.x major
       }
       assert.deepEqual(ADAPTER_REGION_REQUIREMENT.capabilities.filter(c =>
-        !c.startsWith('world-adapter-region/v1:')), []);
+        !c.startsWith('world-adapter-region/v2:')), []);
       assert.deepEqual(ADAPTER_CELL_REQUIREMENT.capabilities.filter(c =>
         !c.startsWith('world-adapter/v7:')), []);
       const cellPort = canvas.adapter;
@@ -488,22 +529,22 @@ test('protocol major + capabilities decide compatibility; patch and provenance d
           !c.endsWith('write-path-state-facts'))))).error.code, 'CAPABILITY_UNAVAILABLE');
         assert.equal((await runCell(cellHandshake(6, 1))).error.code, 'UNSUPPORTED_VERSION');
       }
-      assert.equal((await run(handshake(), { contractVersion: 'canvas-region/v2' })).error.code,
+      assert.equal((await run(handshake(), { contractVersion: 'canvas-region/v3' })).error.code,
         'UNSUPPORTED_VERSION');
       assert.equal(world.writes.length, 0);
-      const ok = await run(handshake(1, 3, ADAPTER_CAPS, '0.9.7-other-patch'));
+      const ok = await run(handshake(2, 3, ADAPTER_CAPS, '0.9.7-other-patch'));
       assert.equal(ok.error, null, JSON.stringify(ok.error));
       assert.equal(ok.result.status, 'VERIFIED');
 
       // Canvas's own handshake for its consumers
-      const requirement = protocolRequirement('canvas-region/v1', ['canvas-region/v1:compressed-before-snapshot',
-        'canvas-region/v1:rollback-on-failure', 'canvas-region/v1:single-logical-transaction',
-        'canvas-region/v1:whole-region-undo']);
+      const requirement = protocolRequirement('canvas-region/v2', ['canvas-region/v2:compressed-before-snapshot',
+        'canvas-region/v2:rollback-on-failure', 'canvas-region/v2:single-logical-transaction',
+        'canvas-region/v2:whole-region-undo']);
       assert.equal(checkProtocolCompatibility(canvasProtocolHandshake, [requirement]).result,
         'PROTOCOL_COMPATIBLE');
       assert.throws(() => checkProtocolCompatibility(canvasProtocolHandshake,
-        [protocolRequirement('canvas-region/v2')]), e => e.code === 'UNSUPPORTED_VERSION');
-      assert.equal(canvas.status().version, '0.7.0');
+        [protocolRequirement('canvas-region/v3')]), e => e.code === 'UNSUPPORTED_VERSION');
+      assert.equal(canvas.status().version, '0.8.0');
     } finally { await rm(directory, { recursive: true, force: true }); }
   });
 

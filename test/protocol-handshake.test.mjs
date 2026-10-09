@@ -8,7 +8,7 @@ import { openRuntime } from './support/cordis-runtime.mjs';
 const consumer = await import(process.env.CANVAS_CONSUMER_ENTRY ?? 'hanaworlds-contracts');
 const { protocolRequirement, checkProtocolCompatibility, regionCapabilities } = consumer;
 const cellRequirement = protocolRequirement('canvas/v6', []);
-const regionRequirement = protocolRequirement('canvas-region/v1', regionCapabilities
+const regionRequirement = protocolRequirement('canvas-region/v2', regionCapabilities
   .filter(c => c.owner === 'hanaworlds-canvas').map(c => c.id));
 
 test('real Cordis Canvas publicly advertises canvas/v6 and retains its region declaration', async () => {
@@ -29,7 +29,7 @@ test('real Cordis Canvas publicly advertises canvas/v6 and retains its region de
     assert.equal(checkProtocolCompatibility(advertised, [cellRequirement]).result,
       'PROTOCOL_COMPATIBLE');
     const region = runtime.ctx.get('hanaworldsCanvasRegionV1').protocolHandshake;
-    assert.deepEqual(region.protocols, [{ protocol: 'canvas-region', major: 1, minor: 0 }]);
+    assert.deepEqual(region.protocols, [{ protocol: 'canvas-region', major: 2, minor: 0 }]);
     assert.equal(checkProtocolCompatibility(region, [regionRequirement]).result,
       'PROTOCOL_COMPATIBLE');
     const original = structuredClone(advertised);
@@ -65,7 +65,7 @@ test('public consumer names wrong major, missing declaration, and missing publis
     const region = runtime.ctx.get('hanaworldsCanvasRegionV1').protocolHandshake;
     const missing = structuredClone(region);
     missing.capabilities = missing.capabilities.filter(c =>
-      c !== 'canvas-region/v1:whole-region-undo');
+      c !== 'canvas-region/v2:whole-region-undo');
     assert.throws(() => checkProtocolCompatibility(missing, [regionRequirement]),
       error => error.code === 'CAPABILITY_UNAVAILABLE' && error.phase === 'decode');
     // Cell capabilities=[] cannot have a missing-cell-token case. Test the real

@@ -3,11 +3,8 @@ import { createHash } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import canonicalize from 'canonicalize';
-import { digestValue, encodeRegionBlock, expandRegionBlock, regionChunksOfBox, comparePosition,
-  safetyCapabilities } from 'hanaworlds-contracts';
-// FIXTURE claim only: the example Adapter advertises the Contracts engine safety ids of each wire.
-const fixtureSafety = wire => safetyCapabilities.filter(c => c.id.startsWith(`${wire}:`) &&
-  ['G1', 'G2', 'G3'].includes(c.gap)).map(c => c.id);
+import { digestValue, encodeRegionBlock, expandRegionBlock, regionChunksOfBox, comparePosition } from 'hanaworlds-contracts';
+import { fixtureEngineGuards, guardSlot } from './fixture-engine-guards.mjs';
 import { CanvasV5, CanvasStore, CanvasRegionV1 } from '../src/index.mjs';
 import { objectsRunRoot } from './objects-web-server.mjs';
 import { fixtureSessions } from './fixture-sessions.mjs';
@@ -20,7 +17,8 @@ const profile = { profileVersion:'state-profile/v2', nodeFields:['nodeName','par
 const connection = { connectionRef:'objects-fixture-connection', connectionIncarnationRef:'objects-fixture-incarnation',
   worldRef, payloadVersion:'local-world/v1', payloadDigest:'1'.repeat(64), capabilities:{ providerRef:'fixture-adapter',
     capabilityRevision:'fixture-cap-1', worldRef, engineBounds:{min:[-64,-64,-64],max:[64,64,64]}, limits:[],
-    recoveryGuarantee:'RECOVERABLE_VERIFIED', stateProfile:profile, sessionDeleteSupported:true, imageMediaTypes:[], model:null } };
+    recoveryGuarantee:'RECOVERABLE_VERIFIED', stateProfile:profile, sessionDeleteSupported:true, imageMediaTypes:[], model:null,
+    engineGuards: fixtureEngineGuards() } };
 
 // Only the world/Adapter inputs are fixtures. Canvas decisions, validation,
 // before snapshots, readback, commits and fsynced history are production code.
@@ -56,12 +54,11 @@ function fixtureEnvironment() {
   // FIXTURE per-cell port handshake: what a G3 Adapter advertises on world-adapter/v7.
   env.adapter = { protocolHandshake:{ profileVersion:'protocol-handshake/v1', component:'objects-fixture-adapter',
     protocols:[{ protocol:'world-adapter', major:7, minor:0 }],
-    capabilities:['world-adapter/v7:callback-free-write','world-adapter/v7:write-path-state-facts',
-      ...fixtureSafety('world-adapter/v7')].sort(),
+    capabilities:['world-adapter/v7:callback-free-write','world-adapter/v7:write-path-state-facts'].sort(),
     provenance:{ packageName:'objects-fixture-adapter', packageVersion:'1.0.0', sourceRevision:null, artifactDigest:null } },
     async call(operation, request) {
     calls.push({port:'world-adapter/v7',operation,request:structuredClone(request)});
-    const answer = result => ({contractVersion:'world-adapter/v7',requestId:request.requestId,result,error:null});
+    const answer = result => guardSlot('world-adapter/v7', operation, { contractVersion: 'world-adapter/v7', requestId:request.requestId,result,error:null});
     if (operation==='DiscoverConnections') return answer({capabilityRevision:'fixture-cap-1',connections:[{
       adapterId:'hanaworlds-world-adapter',connectionRef:connection.connectionRef,worldRef,
       displayName:'隔离示例世界',capabilityRevision:'fixture-cap-1',payloadVersion:connection.payloadVersion,
@@ -87,20 +84,19 @@ function fixtureEnvironment() {
       return answer({contractVersion:'canvas/v6',transactionId:request.transactionId,operationDigest:request.operationDigest,
         transactionPayloadDigest:request.preparedTransaction.transactionPayloadDigest,status:'VERIFIED',previousWorldRevision,
         observedWorldRevision:'fixture-cell-world-1',readbackDigest:D('readback',projection(request)),
-        restoreStatus:'NOT_REQUIRED',error:null,localContext:request.localContext});
+        restoreStatus:'NOT_REQUIRED',error:null,guardRefusal:null,applyFailure:null,localContext:request.localContext});
     }
     throw new Error(`FIXTURE_UNSUPPORTED_CELL_OPERATION:${operation}`);
   } };
   env.regionAdapter = { protocolHandshake:{profileVersion:'protocol-handshake/v1',component:'objects-fixture-adapter',
-    protocols:[{protocol:'world-adapter-region',major:1,minor:1}],capabilities:[
-      'world-adapter-region/v1:callback-free-write',
-      'world-adapter-region/v1:chunked-read','world-adapter-region/v1:chunked-write','world-adapter-region/v1:lighting-complete',
-      'world-adapter-region/v1:load-then-know','world-adapter-region/v1:restore-state',
-      ...fixtureSafety('world-adapter-region/v1')].sort(),
+    protocols:[{protocol:'world-adapter-region',major:2,minor:0}],capabilities:[
+      'world-adapter-region/v2:callback-free-write',
+      'world-adapter-region/v2:chunked-read','world-adapter-region/v2:chunked-write','world-adapter-region/v2:lighting-complete',
+      'world-adapter-region/v2:load-then-know','world-adapter-region/v2:restore-state'].sort(),
     provenance:{packageName:'objects-fixture-adapter',packageVersion:'1.0.0',sourceRevision:null,artifactDigest:null}},
     async call(operation, request) {
-      calls.push({port:'world-adapter-region/v1',operation,request:structuredClone(request)});
-      const answer = result => ({contractVersion:'world-adapter-region/v1',requestId:request.requestId,result,error:null});
+      calls.push({port:'world-adapter-region/v2',operation,request:structuredClone(request)});
+      const answer = result => guardSlot('world-adapter-region/v2', operation, { contractVersion: 'world-adapter-region/v2', requestId:request.requestId,result,error:null});
       if (operation==='ReadRegion') return answer({worldRef,box:request.box,localContext:request.localContext,
         chunks:regionChunksOfBox(request.box).map(({chunkPos,box})=>{
           const state=regionState(box);
@@ -155,7 +151,7 @@ export async function createObjectsExample(directory) {
   const selected=await call(canvas,'SelectWorldConnection',{...base,requestId:'fixture-select',connectionRef:connection.connectionRef,
     connectionIncarnationRef:connection.connectionIncarnationRef,expectedRevision:context.selection.sessionRevision,expectedContext:null});
   const localContext=selected.localContext;
-  const regionBase={contractVersion:'canvas-region/v1',sessionRef:exampleSessionRef,worldRef,localContext,guarantee:'RECOVERABLE_VERIFIED'};
+  const regionBase={contractVersion:'canvas-region/v2',sessionRef:exampleSessionRef,worldRef,localContext,guarantee:'RECOVERABLE_VERIFIED'};
   await call(region,'ApplyRegionCommit',{...regionBase,requestId:'fixture-region-keep',transactionId:'fixture-region-keep',...regionInput([12,4,8],[2,2,2])});
   const operations={contractVersion:'operations/v3',buildDigest:'b'.repeat(64),compilerRevision:'fixture-brush-cell-1',
     compilationConfigDigest:'a'.repeat(64),worldRef,frameDigest:'f'.repeat(64),catalogueDigest:'c'.repeat(64),
@@ -170,7 +166,7 @@ export async function createObjectsExample(directory) {
     operations,operationDigest,analysisDigest:D('affected-analysis',analyzed),decisionRevision:null,expectedWorldRevision:worldRevision,
     expectedObjectRevisions:{},guarantee:'RECOVERABLE_VERIFIED',regionInspectionBinding:null,localContext});
   const withdrawn=await call(region,'ApplyRegionCommit',{...regionBase,requestId:'fixture-region-withdrawn',transactionId:'fixture-region-withdrawn',...regionInput([4,1,4],[2,1,1])});
-  await call(region,'UndoRegionCommit',{contractVersion:'canvas-region/v1',sessionRef:exampleSessionRef,worldRef,localContext,
+  await call(region,'UndoRegionCommit',{contractVersion:'canvas-region/v2',sessionRef:exampleSessionRef,worldRef,localContext,
     requestId:'fixture-region-undo',originTransactionId:'fixture-region-withdrawn',undoTransactionId:'fixture-region-undo',expectedHistoryRevision:withdrawn.historyRevision});
   const view=await canvas.readObjectsHistory(exampleSessionRef);
   return {classification:'REAL_RUNTIME + FIXTURE',sessionRef:exampleSessionRef,worldRef,storeDirectory:directory,

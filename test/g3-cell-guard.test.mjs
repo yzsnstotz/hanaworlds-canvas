@@ -5,19 +5,19 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { digestValue, encodeRegionBlock, regionChunksOfBox } from 'hanaworlds-contracts';
 import { CanvasV5, CanvasStore, CanvasRegionV1, ADAPTER_CELL_REQUIREMENT,
-  ADAPTER_REGION_REQUIREMENT, apply as applyCanvas } from '../src/index.mjs';
+  ADAPTER_REGION_REQUIREMENT, ENGINE_GUARD_REQUIREMENTS, apply as applyCanvas } from '../src/index.mjs';
 import { openUndoFixtureWorld, undoConnection, undoSessionRef,
   undoWorldRef } from '../scripts/undo-fixture-world.mjs';
 import { undoWorldFile } from '../scripts/undo-host.mjs';
-import { g3CellHandshake, CELL_SAFETY_CAPABILITIES, G3_CELL_CAPABILITIES }
-  from './support/g3-adapter-handshake.mjs';
+import { g3CellHandshake } from './support/g3-adapter-handshake.mjs';
+import { fixtureEngineGuards } from '../scripts/fixture-engine-guards.mjs';
 import { fixtureSessions } from '../scripts/fixture-sessions.mjs';
 
 /*
  * G3 write-before guard on the per-cell port (world-adapter/v7) for BUILD, Undo and
  * Redo, and on both ports for a region write. FIXTURE: the isolated undo fixture
  * world and its two port handshakes stand in for the Adapter; Canvas, its durable
- * Store and the public canvas/v6 / canvas-region/v1 calls are the real component.
+ * Store and the public canvas/v6 / canvas-region/v2 calls are the real component.
  * "Before any write" is checked as: no mutating Adapter call (Prepare/Apply/Restore,
  * WriteRegion) during the refused call, only the named read-only admission reads,
  * no pending row, unchanged history, and the fixture world file bytes unchanged.
@@ -107,35 +107,36 @@ async function refusedBeforeWrite(env, operation, request, handshake, code, send
   assert.ok(bytes.equals(await readFile(env.file)), `${operation} changed the world`);
 }
 const regionAsCell = { ...g3CellHandshake(), protocols: [{ protocol: 'world-adapter-region',
-  major: 1, minor: 1 }], capabilities: [...ADAPTER_REGION_REQUIREMENT.capabilities] };
+  major: 2, minor: 0 }], capabilities: [...ADAPTER_REGION_REQUIREMENT.capabilities] };
 const refusals = () => [
   ['no per-cell handshake', undefined, 'UNSUPPORTED_VERSION'],
   ['0.x Adapter major', g3CellHandshake({ major: 6, minor: 1 }), 'UNSUPPORTED_VERSION'],
   ['region handshake on the per-cell port', regionAsCell, 'UNSUPPORTED_VERSION'],
   ...(g3 ? [
     ['missing callback-free-write', g3CellHandshake({ capabilities:
-      ['world-adapter/v7:write-path-state-facts', ...CELL_SAFETY_CAPABILITIES] }),
-    'CAPABILITY_UNAVAILABLE'],
+      ['world-adapter/v7:write-path-state-facts'] }), 'CAPABILITY_UNAVAILABLE'],
     ['missing write-path-state-facts', g3CellHandshake({ capabilities:
-      ['world-adapter/v7:callback-free-write', ...CELL_SAFETY_CAPABILITIES] }),
-    'CAPABILITY_UNAVAILABLE'],
+      ['world-adapter/v7:callback-free-write'] }), 'CAPABILITY_UNAVAILABLE'],
     ['region callback-free-write in place of the v7 one', g3CellHandshake({ capabilities:
-      ['world-adapter-region/v1:callback-free-write', 'world-adapter/v7:write-path-state-facts',
-        ...CELL_SAFETY_CAPABILITIES] }), 'CAPABILITY_UNAVAILABLE'],
+      ['world-adapter-region/v2:callback-free-write', 'world-adapter/v7:write-path-state-facts'] }),
+    'CAPABILITY_UNAVAILABLE'],
   ] : []),
 ];
-// Contracts 1.x engine safety on the per-cell port (BUILD, Undo, Redo): each capability missing
-// alone, or the region wire's ids in their place, refuses with the Contracts absent-capability
-// error (phase validate) before any write.
-const safetyRefusals = () => [
-  ...CELL_SAFETY_CAPABILITIES.map(id => [`missing ${id}`, g3CellHandshake({ capabilities:
-    [...G3_CELL_CAPABILITIES, ...CELL_SAFETY_CAPABILITIES.filter(other => other !== id)] }),
-  'CAPABILITY_UNAVAILABLE', 'validate']),
-  ['region safety ids in place of the per-cell ones', g3CellHandshake({ capabilities:
-    [...G3_CELL_CAPABILITIES, ...CELL_SAFETY_CAPABILITIES.map(id =>
-      id.replace('world-adapter/v7:', 'world-adapter-region/v1:'))] }),
-  'CAPABILITY_UNAVAILABLE', 'validate'],
-];
+// Contracts 1.0.0-rc.2 engine guards (PublicCapabilities.engineGuards of the current connection):
+// every guard x stage the operation needs, dropped alone from the declaration, refuses with
+// guardRefusalError(GUARD_UNAVAILABLE, preflight) = CAPABILITY_UNAVAILABLE/validate before any write;
+// a null declaration refuses too. Rows are [label, declaration].
+const guardRefusals = operation => [['no declaration', null],
+  ...ENGINE_GUARD_REQUIREMENTS[operation].map(row => [`${row.guard}@${row.stage} uncovered`,
+    fixtureEngineGuards({ without: [row] })])];
+/** Sends `request` with the connection declaring `declaration`; proves nothing was written. */
+async function guardRefusedBeforeWrite(env, operation, request, declaration, send) {
+  env.world.engineGuards = declaration;
+  try {
+    await refusedBeforeWrite(env, operation, request, env.canvas.adapter.protocolHandshake,
+      'CAPABILITY_UNAVAILABLE', send, 'validate');
+  } finally { delete env.world.engineGuards; }
+}
 
 test('per-cell requirement is world-adapter/v7 at the declared minor with the G3 write-path ids',
   () => {
@@ -157,15 +158,22 @@ test('BUILD, Undo and Redo refuse an incompatible per-cell port before any Adapt
       const env = await boot(directory);
       // BUILD: every refusal before reservation / Prepare / Apply.
       const build = await buildRequest(env, 'g3-build-1', [[8, 2, 8], [9, 2, 8]]);
-      for (const [label, handshake, code, phase] of [...refusals(), ...safetyRefusals()]) {
+      for (const [label, handshake, code] of refusals())
         await refusedBeforeWrite(env, 'ApplyRecoverableCommit',
-          { ...build, requestId: `g3-build-1-${label}` }, handshake, code, undefined, phase);
-      }
+          { ...build, requestId: `g3-build-1-${label}` }, handshake, code);
+      for (const [label, declaration] of guardRefusals('ApplyRecoverableCommit'))
+        await guardRefusedBeforeWrite(env, 'ApplyRecoverableCommit',
+          { ...build, requestId: `g3-build-1-${label}` }, declaration);
+      // An uncovered stage the operation never reaches (region / inspection) does not refuse it.
+      env.world.engineGuards = fixtureEngineGuards({ without: [
+        { guard: 'PLAYER_ENCLOSURE', stage: 'REGION_RESTORE' },
+        { guard: 'CELL_PROTECTION', stage: 'INSPECT_REGION' }] });
       // A higher minor and extra ids are accepted (provenance never decides).
       env.canvas.adapter = { ...env.canvas.adapter, protocolHandshake: g3CellHandshake({ minor: 4,
         capabilities: ['world-adapter/v7:callback-free-write', 'world-adapter/v7:future-id',
-          'world-adapter/v7:write-path-state-facts', ...CELL_SAFETY_CAPABILITIES] }) };
+          'world-adapter/v7:write-path-state-facts'] }) };
       const built = await env.canvas.call('ApplyRecoverableCommit', build);
+      delete env.world.engineGuards;
       assert.equal(built.error, null, JSON.stringify(built.error));
       assert.equal(built.result.status, 'VERIFIED');
       assert.deepEqual(env.world.readCells([[8, 2, 8], [9, 2, 8]]).map(c => c.nodeName),
@@ -174,9 +182,12 @@ test('BUILD, Undo and Redo refuse an incompatible per-cell port before any Adapt
       // Undo, then Redo: the same guard, same refusals, then the real move.
       for (const operation of ['Undo', 'Redo']) {
         const request = await historyRequest(env, operation, `g3-${operation}`);
-        for (const [label, handshake, code, phase] of [...refusals(), ...safetyRefusals()])
+        for (const [label, handshake, code] of refusals())
           await refusedBeforeWrite(env, operation, { ...request, requestId: `g3-${operation}-${label}` },
-            handshake, code, undefined, phase);
+            handshake, code);
+        for (const [label, declaration] of guardRefusals(operation))
+          await guardRefusedBeforeWrite(env, operation,
+            { ...request, requestId: `g3-${operation}-${label}` }, declaration);
         const moved = await env.canvas.call(operation, request);
         assert.equal(moved.error, null, JSON.stringify(moved.error));
         assert.equal(moved.result.status, 'VERIFIED');
@@ -201,7 +212,7 @@ test('a region write needs both ports compatible and is refused before any regio
       const operations = { contractVersion: 'region-operations/v1', buildDigest: 'b'.repeat(64),
         compilerRevision: 'g3-region-1', worldRef: undoWorldRef, catalogueDigest: 'c'.repeat(64),
         chunkEdge: 16, chunks };
-      const request = { contractVersion: 'canvas-region/v1', sessionRef: undoSessionRef,
+      const request = { contractVersion: 'canvas-region/v2', sessionRef: undoSessionRef,
         worldRef: undoWorldRef, localContext: env.localContext, guarantee: 'RECOVERABLE_VERIFIED',
         requestId: 'g3-region', transactionId: 'g3-region', operations,
         operationDigest: D('region-operations', operations) };
@@ -223,23 +234,16 @@ test('a region write needs both ports compatible and is refused before any regio
           protocolHandshake: preG3 }));
       if (g3) await refusedBeforeWrite(env, 'ApplyRegionCommit', { ...request, requestId: 'g3-region-cap' },
         env.canvas.adapter.protocolHandshake, 'CAPABILITY_UNAVAILABLE', sendWith({ ...regionPort,
-          protocolHandshake: { ...preG3, protocols: [{ protocol: 'world-adapter-region', major: 1,
-            minor: 1 }] } }));
-      // Contracts 1.x engine safety on the region port: each region capability missing alone,
-      // or the per-cell ids in their place, refuses before any region read or write.
-      const regionSafety = regionPort.protocolHandshake.capabilities.filter(c =>
-        /:(restore-body-recheck|cell-protection|no-body-enclosure)$/.test(c));
-      assert.equal(regionSafety.length, 3);
-      const regionWithout = capabilities => ({ ...regionPort, protocolHandshake: {
-        ...regionPort.protocolHandshake, capabilities: [...capabilities].sort() } });
-      const plain = regionPort.protocolHandshake.capabilities.filter(c => !regionSafety.includes(c));
-      for (const id of regionSafety)
-        await refusedBeforeWrite(env, 'ApplyRegionCommit', { ...request, requestId: `g3-region-no-${id}` },
-          env.canvas.adapter.protocolHandshake, 'CAPABILITY_UNAVAILABLE',
-          sendWith(regionWithout([...plain, ...regionSafety.filter(other => other !== id)])), 'validate');
-      await refusedBeforeWrite(env, 'ApplyRegionCommit', { ...request, requestId: 'g3-region-cell-ids' },
-        env.canvas.adapter.protocolHandshake, 'CAPABILITY_UNAVAILABLE',
-        sendWith(regionWithout([...plain, ...CELL_SAFETY_CAPABILITIES])), 'validate');
+          protocolHandshake: { ...preG3, protocols: [{ protocol: 'world-adapter-region', major: 2,
+            minor: 0 }] } }));
+      // Contracts 1.0.0-rc.2 engine guards for a region write (REGION_APPLY / REGION_RESTORE).
+      for (const [label, declaration] of guardRefusals('ApplyRegionCommit'))
+        await guardRefusedBeforeWrite(env, 'ApplyRegionCommit',
+          { ...request, requestId: `g3-region-${label}` }, declaration, send);
+      // Per-cell coverage never stands in for the region stages.
+      await guardRefusedBeforeWrite(env, 'ApplyRegionCommit', { ...request, requestId: 'g3-region-cell-only' },
+        fixtureEngineGuards({ without: ['BODY_CLEARANCE', 'CELL_PROTECTION', 'PLAYER_ENCLOSURE']
+          .flatMap(guard => ['REGION_APPLY', 'REGION_RESTORE'].map(stage => ({ guard, stage }))) }), send);
       const committed = await send(request);
       assert.equal(committed.error, null, JSON.stringify(committed.error));
       assert.equal(committed.result.status, 'VERIFIED');
@@ -290,7 +294,7 @@ test('apply() reads the per-cell handshake from the public hanaworldsWorldAdapte
       assert.equal((await run({ protocolHandshake: undefined,
         handshake: () => publicV6Handshake(), call })).error.code, 'UNSUPPORTED_VERSION');
       assert.equal((await run({ protocolHandshake: { ...publicV6Handshake(),
-        protocols: [{ protocol: 'world-adapter-region', major: 1, minor: 1 }] }, call }))
+        protocols: [{ protocol: 'world-adapter-region', major: 2, minor: 0 }] }, call }))
         .error.code, 'UNSUPPORTED_VERSION');
       if (g3) assert.equal((await run({ protocolHandshake: { ...publicV6Handshake(),
         capabilities: ['world-adapter/v7:callback-free-write'] }, call })).error.code,

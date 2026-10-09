@@ -121,7 +121,7 @@ test('every offered Undo has a same-entry Redo; region and stale entries are nam
     host = await openUndoHost(directory);
     assert.equal((await host.perform(cellRef, 'redo')).status, 'VERIFIED');
 
-    // A region entry in the same isolated world (made here, never in the example): canvas-region/v1
+    // A region entry in the same isolated world (made here, never in the example): canvas-region/v2
     // has no Redo, so Canvas names its Undo instead of offering a move it could not reverse.
     const region = new CanvasRegionV1(host.canvas, host.world.regionAdapter);
     const localContext = host.canvas.store.snapshot.sessions['undo-fixture-session'].localContext;
@@ -131,7 +131,7 @@ test('every offered Undo has a same-entry Redo; region and stale entries are nam
     const chunks = regionChunksOfBox({ min: origin, max: origin.map((o, a) => o + size[a] - 1) });
     const operations = { contractVersion: 'region-operations/v1', buildDigest: 'b'.repeat(64), compilerRevision: 'test-region-1',
       worldRef: 'undo-fixture-world', catalogueDigest: 'c'.repeat(64), chunkEdge: 16, chunks: [{ chunkPos: chunks[0].chunkPos, block }] };
-    const committed = await region.call('ApplyRegionCommit', { contractVersion: 'canvas-region/v1', sessionRef: 'undo-fixture-session',
+    const committed = await region.call('ApplyRegionCommit', { contractVersion: 'canvas-region/v2', sessionRef: 'undo-fixture-session',
       worldRef: 'undo-fixture-world', localContext, guarantee: 'RECOVERABLE_VERIFIED', requestId: 'test-region',
       transactionId: 'test-region', operations, operationDigest: digestValue('region-operations', operations).sha256 });
     assert.equal(committed.error, null);

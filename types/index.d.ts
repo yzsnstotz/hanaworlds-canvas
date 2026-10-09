@@ -44,8 +44,8 @@ export class CanvasV5 implements CanvasV5ProtocolSource {
   readWorldRevision(worldRef: string): Promise<string>;
   /** Plugin-owned read: per-object Undo/Redo availability plus every unfinished transaction of
    * the World; a rollback the engine refused stays `recoveryPending` (phase RESTORE_PENDING). */
-  /** Canvas-own read: per write operation, the engine safety it needs and what is missing. */
-  readEngineSafety(regionHandshake?: unknown): EngineSafetyRow[];
+  /** Canvas-own read: per write operation, the engine guards it needs and which are uncovered. */
+  readEngineSafety(sessionRef: string): EngineSafetyReadback;
   readHistoryActions(sessionRef: string): Promise<{ state: string; worldRef: string | null;
     objects: any[]; recovery?: RecoveryRow[] } & Record<string, unknown>>;
 }
@@ -53,19 +53,24 @@ export interface RecoveryRow {
   transactionId: string; mode: 'CELL' | 'REGION'; phase: string; recoveryPending: boolean;
   /** CELL: RESTORE_FAILED (canvas/v6 receipt, manual recovery) or RECOVERY_PENDING (unknown). */
   receiptStatus: 'RESTORE_FAILED' | 'RECOVERY_PENDING' | null;
+  guardRefusal: import('hanaworlds-contracts').GuardRefusal | null;
   restoreCode: string | null; causeCode: string | null;
 }
-export type EngineSafetyOperation = 'ApplyRecoverableCommit' | 'Undo' | 'Redo' |
-  'ApplyRegionCommit' | 'UndoRegionCommit';
-/** Engine safety capabilities (Contracts G1–G3 ids) each write operation needs from its port. */
-export const ENGINE_SAFETY_REQUIREMENTS: Readonly<Record<EngineSafetyOperation, Readonly<{
-  port: 'world-adapter/v7' | 'world-adapter-region/v1';
-  ids: readonly import('hanaworlds-contracts').SafetyCapabilityId[] }>>>;
-export function unmetEngineSafety(handshake: unknown, operation: EngineSafetyOperation):
-  { id: import('hanaworlds-contracts').SafetyCapabilityId; cause: string }[];
-export interface EngineSafetyRow {
-  operation: EngineSafetyOperation; port: string; required: string[];
-  unmet: { id: string; cause: string }[]; status: 'ADVERTISED' | 'CAPABILITY_UNAVAILABLE';
+export type EngineGuardOperation = 'ApplyRecoverableCommit' | 'Undo' | 'Redo' |
+  'ApplyRegionCommit' | 'UndoRegionCommit' | 'RecoverRegion';
+type GuardRequirement = { guard: import('hanaworlds-contracts').EngineGuard;
+  stage: import('hanaworlds-contracts').EngineGuardStage };
+/** Contracts engine-guards/v1 guard x stage requirements of each Canvas write operation. */
+export const ENGINE_GUARD_REQUIREMENTS: Readonly<Record<EngineGuardOperation,
+  readonly Readonly<GuardRequirement>[]>>;
+/** Uncovered requirements of `operation` against a declaration, as GUARD_UNAVAILABLE refusals. */
+export function unmetGuards(declaration: import('hanaworlds-contracts').EngineGuardDeclaration | null,
+  operation: EngineGuardOperation): import('hanaworlds-contracts').GuardRefusal[];
+export interface EngineSafetyReadback {
+  sessionRef: string; bound: boolean;
+  declaration: import('hanaworlds-contracts').EngineGuardDeclaration | null;
+  operations: { operation: EngineGuardOperation; required: GuardRequirement[];
+    unmet: import('hanaworlds-contracts').GuardRefusal[]; status: 'COVERED' | 'CAPABILITY_UNAVAILABLE' }[];
 }
 /** Data directory name under `<dsh home>/data` for the 1.x store; 0.x data is never read. */
 export const STORE_ROOT: 'hanaworlds-canvas-v1';
@@ -73,14 +78,14 @@ export class CanvasRegionV1 {
   constructor(canvas: CanvasV5, regionAdapter: any);
   readonly protocolHandshake: ProtocolHandshake;
   describe(): Record<string, unknown>;
-  call<N extends keyof OperationMap['canvas-region/v1']>(operation: N,
-    request: unknown): Promise<OperationMap['canvas-region/v1'][N]['response']>;
+  call<N extends keyof OperationMap['canvas-region/v2']>(operation: N,
+    request: unknown): Promise<OperationMap['canvas-region/v2'][N]['response']>;
   recoverPending(): Promise<any>;
 }
 /** Region-only canvas-region major 1/minor 0; not the per-cell declaration. */
 export const canvasProtocolHandshake: ProtocolHandshake;
-export const REGION_WIRE: 'canvas-region/v1';
-export const REGION_ADAPTER: 'world-adapter-region/v1';
+export const REGION_WIRE: 'canvas-region/v2';
+export const REGION_ADAPTER: 'world-adapter-region/v2';
 export const CANVAS_REGION_CAPABILITIES: readonly string[];
 export const ADAPTER_REGION_REQUIREMENT: import('hanaworlds-contracts').ProtocolRequirement;
 export const ADAPTER_CELL_REQUIREMENT: import('hanaworlds-contracts').ProtocolRequirement;

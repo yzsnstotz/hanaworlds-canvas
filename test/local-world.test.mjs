@@ -8,7 +8,7 @@ const { CanvasV5, CanvasStore, apply: applyCanvas } = await import(process.env.C
 import { openRuntime } from './support/cordis-runtime.mjs';
 const consumer = await import(process.env.CANVAS_CONSUMER_ENTRY ?? 'hanaworlds-contracts');
 import { readFile, writeFile } from 'node:fs/promises';
-import { digestValue, checkContractHandshake, contractHandshake, safetyCheckFailure }
+import { digestValue, checkContractHandshake, contractHandshake, guardRefusalError }
   from 'hanaworlds-contracts';
 import majorCompat from 'hanaworlds-contracts/fixtures/contracts-major-compat' with { type: 'json' };
 import { createHash } from 'node:crypto';
@@ -16,7 +16,9 @@ import { createRequire } from 'node:module';
 import canonicalize from 'canonicalize';
 import { g3CellHandshake } from './support/g3-adapter-handshake.mjs';
 import { fixtureSessions } from '../scripts/fixture-sessions.mjs';
+import { fixtureEngineGuards, guardSlot } from '../scripts/fixture-engine-guards.mjs';
 
+const G1_REFUSAL = { guard: 'BODY_CLEARANCE', stage: 'RESTORE', finding: 'BODY_OCCUPIED' };
 const stateProfile = { profileVersion: 'state-profile/v2',
   nodeFields: ['nodeName', 'param1', 'param2'], metadataMode: 'exact',
   inventoryMode: 'exact', timerMode: 'exact', derivedLightMode: 'recompute-with-readback' };
@@ -25,7 +27,8 @@ const connection = { connectionRef: 'local-connection', connectionIncarnationRef
   capabilities: { providerRef: 'adapter', capabilityRevision: 'cap-1', worldRef: 'local-world',
     engineBounds: { min: [0, 0, 0], max: [9, 9, 9] }, limits: [],
     recoveryGuarantee: 'RECOVERABLE_VERIFIED', stateProfile,
-    sessionDeleteSupported: true, imageMediaTypes: [], model: null } };
+    sessionDeleteSupported: true, imageMediaTypes: [], model: null,
+    engineGuards: fixtureEngineGuards() } };
 
 test('actual connection readback binds the current local world durably', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'canvas-local-'));
@@ -164,8 +167,7 @@ test('build commits only after complete readback and stores one durable history 
     const calls = [];
     const adapter = { protocolHandshake: g3CellHandshake(), async call(operation, request) {
       calls.push(operation);
-      const respond = result => ({ contractVersion: 'world-adapter/v7',
-        requestId: request.requestId, result, error: null });
+      const respond = result => guardSlot('world-adapter/v7', operation, { contractVersion: 'world-adapter/v7', requestId: request.requestId, result, error: null });
       if (operation === 'DiscoverConnections') return respond({
         capabilityRevision: 'cap-1', connections: [{
           adapterId: 'hanaworlds-world-adapter',
@@ -229,15 +231,17 @@ test('build commits only after complete readback and stores one durable history 
             fixture.request.targetFacts.worldRevision : 'world-3',
           observedWorldRevision: writes === 1 ? 'world-2' : 'world-4',
           readbackDigest: D('readback', projection),
-          restoreStatus: 'NOT_REQUIRED', error: null, localContext: request.localContext });
+          restoreStatus: 'NOT_REQUIRED', error: null, guardRefusal: null, applyFailure: null, localContext: request.localContext });
       }
       if (operation === 'RestoreTransaction') {
         restores++;
-        // G1 FIXTURE: the engine refuses the rollback (a real body blocks a solid target) with the
-        // exact public error Contracts define for world-adapter/v7:restore-body-recheck.
+        // G1 FIXTURE: the engine's BODY_CLEARANCE guard refuses the restore (a real body blocks a
+        // solid target), with the public GuardRefusal beside the Contracts restore error. The
+        // Adapter does not know why Canvas restores, so its causeCode is its own.
         if (restoreFails === 'G1') return { contractVersion: 'world-adapter/v7',
-          requestId: request.requestId, result: null, error: safetyCheckFailure(
-            'world-adapter/v7:restore-body-recheck', request.originTransactionId) };
+          requestId: request.requestId, result: null, guardRefusal: G1_REFUSAL,
+          error: guardRefusalError(G1_REFUSAL, { transactionRef: request.originTransactionId,
+            cause: 'RESTORE_FAILED' }) };
         // FIXTURE: a restore whose outcome the transport cannot tell (no receipt rule fits).
         if (restoreFails === 'UNKNOWN') throw new Error('FIXTURE_TRANSPORT_LOST');
         record = { ...record, nodeName: 'air' };
@@ -249,7 +253,7 @@ test('build commits only after complete readback and stores one durable history 
           transactionPayloadDigest: '5'.repeat(64), status: 'ROLLED_BACK',
           previousWorldRevision: 'world-4', observedWorldRevision: 'world-5',
           readbackDigest: D('readback', projection),
-          restoreStatus: 'VERIFIED_RESTORED', error: null,
+          restoreStatus: 'VERIFIED_RESTORED', error: null, guardRefusal: null, applyFailure: null,
           localContext: request.localContext });
       }
       if (operation === 'PrepareHistoryTransaction') {
@@ -275,7 +279,7 @@ test('build commits only after complete readback and stores one durable history 
           transactionPayloadDigest: request.preparedHistoryTransaction.transactionPayloadDigest,
           status: 'VERIFIED', previousWorldRevision: 'world-2',
           observedWorldRevision: 'world-3', readbackDigest: D('readback', projection),
-          restoreStatus: 'NOT_REQUIRED', error: null, localContext: request.localContext });
+          restoreStatus: 'NOT_REQUIRED', error: null, guardRefusal: null, applyFailure: null, localContext: request.localContext });
       }
       throw new Error(`unexpected adapter operation ${operation}`);
     } };
@@ -622,8 +626,13 @@ test('build commits only after complete readback and stores one durable history 
     assert.equal(g1Receipt.restoreStatus, 'FAILED');
     assert.equal(g1Receipt.readbackDigest, null);
     assert.equal(g1Receipt.observedWorldRevision, null);
-    assert.deepEqual({ ...g1Receipt.error }, { ...safetyCheckFailure(
-      'world-adapter/v7:restore-body-recheck', 'build-3') });
+    // causeCode names why Canvas restored; the restore's own reason is the guard refusal; the
+    // causing failure is kept in full.
+    assert.deepEqual({ ...g1Receipt.error }, { ...guardRefusalError(G1_REFUSAL,
+      { transactionRef: 'build-3', cause: 'READBACK_MISMATCH' }) });
+    assert.deepEqual({ ...g1Receipt.guardRefusal }, G1_REFUSAL);
+    assert.equal(g1Receipt.applyFailure.error.code, 'READBACK_MISMATCH');
+    assert.equal(g1Receipt.applyFailure.guardRefusal, null);
     assert.equal(restores, 2);
     const afterRestoreFailed = await CanvasStore.open(directory);
     assert.equal(afterRestoreFailed.snapshot.transactions['build-3'], undefined);
@@ -633,7 +642,7 @@ test('build commits only after complete readback and stores one durable history 
     let actions = await canvas.readHistoryActions(sessionRef);
     assert.deepEqual(actions.recovery, [{ transactionId: 'build-3', mode: 'CELL',
       phase: 'RESTORE_PENDING', recoveryPending: true, receiptStatus: 'RESTORE_FAILED',
-      restoreCode: 'RESTORE_FAILED', causeCode: 'READBACK_MISMATCH' }]);
+      guardRefusal: G1_REFUSAL, restoreCode: 'RESTORE_FAILED', causeCode: 'READBACK_MISMATCH' }]);
     assert.ok(actions.objects.every(row => row.undo.reason === 'TRANSACTION_PENDING' ||
       row.undo.reason === 'NOTHING_TO_UNDO'));
     // The same request replays the same receipt and never writes or restores again.
@@ -688,7 +697,7 @@ test('host exposes durable Canvas facts as separate public ports', async () => {
     const entry = process.env.CANVAS_ENTRY ?? new URL('../src/index.mjs', import.meta.url).href;
     const running = createRequire(entry)('hanaworlds-contracts/package.json');
     assert.equal(advertised.contracts, `hanaworlds-contracts@${running.version}`);
-    assert.equal(ports.get('hanaworldsCanvasV5').status().version, '0.7.0');
+    assert.equal(ports.get('hanaworldsCanvasV5').status().version, '0.8.0');
     assert.doesNotThrow(() => checkContractHandshake(advertised));
     // Public Contracts conformance cases, each patched over Canvas's advertised handshake.
     const patched = c => { const h = { ...advertised, ...c.patch };

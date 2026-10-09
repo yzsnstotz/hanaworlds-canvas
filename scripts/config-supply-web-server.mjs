@@ -26,7 +26,7 @@ let h='<h2>来源权威 <span class="real">REAL Canvas 代码</span></h2><div cl
 h+='<h2>适用域（Canvas 自己的选择表；连接来自 <span class="fixture">FIXTURE 输入</span>）</h2><div class="box">'+(c.domain?Object.entries(c.domain).map(([k,v])=>esc(k)+' '+j(v)).join('<br>')+'<br>sessions '+j(c.sessionRefs):'<span class="NOT_BOUND">NOT_BOUND</span>：该 World 没有被任何 Session 绑定')+'</div>';
 h+='<div class="box">本次观察 #'+esc(c.observedSequence)+' '+j(c.observationDigest)+' · '+esc(c.observedAt)+(c.sources?' · Catalogue <span class="fixture">FIXTURE 输入</span> '+j(c.sources.catalogue):'')+'</div>';
 h+='<h2>Safety 规则</h2><div class="box">来源：<b>玩家确认</b>（skill 提案 → 玩家确认 → 合约纯函数）。Canvas 不声明、不供给 SafetyProfile，也没有 hanaworldsSafetyProfile 服务。</div>';
-h+='<h2>引擎安全能力（按写操作；对端握手 <span class="fixture">FIXTURE 输入</span>）</h2><table><tr><th>操作</th><th>端口</th><th>状态</th><th>缺少（合约能力名 · cause）</th></tr>'+d.engine.map(r=>'<tr><td>'+esc(r.operation)+'</td><td>'+esc(r.port)+'</td><td class="'+(r.unmet.length?'MISSING':'SUPPLIED')+'">'+esc(r.status)+'</td><td>'+(r.unmet.length?r.unmet.map(u=>'<code>'+esc(u.id)+'</code> · '+esc(u.cause)).join('<br>'):'—')+'</td></tr>').join('')+'</table><div class="box">缺任一项时该操作在任何写入前被拒（CAPABILITY_UNAVAILABLE）。回滚遇到 RESTORE_FAILED 时事务记为待恢复（canvas/v6 RESTORE_FAILED receipt），不报成功。</div>';
+h+='<h2>引擎守卫（按写操作 × stage；声明来自当前连接 <span class="fixture">FIXTURE 输入</span>）</h2><div class="box">声明 '+(d.engine.declaration?j(d.engine.declaration):'<span class="MISSING">无（null）</span>')+'</div><table><tr><th>操作</th><th>状态</th><th>未覆盖（guard @ stage）</th></tr>'+d.engine.operations.map(r=>'<tr><td>'+esc(r.operation)+'</td><td class="'+(r.unmet.length?'MISSING':'SUPPLIED')+'">'+esc(r.status)+'</td><td>'+(r.unmet.length?r.unmet.map(u=>'<code>'+esc(u.guard)+' @ '+esc(u.stage)+'</code> · '+esc(u.finding)).join('<br>'):'—')+'</td></tr>').join('')+'</table><div class="box">未覆盖任一项时该操作在任何写入前被拒（CAPABILITY_UNAVAILABLE）。回滚被引擎拒绝时事务记为待人工恢复（RESTORE_FAILED，带 guardRefusal 与 applyFailure），不报成功。</div>';
 h+=profile('CompilationConfig',c.profiles.compilationConfig,d.ports.compilerConfig);
 h+='<h2>变更 / 失效记录（持久，'+d.report.history.length+' 条）</h2><table><tr><th>#</th><th>观察</th><th>被取代</th><th>原因</th></tr>';for(const r of [...d.report.history].reverse())h+='<tr><td>'+esc(r.observedSequence)+'</td><td>'+j(r.observationDigest.slice(0,16))+'</td><td>'+esc(r.supersededAt)+'</td><td>'+esc(r.invalidationReasons.join(', '))+'</td></tr>';h+='</table>';$('#out').innerHTML=h;}
 function renderFixture(f){$('#fixture').innerHTML='<div class="fixbox"><span class="fixture">FIXTURE</span> 对端输入（不是配置来源权威）：'+j(f)+'<br><button data-a="worldedit">改 FIXTURE worldedit revision</button><button data-a="noworldedit">FIXTURE Catalogue 去掉 worldedit</button><button data-a="rebind">FIXTURE 新连接 incarnation 并重选</button><button data-a="unbind">经 Canvas 解绑</button></div>';
@@ -117,7 +117,8 @@ export async function createConfigSupplyServer(runDirectory) {
         const report = await supply.read(worldRef);
         const ports = {
           compilerConfig: await portOutcome('hanaworldsCompilerConfig', () => supply.readCompilerConfig(worldRef)) };
-        return reply(res, 200, { report, ports, engine: canvas.readEngineSafety(), fixture: peers.describe() });
+        return reply(res, 200, { report, ports, engine: canvas.readEngineSafety(supplySessionRef),
+          fixture: peers.describe() });
       }
       return reply(res, 404, { error: 'NOT_FOUND' });
     } catch (error) {

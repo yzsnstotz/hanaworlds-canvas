@@ -8,6 +8,7 @@ import * as contracts from 'hanaworlds-contracts';
 import { CanvasV5, CanvasStore } from '../src/index.mjs';
 import { g3CellHandshake } from './support/g3-adapter-handshake.mjs';
 import { fixtureSessions } from '../scripts/fixture-sessions.mjs';
+import { guardSlot } from '../scripts/fixture-engine-guards.mjs';
 
 /*
  * session-world-seam/v1 (canvas/v6 minor 1): Canvas's G-S/G-U/G-L/G-D authority over the
@@ -30,8 +31,7 @@ function seamAdapter() {
   const adapter = { rows, calls: [], protocolHandshake: g3CellHandshake(),
     async call(operation, request) {
       adapter.calls.push(operation);
-      const respond = result => ({ contractVersion: 'world-adapter/v7',
-        requestId: request.requestId, result, error: null });
+      const respond = result => guardSlot('world-adapter/v7', operation, { contractVersion: 'world-adapter/v7', requestId: request.requestId, result, error: null });
       if (operation === 'DiscoverConnections')
         return respond({ capabilityRevision: fixture.adapterInventory.A.capabilityRevision,
           connections: structuredClone(rows) });
@@ -43,7 +43,7 @@ function seamAdapter() {
           capabilities: { providerRef: 'fixture-adapter', capabilityRevision: row.capabilityRevision,
             worldRef: row.worldRef, engineBounds: { min: [-64, -64, -64], max: [64, 64, 64] },
             limits: [], recoveryGuarantee: 'RECOVERABLE_VERIFIED', stateProfile,
-            sessionDeleteSupported: true, imageMediaTypes: [], model: null } });
+            sessionDeleteSupported: true, imageMediaTypes: [], model: null, engineGuards: null } });
       }
       throw new Error(`unexpected v6 operation ${operation}`);
     } };
