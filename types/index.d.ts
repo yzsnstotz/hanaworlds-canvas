@@ -73,7 +73,7 @@ export interface ConfigFieldRow {
   provenance: { kind: ConfigFieldSource; ref: string; sourceRevision: string;
     basis?: Stage1PolicyBasis } | null;
   sourceKind?: ConfigFieldSource; reason?: 'REQUIRED_FACT_UNKNOWN' | 'POLICY_UNAVAILABLE';
-  need?: string; cause?: string; impact?: string;
+  need?: string; cause?: string; impact?: string; redacted?: 'INV-POSE-STAYS-IN-ENGINE';
 }
 /** Canvas's own Stage 1 policy declaration (read-only; changes only with the package). */
 export interface Stage1PolicyBasis {
@@ -125,6 +125,8 @@ export class CanvasConfigSupply {
 export const SUPPLY_PROFILE: 'canvas-stage1-config-supply/v1';
 export function assembleProfile(name: 'safetyProfile' | 'compilationConfig',
   fields: Record<string, ConfigFieldRow>, domain: ConfigDomain): ConfigProfileObservation<unknown>;
+/** Durable form of an observation: no player geometry (INV-POSE-STAYS-IN-ENGINE). */
+export function withoutPlayerGeometry(observation: ConfigObservation): ConfigObservation;
 export function boundDomain(snapshot: any, worldRef: string):
   { domain: ConfigDomain; sessionRefs: string[] }[];
 export const name: 'hanaworlds-canvas';

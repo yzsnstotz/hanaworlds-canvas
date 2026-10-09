@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { contractHandshake, digestValue, publicError, schemaBundle, validateType }
   from 'hanaworlds-contracts';
-const { CanvasV5, CanvasStore, CanvasConfigSupply, assembleProfile, apply: applyCanvas } =
+const { CanvasV5, CanvasStore, CanvasConfigSupply, assembleProfile, withoutPlayerGeometry,
+  apply: applyCanvas } =
   await import(process.env.CANVAS_ENTRY ?? new URL('../src/index.mjs', import.meta.url).href);
 import { g3CellHandshake } from './support/g3-adapter-handshake.mjs';
 const { STAGE1_POLICY_DECLARATION, STAGE1_POLICY_REVISION } = await import(
@@ -126,6 +127,8 @@ test('bound World: every field names its source; sourceless fields are refused b
       ['requireEntranceConnectivity', 'DECLARED_POLICY', 'POLICY_UNAVAILABLE'],
       ['hazardPolicy', 'DECLARED_POLICY', 'POLICY_UNAVAILABLE'],
       ['optionalLightRule', 'DECLARED_POLICY', 'POLICY_UNAVAILABLE']]);
+    // INV-POSE: the envelope stays in the engine; Canvas names that, it does not fill it.
+    assert.equal(safety.missing[0].cause, 'INV-POSE-STAYS-IN-ENGINE');
     for (const row of safety.missing.slice(1)) {
       assert.equal(row.cause, 'VALUE_UNDETERMINED');
       assert.ok(row.impact.length > 0);
@@ -305,4 +308,33 @@ test('Stage 1 policy declaration: Canvas-only, cited or UNDETERMINED, never a de
     }
   }
   assert.match(STAGE1_POLICY_REVISION, /^stage1-policy-[0-9a-f]{32}$/);
+});
+
+test('INV-POSE: Canvas never persists player geometry, even when a source supplies it', async () => {
+  // FIXTURE observation: a supplied envelope exercises the durable-form guard only.
+  const domain = { worldRef: 'w', connectionRef: 'c', connectionIncarnationRef: 'i',
+    payloadVersion: 'p', capabilityRevision: 'r' };
+  const envelope = { width: 0.6, height: 1.77, depth: 0.6, unit: 'node' };
+  const fields = Object.fromEntries(schemaBundle.definitions.SafetyProfile.required.map(field => {
+    const schema = schemaBundle.definitions.SafetyProfile.properties[field];
+    const value = Object.hasOwn(schema, 'const') ? schema.const : field === 'avatarDimensions' ?
+      envelope : field === 'hazardPolicy' ? { forbidLiquid: true, maximumDamagePerSecond: 0 } :
+      field === 'optionalLightRule' ? null : true;
+    return [field, { status: 'SUPPLIED', value, provenance: { kind: 'FIXTURE', ref: field,
+      sourceRevision: 'f-1' } }];
+  }));
+  const safetyProfile = assembleProfile('safetyProfile', fields, domain);
+  assert.equal(safetyProfile.status, 'SUPPLIED');
+  const observation = { contracts: 'c', declaration: 'd', domain, sessionRefs: [], sources: null,
+    profiles: { safetyProfile, compilationConfig: { type: 'CompilationConfig', status: 'SOURCE_MISSING',
+      value: null, digest: null, revision: null, fields: {}, missing: [] } } };
+  const stored = withoutPlayerGeometry(observation);
+  const text = JSON.stringify(stored);
+  for (const number of ['0.6', '1.77']) assert.equal(text.includes(number), false, number);
+  assert.equal(text.includes(safetyProfile.digest), false);
+  assert.equal(text.includes(safetyProfile.revision), false);
+  assert.equal(stored.profiles.safetyProfile.fields.avatarDimensions.redacted, 'INV-POSE-STAYS-IN-ENGINE');
+  assert.equal(stored.profiles.safetyProfile.fields.avatarDimensions.provenance.sourceRevision, 'f-1');
+  // The caller's own observation is untouched (the live read still returns the profile).
+  assert.deepEqual({ ...observation.profiles.safetyProfile.value.avatarDimensions }, envelope);
 });

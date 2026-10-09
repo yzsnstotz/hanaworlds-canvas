@@ -1,4 +1,4 @@
-# HanaWorlds Canvas 0.6.13 local world component
+# HanaWorlds Canvas 0.6.14 local world component
 
 The package exposes `hanaworldsCanvasV5` and consumes the public
 `hanaworldsWorldAdapterV6` port. It uses the root export of the released
@@ -37,6 +37,11 @@ Stage 1 validation configuration supply (0.6.11):
   `compiler-config-…`, the latter is `compilerRevision`). Each change of observation is
   recorded durably in Canvas's store with `invalidationReasons`; reads are otherwise read-only
   (no Adapter call, no World write).
+- INV-POSE-STAYS-IN-ENGINE (0.6.14): `avatarDimensions` is refused with cause
+  `INV-POSE-STAYS-IN-ENGINE` (no public non-pose envelope fact). Canvas never derives, defaults
+  or persists player geometry: the durable supply record (`withoutPlayerGeometry`) keeps only
+  status and source provenance for a supplied envelope and drops the SafetyProfile
+  value/digest/revision derived from it; only the live read returns them.
 - Refusals are Contracts `ContractError`s (0.6.12), so a consumer that maps errors through
   `publicError()` (Workshop) keeps the exact code/reason; `missingSources` is on the thrown
   object and in `hanaworldsCanvasConfigSupply.read`, not in the public Error shape.

@@ -25,9 +25,12 @@ const CONTRACTS_REF = contractHandshake.contracts;
 const definitions = schemaBundle.definitions;
 
 const MISSING_SOURCE = {
-  // No public Contracts/Adapter port reports the actual player movement/collision envelope.
+  // INV-POSE-STAYS-IN-ENGINE keeps players' collision boxes inside the Adapter; no public
+  // non-pose envelope fact exists. Canvas never derives, defaults or persists player geometry.
   avatarDimensions: { sourceKind: 'ENGINE_FACT', reason: 'REQUIRED_FACT_UNKNOWN',
-    need: 'actual player collision envelope of this World from a public Adapter fact port' },
+    cause: 'INV-POSE-STAYS-IN-ENGINE',
+    need: 'a public non-pose collision envelope fact allowed under INV-POSE-STAYS-IN-ENGINE ' +
+      '(C-STAGE1-CONFIG-SEAM-01 / hanaworlds-adapter-luanti-SUPPLY-01); none exists' },
   // Contracts 0.5.4 names the field but defines no source or derivation for it.
   backendProfileId: { sourceKind: 'UNDEFINED_IN_CONTRACT', reason: 'REQUIRED_FACT_UNKNOWN',
     need: 'Contracts definition of what backendProfileId identifies and which port supplies it' },
@@ -127,6 +130,24 @@ export function assembleProfile(name, fields, domain) {
   return { type, status: 'SUPPLIED', value, digest, revision, fields, missing: [] };
 }
 
+/**
+ * The durable form of an observation: never any player geometry (INV-POSE-STAYS-IN-ENGINE).
+ * A supplied avatarDimensions value, and the SafetyProfile value/digest/revision derived from
+ * it, are returned live to the caller but stored only as status and source provenance.
+ */
+export function withoutPlayerGeometry(observation) {
+  const stored = structuredClone(observation);
+  const safety = stored.profiles?.safetyProfile;
+  const avatar = safety?.fields?.avatarDimensions;
+  if (avatar?.status === 'SUPPLIED') {
+    avatar.value = null;
+    avatar.redacted = 'INV-POSE-STAYS-IN-ENGINE';
+    Object.assign(safety, { value: null, digest: null, revision: null,
+      redacted: 'INV-POSE-STAYS-IN-ENGINE' });
+  }
+  return stored;
+}
+
 function changeReasons(previous, current) {
   if (!previous) return ['FIRST_OBSERVATION'];
   const reasons = [];
@@ -196,6 +217,8 @@ export class CanvasConfigSupply {
           { status: 'READ', digest: catalogue.digest } :
           { status: catalogue.status, cause: catalogue.cause } } };
     }
+    const live = observation;
+    observation = withoutPlayerGeometry(observation);
     const digest = observationDigest(observation);
     const record = await store.commit(state => {
       state.configSupply ??= {};
@@ -209,8 +232,9 @@ export class CanvasConfigSupply {
         observedAt: now };
       return structuredClone(row);
     });
+    // The caller gets this read's live profiles; the store and history keep the durable form.
     return { profileVersion: SUPPLY_PROFILE, authority: AUTHORITY, worldRef,
-      current: record.current, history: record.history };
+      current: { ...record.current, profiles: live.profiles }, history: record.history };
   }
   #require(report, name) {
     const profile = report.current.profiles[name];

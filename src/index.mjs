@@ -1,5 +1,6 @@
 export { CanvasV5, CanvasStore, name, inject, apply } from './local-v5.mjs';
-export { CanvasConfigSupply, SUPPLY_PROFILE, assembleProfile, boundDomain } from './config-supply.mjs';
+export { CanvasConfigSupply, SUPPLY_PROFILE, assembleProfile, boundDomain, withoutPlayerGeometry }
+  from './config-supply.mjs';
 export { STAGE1_POLICY_DECLARATION, STAGE1_POLICY_REVISION } from './stage1-policy.mjs';
 export { CanvasRegionV1, canvasProtocolHandshake, regionToolDescription, encodeSnapshot,
   decodeSnapshot, REGION_WIRE, REGION_ADAPTER, CANVAS_REGION_CAPABILITIES,
