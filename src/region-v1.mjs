@@ -20,7 +20,7 @@ import { canonicalJSON, checkProtocolCompatibility, comparePosition, contractPro
 export const REGION_WIRE = 'canvas-region/v2';
 export const REGION_ADAPTER = 'world-adapter-region/v2';
 const ADAPTER = 'world-adapter/v7';
-const PACKAGE_VERSION = '0.10.1';
+const PACKAGE_VERSION = '0.10.2';
 export const CANVAS_REGION_CAPABILITIES = Object.freeze(regionCapabilities
   .filter(c => c.owner === 'hanaworlds-canvas').map(c => c.id).sort());
 // A capability id is scoped by its wire ("<wire>:<name>"). Each Adapter requirement takes
@@ -46,12 +46,14 @@ export const ADAPTER_CELL_REQUIREMENT = adapterRequirement(ADAPTER);
  * Engine guards each Canvas write operation needs, as Contracts engine-guards/v1 guard x stage
  * requirements against the loaded payload's declaration (PublicCapabilities.engineGuards of the
  * current connection). A stage the declaration does not list is not covered; nothing is inferred
- * from a name, a version or another stage. Canvas's choice of stages (its judgment):
- * - every forward write stage needs all three guards (BODY_CLEARANCE, CELL_PROTECTION,
- *   PLAYER_ENCLOSURE);
- * - the rollback restore of a failed write needs BODY_CLEARANCE and CELL_PROTECTION (it reinstates
- *   the verified before image right after the attempt);
- * - a region Undo is a forward action that writes through REGION_RESTORE, so it needs all three;
+ * from a name, a version or another stage. Canvas's choice of stages (its judgment): every stage
+ * that writes cells is covered, because that is where a guard stops a write.
+ * - a forward write (APPLY_COMPILED, APPLY_HISTORY, REGION_APPLY, and the REGION_RESTORE of a
+ *   region Undo, which writes a former image while players may stand there) needs all three
+ *   guards (BODY_CLEARANCE, CELL_PROTECTION, PLAYER_ENCLOSURE);
+ * - the rollback restore of a failed write (RESTORE, REGION_RESTORE) needs BODY_CLEARANCE and
+ *   CELL_PROTECTION (it reinstates the verified before image right after the attempt);
+ * - Prepare stages write nothing and are not required (the engine still runs what it declares);
  * - CELL_PROTECTION takes the declared protectionPrincipal as it is (ANONYMOUS satisfies it;
  *   no acting-principal source exists in this major).
  */
@@ -59,10 +61,9 @@ const ALL = ['BODY_CLEARANCE', 'CELL_PROTECTION', 'PLAYER_ENCLOSURE'];
 const ROLLBACK = ['BODY_CLEARANCE', 'CELL_PROTECTION'];
 const needs = (stages, guards) => stages.flatMap(stage => guards.map(guard => ({ guard, stage })));
 export const ENGINE_GUARD_REQUIREMENTS = Object.freeze(Object.fromEntries(Object.entries({
-  ApplyRecoverableCommit: [...needs(['PREPARE_RECOVERABLE', 'APPLY_COMPILED'], ALL),
-    ...needs(['RESTORE'], ROLLBACK)],
-  Undo: [...needs(['PREPARE_HISTORY', 'APPLY_HISTORY'], ALL), ...needs(['RESTORE'], ROLLBACK)],
-  Redo: [...needs(['PREPARE_HISTORY', 'APPLY_HISTORY'], ALL), ...needs(['RESTORE'], ROLLBACK)],
+  ApplyRecoverableCommit: [...needs(['APPLY_COMPILED'], ALL), ...needs(['RESTORE'], ROLLBACK)],
+  Undo: [...needs(['APPLY_HISTORY'], ALL), ...needs(['RESTORE'], ROLLBACK)],
+  Redo: [...needs(['APPLY_HISTORY'], ALL), ...needs(['RESTORE'], ROLLBACK)],
   ApplyRegionCommit: [...needs(['REGION_APPLY'], ALL), ...needs(['REGION_RESTORE'], ROLLBACK)],
   UndoRegionCommit: needs(['REGION_RESTORE'], ALL),
   RecoverRegion: needs(['REGION_RESTORE'], ROLLBACK),

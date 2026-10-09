@@ -457,3 +457,31 @@ test('config fact read changing the selected connection is rejected before recor
     assert.equal(canvas.store.snapshot.configSupply?.['local-world'], undefined);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
+
+test('host apply() forwards readConfigEngineFacts: backendProfileId comes from the engine facts', async () => {
+  // Regression (real-GO assembly finding): apply() wired only readScopedState/readCatalogue, so a
+  // Host-assembled Canvas always reported CONFIG_ENGINE_FACTS_PORT_ABSENT.
+  const profile = await temp();
+  try {
+    const ports = new Map();
+    const world = fixtureWorld();
+    const facts = fixtureEngine(world);
+    const ctx = { get: name => name === 'dshHomePath' ? (...parts) => join(profile, ...parts) :
+      name === 'hanaworldsWorldAdapterV6' ? world.adapter :
+      name === 'hanaworldsLuantiNativeFacts' ? world.nativeFacts :
+      name === 'hanaworldsWorkshopV3' ? fixtureSessions() : ports.get(name) ?? null,
+    provide: (name, port) => ports.set(name, port) };
+    const canvas = applyCanvas(ctx);
+    await canvas.ready;
+    await select(canvas, world, 'session-1');
+    const row = (await ports.get('hanaworldsCanvasConfigSupply').read('local-world'))
+      .current.profiles.compilationConfig.fields.backendProfileId;
+    assert.equal(row.status, 'SUPPLIED');
+    assert.equal(row.value, facts.writeBackend.backendProfileId);
+    // Without the method on the Host port the source is named absent, never defaulted.
+    delete world.nativeFacts.readConfigEngineFacts;
+    const absent = (await ports.get('hanaworldsCanvasConfigSupply').read('local-world'))
+      .current.profiles.compilationConfig.fields.backendProfileId;
+    assert.equal(absent.cause, 'CONFIG_ENGINE_FACTS_PORT_ABSENT');
+  } finally { await rm(profile, { recursive: true, force: true }); }
+});

@@ -24,7 +24,7 @@ const SESSION = 'session/v4';
 // pre-seam canvas behaviour left to switch to.
 const canvasProtocol = contractProtocols.find(row => row.protocol === 'canvas');
 if (!canvasProtocol || canvasProtocol.major !== 6) throw new Error('CANVAS_PROTOCOL_UNDECLARED');
-const PACKAGE_VERSION = '0.10.1';
+const PACKAGE_VERSION = '0.10.2';
 // The public wire defines canvas major 6, minor 0. Contracts publishes no
 // per-cell Canvas capability token; regional tokens describe the region port.
 const cellRequirement = protocolRequirement(WIRE, []);
@@ -1325,6 +1325,13 @@ export function apply(ctx) {
       if (typeof current?.readCatalogue !== 'function')
         throw fail('CAPABILITY_UNAVAILABLE', 'REQUIRED_FACT_UNKNOWN');
       return current.readCatalogue(...args);
+    },
+    // The loaded payload's write-backend declaration (CompilationConfig.backendProfileId source).
+    // Absent on the Host → the supply names CONFIG_ENGINE_FACTS_PORT_ABSENT, never a default.
+    get readConfigEngineFacts() {
+      const current = ctx.get?.('hanaworldsLuantiNativeFacts');
+      return typeof current?.readConfigEngineFacts === 'function' ?
+        (...args) => current.readConfigEngineFacts(...args) : undefined;
     } } });
   ctx.provide?.('hanaworldsCanvasV5', service);
   // Host service names are Canvas's choice; the wire shapes are Contracts canvas-/world-adapter-region/v2.
