@@ -35,7 +35,7 @@ Stage 1 validation configuration supply (v1 batch; earlier 0.6.11–0.6.15 notes
   `invalidationReasons`; reads are otherwise read-only (no Adapter call, no World write).
 - Store: the 1.x store lives in `<dsh home>/data/hanaworlds-canvas-v1/canvas-v6.json`
   (schemaVersion 6). A 0.x store is never read, migrated or accepted.
-- Contracts `#semver:^1.0.0-rc.3` (0.9.0): canvas/v6, world-adapter/v7, session/v4,
+- Contracts `#semver:^1.0.0-rc.4` (0.10.0): canvas/v6, world-adapter/v7, session/v4,
   canvas-region/v2, world-adapter-region/v2; the session-world seam is unconditional. Host
   service keys are unchanged (`hanaworldsCanvasV5`, `hanaworldsCanvasRegionV1`,
   `hanaworldsWorldAdapterV6`, `hanaworldsWorldAdapterRegionV1`, `hanaworldsWorkshopV3`, ...).
@@ -60,6 +60,14 @@ Stage 1 validation configuration supply (v1 batch; earlier 0.6.11–0.6.15 notes
   restore) answers `RECOVERY_PENDING`. Either way the transaction stays a durable
   `RESTORE_PENDING` row (restoreCode/causeCode/receiptStatus/guardRefusal), blocks the World,
   replays exactly, and `readHistoryActions(sessionRef).recovery` lists it; it is never success.
+- Guard refusal relay (rc.4): the canvas/v6 envelopes of ApplyRecoverableCommit, Undo, Redo,
+  InspectPlacementRegion, RecoverPendingUndo and ReadPendingUndoResult carry `guardRefusal`
+  beside `error`: null normally; Canvas's pre-flight refusal = the first uncovered guard x stage
+  (GUARD_UNAVAILABLE) with `CAPABILITY_UNAVAILABLE/validate`; an Adapter refusal (Prepare,
+  InspectRegion, ...) is forwarded with its error unchanged; a rollback caused by an engine
+  refusal keeps that refusal and its error on the ROLLED_BACK receipt. A region APPLY write the
+  engine refused without writing (mutationState NONE) is forwarded unchanged once the region reads
+  back unchanged (`result: null`, nothing pending).
 - Region Undo refused by an engine guard (rc.3 engine form): once Canvas has read back that the
   region is still the pre-Undo image, `UndoRegionCommit` returns that error and `guardRefusal`
   unchanged with `applyFailure: null`; nothing is written, recorded as Undo or left pending, and

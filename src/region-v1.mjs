@@ -20,7 +20,7 @@ import { canonicalJSON, checkProtocolCompatibility, comparePosition, contractPro
 export const REGION_WIRE = 'canvas-region/v2';
 export const REGION_ADAPTER = 'world-adapter-region/v2';
 const ADAPTER = 'world-adapter/v7';
-const PACKAGE_VERSION = '0.9.0';
+const PACKAGE_VERSION = '0.10.0';
 export const CANVAS_REGION_CAPABILITIES = Object.freeze(regionCapabilities
   .filter(c => c.owner === 'hanaworlds-canvas').map(c => c.id).sort());
 // A capability id is scoped by its wire ("<wire>:<name>"). Each Adapter requirement takes
@@ -382,6 +382,23 @@ export class CanvasRegionV1 {
       return await this.#record(body, { beforeSummary, expectedAfterSummary, actualSummary,
         snapshot: snapshot.ref, lighting, positions, box, layout, replayKey, requestHash });
     } catch (cause) {
+      // An engine guard that refused the APPLY write without writing anything (mutationState
+      // NONE) is forwarded unchanged with its error once the region reads back unchanged; the
+      // transaction ends there (nothing to roll back, not pending). Anything else rolls back.
+      if (cause?.guardRefusal && cause.publicError?.mutationState === 'NONE') {
+        const now = await this.#read(body, box, 'INSPECT', 'apply-refused', layout);
+        if (same(this.#summary(body.worldRef, now), beforeSummary)) {
+          const response = validateResponse(REGION_WIRE, 'ApplyRegionCommit', {
+            contractVersion: REGION_WIRE, requestId: body.requestId, result: null,
+            error: { ...cause.publicError }, guardRefusal: { ...cause.guardRefusal },
+            applyFailure: null });
+          await this.store.commit(state => {
+            state.replay[replayKey] = { digest: requestHash, response };
+            delete state.pending[body.transactionId];
+          });
+          return response;
+        }
+      }
       return this.#rollback(body, { content, beforeSummary, expectedAfterSummary,
         snapshot: snapshot.ref, box, lighting, replayKey, requestHash, cause });
     }

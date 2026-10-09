@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
 import { canonicalJSON, checkProtocolCompatibility, comparePosition, contractHandshake, digestValue,
-  guardRefusalError,
+  guardRefusalError, validateResponse,
   encodeRegionBlock, expandRegionBlock, protocolRequirement, regionChunksOfBox,
   validateRegionSnapshotContent } from 'hanaworlds-contracts';
 import { restoreFailedResponse as regionRestoreFailedResponse } from '../src/region-v1.mjs';
@@ -122,6 +122,11 @@ function fixtureWorld({ protocolHandshake = handshake(), worldRef = WORLD } = {}
       }) });
     if (operation === 'WriteRegion') {
       world.writes.push({ purpose: request.purpose, chunks: request.writes.length });
+      // FIXTURE: an engine guard refuses the APPLY write (world.guardApply), writing nothing.
+      if (request.purpose === 'APPLY' && world.guardApply) return { contractVersion:
+        'world-adapter-region/v2', requestId: request.requestId, result: null,
+        guardRefusal: world.guardApply, error: guardRefusalError(world.guardApply,
+          { transactionRef: request.transactionId }) };
       // G1 FIXTURE: an engine guard refuses the stateless region restore in the Contracts engine
       // form (no cause, nothing written); world.guardRestore is the GuardRefusal to use.
       if (request.purpose === 'RESTORE' && world.guardRestore) return { contractVersion:
@@ -437,6 +442,38 @@ test('a region rollback refused in the engine form becomes RESTORE_FAILED pendin
     }
   });
 
+test('rc.4 relay: a region APPLY the engine guard refuses is forwarded unchanged, nothing written',
+  async () => {
+    const fixture = createRequire(import.meta.url)('hanaworlds-contracts/fixtures/skill-site-rules');
+    const refusal = fixture.engineGuards.regionRestore.rollbackApplyRefusal;
+    const directory = await mkdtemp(join(tmpdir(), 'canvas-region-apply-refused-'));
+    try {
+      const world = fixtureWorld();
+      const { canvas, region } = await boot(directory, world);
+      const localContext = await select(canvas);
+      const before = picture(world);
+      world.guardApply = refusal;
+      const body = commit(localContext, terrain());
+      const refused = await region.call('ApplyRegionCommit', body);
+      validateResponse('canvas-region/v2', 'ApplyRegionCommit', refused);
+      assert.equal(refused.result, null);
+      assert.deepEqual({ ...refused.guardRefusal }, refusal);
+      assert.deepEqual({ ...refused.error }, { ...guardRefusalError(refusal,
+        { transactionRef: 'region-tx-1' }) });
+      assert.equal(refused.applyFailure, null);
+      assert.equal(picture(world), before);
+      assert.deepEqual(canvas.store.snapshot.pending, {});
+      assert.equal(world.writes.filter(w => w.purpose === 'RESTORE').length, 0);
+      // Exact replay; a VERIFIED commit has guardRefusal null.
+      assert.deepEqual(await region.call('ApplyRegionCommit', body), refused);
+      world.guardApply = null;
+      const ok = await region.call('ApplyRegionCommit', commit(localContext, terrain(),
+        { requestId: 'region-ok', transactionId: 'region-tx-ok' }));
+      assert.equal(ok.result.status, 'VERIFIED', JSON.stringify(ok.error));
+      assert.equal(ok.guardRefusal, null);
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+
 test('a region Undo the engine guard refuses is returned unchanged, writes nothing, is not pending',
   async () => {
     const examples = createRequire(import.meta.url)('hanaworlds-contracts/fixtures/skill-site-rules')
@@ -616,7 +653,7 @@ test('protocol major + capabilities decide compatibility; patch and provenance d
         'PROTOCOL_COMPATIBLE');
       assert.throws(() => checkProtocolCompatibility(canvasProtocolHandshake,
         [protocolRequirement('canvas-region/v3')]), e => e.code === 'UNSUPPORTED_VERSION');
-      assert.equal(canvas.status().version, '0.9.0');
+      assert.equal(canvas.status().version, '0.10.0');
     } finally { await rm(directory, { recursive: true, force: true }); }
   });
 

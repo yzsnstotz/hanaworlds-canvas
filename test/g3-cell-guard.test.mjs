@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { digestValue, encodeRegionBlock, regionChunksOfBox } from 'hanaworlds-contracts';
+import { digestValue, encodeRegionBlock, regionChunksOfBox, guardRefusalError, validateResponse,
+  unmetEngineGuards } from 'hanaworlds-contracts';
 import { CanvasV5, CanvasStore, CanvasRegionV1, ADAPTER_CELL_REQUIREMENT,
   ADAPTER_REGION_REQUIREMENT, ENGINE_GUARD_REQUIREMENTS, apply as applyCanvas } from '../src/index.mjs';
 import { openUndoFixtureWorld, undoConnection, undoSessionRef,
@@ -105,6 +106,7 @@ async function refusedBeforeWrite(env, operation, request, handshake, code, send
   assert.deepEqual(Object.keys(env.canvas.store.snapshot.pending), []);
   assert.deepEqual(env.canvas.store.snapshot.history, history);
   assert.ok(bytes.equals(await readFile(env.file)), `${operation} changed the world`);
+  return response;
 }
 const regionAsCell = { ...g3CellHandshake(), protocols: [{ protocol: 'world-adapter-region',
   major: 2, minor: 0 }], capabilities: [...ADAPTER_REGION_REQUIREMENT.capabilities] };
@@ -133,8 +135,13 @@ const guardRefusals = operation => [['no declaration', null],
 async function guardRefusedBeforeWrite(env, operation, request, declaration, send) {
   env.world.engineGuards = declaration;
   try {
-    await refusedBeforeWrite(env, operation, request, env.canvas.adapter.protocolHandshake,
-      'CAPABILITY_UNAVAILABLE', send, 'validate');
+    const response = await refusedBeforeWrite(env, operation, request,
+      env.canvas.adapter.protocolHandshake, 'CAPABILITY_UNAVAILABLE', send, 'validate');
+    // rc.4: the envelope names the first uncovered guard x stage, explained by its error.
+    const [first] = unmetEngineGuards(declaration, ENGINE_GUARD_REQUIREMENTS[operation]);
+    assert.deepEqual({ ...response.guardRefusal }, { ...first }, operation);
+    assert.deepEqual({ ...response.error }, { ...guardRefusalError(first, { preflight: true }) });
+    validateResponse(send ? 'canvas-region/v2' : 'canvas/v6', operation, response);
   } finally { delete env.world.engineGuards; }
 }
 
@@ -301,3 +308,49 @@ test('apply() reads the per-cell handshake from the public hanaworldsWorldAdapte
       'CAPABILITY_UNAVAILABLE');
     } finally { await rm(directory, { recursive: true, force: true }); }
   });
+
+test('rc.4 relay: canvas/v6 envelopes carry engine guard refusals unchanged, null otherwise', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'canvas-relay-'));
+  try {
+    const env = await boot(directory);
+    const before = await readFile(env.file);
+    // Prepare refused by the engine (G3): forwarded with its error, nothing written or pending.
+    const prepareRefusal = { guard: 'PLAYER_ENCLOSURE', stage: 'PREPARE_RECOVERABLE', finding: 'PLAYER_ENCLOSED' };
+    env.world.refuse = { operation: 'PrepareRecoverableTransaction', refusal: prepareRefusal };
+    const build = await buildRequest(env, 'relay-build-1', [[8, 2, 8]]);
+    const prepared = await env.canvas.call('ApplyRecoverableCommit', build);
+    validateResponse('canvas/v6', 'ApplyRecoverableCommit', prepared);
+    assert.equal(prepared.result, null);
+    assert.deepEqual({ ...prepared.guardRefusal }, prepareRefusal);
+    assert.deepEqual({ ...prepared.error, transactionRef: null },
+      { ...guardRefusalError(prepareRefusal), transactionRef: null });
+    assert.deepEqual(Object.keys(env.canvas.store.snapshot.pending), []);
+    assert.ok(before.equals(await readFile(env.file)));
+    // Apply refused by the engine (G2, zero writes): Canvas rolls back and the ROLLED_BACK
+    // receipt keeps the refusal and its error.
+    const applyRefusal = { guard: 'CELL_PROTECTION', stage: 'APPLY_COMPILED', finding: 'PROTECTED_CELL' };
+    env.world.refuse = { operation: 'ApplyCompiledTransaction', refusal: applyRefusal };
+    const build2 = await buildRequest(env, 'relay-build-2', [[8, 2, 8]]);
+    const applied = await env.canvas.call('ApplyRecoverableCommit', build2);
+    validateResponse('canvas/v6', 'ApplyRecoverableCommit', applied);
+    assert.equal(applied.error, null, JSON.stringify(applied));
+    assert.equal(applied.guardRefusal, null);
+    assert.equal(applied.result.status, 'ROLLED_BACK');
+    assert.deepEqual({ ...applied.result.guardRefusal }, applyRefusal);
+    assert.equal(applied.result.error.code, 'SAFETY_INVARIANT_FAILED');
+    assert.deepEqual(env.world.readCells([[8, 2, 8]]).map(c => c.nodeName), ['air']);
+    delete env.world.refuse;
+    // A normal BUILD: guardRefusal null on the envelope and the receipt.
+    const ok = await env.canvas.call('ApplyRecoverableCommit',
+      await buildRequest(env, 'relay-build-3', [[8, 2, 8]]));
+    assert.equal(ok.error, null, JSON.stringify(ok.error));
+    assert.equal(ok.guardRefusal, null);
+    assert.equal(ok.result.guardRefusal, null);
+    // Pending-Undo envelopes (Canvas does not provide these operations): null, valid shape.
+    const recovery = await env.canvas.call('RecoverPendingUndo', { contractVersion: 'canvas/v6',
+      sessionRef: undoSessionRef, requestId: 'relay-recover', worldRef: undoWorldRef });
+    assert.equal(recovery.guardRefusal, null);
+    assert.notEqual(recovery.error, null);
+    validateResponse('canvas/v6', 'RecoverPendingUndo', recovery);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});

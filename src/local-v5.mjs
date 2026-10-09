@@ -24,7 +24,7 @@ const SESSION = 'session/v4';
 // pre-seam canvas behaviour left to switch to.
 const canvasProtocol = contractProtocols.find(row => row.protocol === 'canvas');
 if (!canvasProtocol || canvasProtocol.major !== 6) throw new Error('CANVAS_PROTOCOL_UNDECLARED');
-const PACKAGE_VERSION = '0.9.0';
+const PACKAGE_VERSION = '0.10.0';
 // The public wire defines canvas major 6, minor 0. Contracts publishes no
 // per-cell Canvas capability token; regional tokens describe the region port.
 const cellRequirement = protocolRequirement(WIRE, []);
@@ -55,6 +55,21 @@ function boxCells(box) {
 }
 function answer(body, result, error = null) {
   return { contractVersion: WIRE, requestId: body.requestId, result, error };
+}
+// canvas/v6 envelopes that carry guardRefusal beside error (Contracts 1.0.0-rc.4 relay): null
+// unless the error is a guard refusal (Canvas's pre-flight GUARD_UNAVAILABLE or an engine
+// refusal Canvas forwards unchanged).
+const GUARDED_OPERATIONS = new Set(contractsSdk.operationContracts[WIRE]
+  .filter(row => contractsSdk.schemaBundle.definitions[row.response].properties.guardRefusal)
+  .map(row => row.operation));
+function respond(operation, value) {
+  return validateResponse(WIRE, operation, GUARDED_OPERATIONS.has(operation) &&
+    !Object.hasOwn(value, 'guardRefusal') ? { ...value, guardRefusal: null } : value);
+}
+/** An Adapter receipt that reports an engine refusal (error + guardRefusal) as a thrown cause. */
+function engineRefusal(receipt) {
+  return Object.assign(new Error(receipt.error.code),
+    { publicError: receipt.error, guardRefusal: receipt.guardRefusal });
 }
 
 /** Current local Canvas. Adapter is a public v6 port; it never decides history. */
@@ -348,7 +363,7 @@ export class CanvasV5 {
       selectionRevision: body.expectedSelectionRevision,
       operationDigest: body.operationDigest,
       orderedSelectedRefs: [...session.orderedSelectedObjectRefs], affectedObjectRefs };
-    const response = validateResponse(WIRE, 'AnalyzeAffectedObjects', answer(body, analysis));
+    const response = respond('AnalyzeAffectedObjects', answer(body, analysis));
     await this.store.commit(state => {
       state.analyses[body.transactionId] = analysis;
       state.replay[replayKey] = { digest: admission.requestDigest, response };
@@ -453,6 +468,8 @@ export class CanvasV5 {
         operations: body.operations, scope, scopeDigest,
         preparedTransaction: projectScopedPreparedTransaction(prepared),
         guarantee: body.guarantee, localContext: body.localContext });
+      if (adapterReceipt.status !== 'VERIFIED' && adapterReceipt.guardRefusal && adapterReceipt.error)
+        throw engineRefusal(adapterReceipt);
       if (adapterReceipt.status !== 'VERIFIED' ||
           adapterReceipt.transactionPayloadDigest !== prepared.transactionPayloadDigest)
         throw fail('TRANSACTION_MISMATCH', 'PAYLOAD_CHANGED');
@@ -481,7 +498,7 @@ export class CanvasV5 {
         receiptDigest: hash('receipt', receipt), historyRevision: rev('history'),
         status: 'VERIFIED' };
       validateCommitReadback(receipt, expected, actual, history);
-      const response = validateResponse(WIRE, 'ApplyRecoverableCommit', answer(body, receipt));
+      const response = respond('ApplyRecoverableCommit', answer(body, receipt));
       await this.store.commit(state => {
         state.transactions[body.transactionId] = { receipt, history, before, after: actual,
           displayMetadata: { committedAt: new Date().toISOString(), mode: 'CELL',
@@ -535,10 +552,12 @@ export class CanvasV5 {
         transactionId: body.transactionId, operationDigest: body.operationDigest,
         transactionPayloadDigest: prepared.transactionPayloadDigest,
         status: 'ROLLED_BACK', restoreStatus: 'VERIFIED_RESTORED',
-        guardRefusal: null, applyFailure: null,
+        // A rollback caused by an engine refusal keeps that refusal and its error, unchanged.
+        error: cause?.guardRefusal ? cause.publicError : restored.error ?? null,
+        guardRefusal: cause?.guardRefusal ?? null, applyFailure: null,
         readbackDigest: hash('readback', actual), localContext: body.localContext };
       validateCommitReadback(receipt, before, actual, null);
-      const response = validateResponse(WIRE, operation, answer(body, receipt));
+      const response = respond(operation, answer(body, receipt));
       await this.store.commit(state => {
         state.transactions[body.transactionId] = { receipt, before, after: actual,
           worldRef: body.worldRef };
@@ -564,7 +583,7 @@ export class CanvasV5 {
       const failure = restoreFailure(restoreError, applyFailure, body.transactionId);
       if (failure) {
         try {
-          response = validateResponse(WIRE, operation, answer(body, {
+          response = respond(operation, answer(body, {
             contractVersion: WIRE, transactionId: body.transactionId,
             operationDigest: body.operationDigest,
             transactionPayloadDigest: prepared.transactionPayloadDigest, status: 'RESTORE_FAILED',
@@ -677,6 +696,8 @@ export class CanvasV5 {
         historyOperationDigest, expectedWorldRevision: body.expectedWorldRevision,
         expectedObjectRevisions: body.expectedObjectRevisions,
         preparedHistoryTransaction: prepared, localContext: body.localContext });
+      if (adapterReceipt.status !== 'VERIFIED' && adapterReceipt.guardRefusal && adapterReceipt.error)
+        throw engineRefusal(adapterReceipt);
       if (adapterReceipt.status !== 'VERIFIED' ||
           adapterReceipt.previousWorldRevision !== body.expectedWorldRevision ||
           adapterReceipt.transactionPayloadDigest !== prepared.transactionPayloadDigest)
@@ -698,7 +719,7 @@ export class CanvasV5 {
         receiptDigest: hash('receipt', receipt), historyRevision: rev('history'),
         status: 'VERIFIED' };
       validateCommitReadback(receipt, target, actual, history);
-      const response = validateResponse(WIRE, operation, answer(body, receipt));
+      const response = respond(operation, answer(body, receipt));
       await this.store.commit(next => {
         next.transactions[body.transactionId] = { receipt, history, direction,
           displayMetadata: { committedAt: new Date().toISOString(), mode: 'CELL',
@@ -760,7 +781,7 @@ export class CanvasV5 {
         { status: 'UNBOUND', sessionRef: body.sessionRef,
           sessionRevision: identity.sessionRevision }
     } : inventory;
-    const response = validateResponse(WIRE, operation, answer(body, result));
+    const response = respond(operation, answer(body, result));
     if (operation === 'ReadWorldSelectionContext') return response;
     return this.#remember(replayKey, admission.requestDigest, response);
   }
@@ -773,7 +794,7 @@ export class CanvasV5 {
     const result = { worldRef: body.worldRef, registryRevision,
       objects: Object.values(this.store.snapshot.objects[body.worldRef] ?? {})
         .sort((a, b) => a.creationSequence - b.creationSequence) };
-    const response = validateResponse(WIRE, 'ListObjects', answer(body, result));
+    const response = respond('ListObjects', answer(body, result));
     return this.#remember(replayKey, admission.requestDigest, response);
   }
   async #inspectPlacementRegion(body) {
@@ -821,7 +842,7 @@ export class CanvasV5 {
           !same(result.choice.placementSettings, settings))
         throw fail('INSPECTION_FAILED', 'REQUIRED_FACT_UNKNOWN');
     } else throw fail('INSPECTION_FAILED', 'REQUIRED_FACT_UNKNOWN');
-    const response = validateResponse(WIRE, 'InspectPlacementRegion',
+    const response = respond('InspectPlacementRegion',
       { ...answer(body, result), unavailableSettings: null });
     await this.store.commit(next => {
       if (!same(next.sessions[body.sessionRef]?.localContext, body.localContext) ||
@@ -857,7 +878,7 @@ export class CanvasV5 {
     if (!same(actual, saved.after) ||
         hash('readback', actual) !== saved.receipt.readbackDigest)
       throw fail('READBACK_MISMATCH', 'PAYLOAD_CHANGED', 'readback');
-    const response = validateResponse(WIRE, 'Readback', answer(body, saved.receipt));
+    const response = respond('Readback', answer(body, saved.receipt));
     await this.store.commit(state => {
       const current = state.transactions[body.transactionId];
       if (!same(current?.receipt, saved.receipt) ||
@@ -895,7 +916,7 @@ export class CanvasV5 {
         result.worldRevision !== worldRevision ||
         !same(result.sampledBounds, body.sampledBounds))
       throw fail('INSPECTION_FAILED', 'REQUIRED_FACT_UNKNOWN');
-    const response = validateResponse(WIRE, 'InspectObject', answer(body, result));
+    const response = respond('InspectObject', answer(body, result));
     await this.store.commit(next => {
       if (!same(next.sessions[body.sessionRef]?.localContext, body.localContext) ||
           next.worldRevisions[body.worldRef] !== worldRevision ||
@@ -915,7 +936,7 @@ export class CanvasV5 {
     const selectionRevision = rev('selection');
     const result = { sessionRef: body.sessionRef, worldRef: body.worldRef,
       selectedObjectRefs: [...body.objectRefs], selectionRevision };
-    const response = validateResponse(WIRE, 'SetObjectSelection', answer(body, result));
+    const response = respond('SetObjectSelection', answer(body, result));
     await this.store.commit(state => {
       const current = state.sessions[body.sessionRef];
       if (!current || current.selectionRevision !== body.expectedSelectionRevision)
@@ -944,7 +965,7 @@ export class CanvasV5 {
       undoAvailable: !this.#undoRow(head),
       redoAvailable: this.#undoRow(head) &&
         this.store.snapshot.transactions[head.originTransactionId]?.kind !== 'REGION' };
-    const response = validateResponse(WIRE, 'HistoryQuery', answer(body, result));
+    const response = respond('HistoryQuery', answer(body, result));
     return this.#remember(replayKey, admission.requestDigest, response);
   }
   async #select(body) {
@@ -969,7 +990,7 @@ export class CanvasV5 {
       orderedSelectedObjectRefs: [],
       sessionRevision: identity.sessionRevision,
       selectionRevision, localContext: this.#context(connection, selectionRevision) };
-    const response = validateResponse(WIRE, 'SelectWorldConnection', answer(body, current));
+    const response = respond('SelectWorldConnection', answer(body, current));
     await this.#commitSelection(body, previous, current, connection, inventory,
       replayKey, admission, response);
     return response;
@@ -1011,7 +1032,7 @@ export class CanvasV5 {
       orderedSelectedObjectRefs: sameWorld ? [...previous.orderedSelectedObjectRefs] : [],
       sessionRevision: identity.sessionRevision, selectionRevision,
       localContext: this.#context(connection, selectionRevision) };
-    const response = validateResponse(WIRE, 'SwitchWorldConnection', answer(body, current));
+    const response = respond('SwitchWorldConnection', answer(body, current));
     await this.#commitSelection(body, previous, current, connection, inventory,
       replayKey, admission, response);
     return response;
@@ -1098,7 +1119,7 @@ export class CanvasV5 {
   async #listWorldSelections(body) {
     const state = this.store.snapshot;
     if (this.#worldRow(state, body.worldRef).retired) throw fail('WORLD_NOT_FOUND', 'SCOPE_DENIED');
-    return validateResponse(WIRE, 'ListWorldSelections',
+    return respond('ListWorldSelections',
       answer(body, this.#worldInventory(state, body.worldRef)));
   }
   async #reserveWorld(body) {
@@ -1112,7 +1133,7 @@ export class CanvasV5 {
     const inventory = check(this.store.snapshot);
     const result = { worldRef: body.worldRef, reservationRef: rev('retirement'),
       inventoryRevision: inventory.inventoryRevision };
-    const response = validateResponse(WIRE, 'ReserveWorldRetirement', answer(body, result));
+    const response = respond('ReserveWorldRetirement', answer(body, result));
     await this.store.commit(state => {
       check(state);
       state.worldSelections ??= {};
@@ -1127,12 +1148,12 @@ export class CanvasV5 {
     // An exact repeat of the release already applied returns that release, never a second one.
     if (row.lastRelease?.reservationRef === body.reservationRef &&
         row.lastRelease.outcome === body.outcome)
-      return validateResponse(WIRE, 'ReleaseWorldRetirement', answer(body, row.lastRelease));
+      return respond('ReleaseWorldRetirement', answer(body, row.lastRelease));
     if (row.retired) throw fail('WORLD_NOT_FOUND', 'SCOPE_DENIED');
     if (row.reservationRef !== body.reservationRef) throw fail('STALE_REVISION');
     const result = { worldRef: body.worldRef, reservationRef: body.reservationRef,
       outcome: body.outcome, inventoryRevision: rev('inventory') };
-    const response = validateResponse(WIRE, 'ReleaseWorldRetirement', answer(body, result));
+    const response = respond('ReleaseWorldRetirement', answer(body, result));
     await this.store.commit(state => {
       const current = state.worldSelections?.[body.worldRef];
       if (!current || current.reservationRef !== body.reservationRef) throw fail('STALE_REVISION');
@@ -1158,7 +1179,7 @@ export class CanvasV5 {
     const current = { currentSession: body.sessionRef, activeWorldRef: null,
       orderedSelectedObjectRefs: [], sessionRevision: previous.sessionRevision,
       selectionRevision: rev('selection'), localContext: null };
-    const response = validateResponse(WIRE, 'UnselectWorldConnection', answer(body, current));
+    const response = respond('UnselectWorldConnection', answer(body, current));
     await this.store.commit(state => {
       if (state.sessions[body.sessionRef]?.selectionRevision !== previous.selectionRevision)
         throw fail('STALE_REVISION');
@@ -1182,7 +1203,7 @@ export class CanvasV5 {
     if (prior) return prior.response;
     const retired = this.store.snapshot.retiredSessions?.[body.sessionRef];
     // Already retired (e.g. Workshop retrying after a failed deletion): same retirement.
-    if (retired) return validateResponse(WIRE, 'RetireSessionSelection', answer(body,
+    if (retired) return respond('RetireSessionSelection', answer(body,
       { sessionRef: body.sessionRef, releasedWorldRef: null,
         selectionRevision: retired.selectionRevision }));
     if (Object.values(this.store.snapshot.pending)
@@ -1192,7 +1213,7 @@ export class CanvasV5 {
     const result = { sessionRef: body.sessionRef,
       releasedWorldRef: previous ? previous.activeWorldRef : null,
       selectionRevision: rev('selection') };
-    const response = validateResponse(WIRE, 'RetireSessionSelection', answer(body, result));
+    const response = respond('RetireSessionSelection', answer(body, result));
     await this.store.commit(state => {
       if (state.sessions[body.sessionRef]?.selectionRevision !== previous?.selectionRevision ||
           state.retiredSessions?.[body.sessionRef]) throw fail('STALE_REVISION');
@@ -1241,6 +1262,8 @@ export class CanvasV5 {
     } catch (error) {
       const response = answer(body ?? { requestId: raw?.requestId ?? 'invalid-request' },
         null, error.publicError ?? publicError(error));
+      // Guard refusals (pre-flight or forwarded from the Adapter) travel with their error.
+      if (GUARDED_OPERATIONS.has(operation)) response.guardRefusal = error.guardRefusal ?? null;
       return operation === 'InspectPlacementRegion' ?
         { ...response, unavailableSettings: error.unavailableSettings ?? null } : response;
     }

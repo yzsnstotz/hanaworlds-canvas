@@ -1,7 +1,7 @@
 import { open, readFile, rename, rm } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import canonicalize from 'canonicalize';
-import { digestValue, encodeRegionBlock, expandRegionBlock, regionChunksOfBox }
+import { digestValue, encodeRegionBlock, expandRegionBlock, regionChunksOfBox, guardRefusalError }
   from 'hanaworlds-contracts';
 import { fixtureEngineGuards, guardSlot } from './fixture-engine-guards.mjs';
 
@@ -86,6 +86,12 @@ export async function openUndoFixtureWorld(file, { create = false } = {}) {
       adapterId:'hanaworlds-world-adapter', connectionRef:undoConnection.connectionRef, worldRef:undoWorldRef,
       displayName:'隔离示例世界（撤回与重做）', capabilityRevision:'undo-fixture-cap-1', payloadVersion:undoConnection.payloadVersion,
       readiness:'READY', connectionIncarnationRef:undoConnection.connectionIncarnationRef }] });
+    // env.refuse = { operation, refusal } (FIXTURE): that operation is refused by an engine guard
+    // with the Contracts error beside the GuardRefusal, and writes nothing.
+    if (env.refuse?.operation === operation)
+      return { contractVersion:'world-adapter/v7', requestId:request.requestId, result:null,
+        error:guardRefusalError(env.refuse.refusal, { transactionRef:request.transactionId ?? null }),
+        guardRefusal:env.refuse.refusal };
     // env.engineGuards (FIXTURE) replaces the declared engine guards when a test sets it.
     if (operation === 'ReadLocalConnection') return answer(env.engineGuards === undefined ? undoConnection :
       { ...undoConnection, capabilities: { ...undoConnection.capabilities, engineGuards: env.engineGuards } });

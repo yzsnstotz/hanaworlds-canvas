@@ -8,8 +8,8 @@ const { CanvasV5, CanvasStore, apply: applyCanvas } = await import(process.env.C
 import { openRuntime } from './support/cordis-runtime.mjs';
 const consumer = await import(process.env.CANVAS_CONSUMER_ENTRY ?? 'hanaworlds-contracts');
 import { readFile, writeFile } from 'node:fs/promises';
-import { digestValue, checkContractHandshake, contractHandshake, guardRefusalError }
-  from 'hanaworlds-contracts';
+import { digestValue, checkContractHandshake, contractHandshake, guardRefusalError,
+  validateResponse } from 'hanaworlds-contracts';
 import majorCompat from 'hanaworlds-contracts/fixtures/contracts-major-compat' with { type: 'json' };
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
@@ -138,6 +138,7 @@ test('build commits only after complete readback and stores one durable history 
     let mismatchAfterApply = false;
     let restoreFails = false;
     let inspectionExtra = null;
+    let inspectionRefusal = null;
     const preparedTransactions = new Set();
     let scopedFactReads = 0;
     let lastOpaqueDigest;
@@ -176,6 +177,10 @@ test('build commits only after complete readback and stores one durable history 
           payloadVersion: connected.payloadVersion, readiness: 'READY',
           connectionIncarnationRef: connected.connectionIncarnationRef }] });
       if (operation === 'ReadLocalConnection') return respond(connected);
+      // FIXTURE: the engine refuses the inspection (guard at INSPECT_REGION), error beside refusal.
+      if (operation === 'InspectRegion' && inspectionRefusal) return { contractVersion: 'world-adapter/v7',
+        requestId: request.requestId, result: null, guardRefusal: inspectionRefusal,
+        error: guardRefusalError(inspectionRefusal) };
       if (operation === 'InspectRegion') {
         const targetFacts = { ...fixture.request.regionInspection.targetFacts,
           worldRevision: request.expectedWorldRevision };
@@ -310,6 +315,18 @@ test('build commits only after complete readback and stores one durable history 
     assert.deepEqual({ ...placement.result.inspection.placementSettings },
       { frontGapCells: 2, forwardSearchCells: 16, lateralSearchCells: 8,
         verticalSearchCells: 4, settingsRevision: 'placement-0' });
+    // rc.4: InspectPlacementRegion forwards the Adapter's guard refusal and its error unchanged.
+    inspectionRefusal = { guard: 'CELL_PROTECTION', stage: 'INSPECT_REGION', finding: 'PROTECTED_CELL' };
+    const refusedInspection = await canvas.call('InspectPlacementRegion', {
+      contractVersion: 'canvas/v6', sessionRef, requestId: 'inspect-refused', worldRef,
+      anchor: { kind: 'CURRENT_VIEW', invocationId: 'confirmed-refused' },
+      footprint: { widthCells: 1, depthCells: 1, heightCells: 1 }, localContext });
+    inspectionRefusal = null;
+    validateResponse('canvas/v6', 'InspectPlacementRegion', refusedInspection);
+    assert.deepEqual({ ...refusedInspection.guardRefusal }, { guard: 'CELL_PROTECTION',
+      stage: 'INSPECT_REGION', finding: 'PROTECTED_CELL' });
+    assert.deepEqual({ ...refusedInspection.error }, { ...guardRefusalError(refusedInspection.guardRefusal) });
+    assert.equal(placement.guardRefusal, null);
     // Contracts 1.x: no player geometry is accepted from the Adapter or persisted by Canvas.
     inspectionExtra = { bodyOccupiedPositions: [[0, 1, 3]] };
     const withBody = await canvas.call('InspectPlacementRegion', {
@@ -699,7 +716,7 @@ test('host exposes durable Canvas facts as separate public ports', async () => {
     const entry = process.env.CANVAS_ENTRY ?? new URL('../src/index.mjs', import.meta.url).href;
     const running = createRequire(entry)('hanaworlds-contracts/package.json');
     assert.equal(advertised.contracts, `hanaworlds-contracts@${running.version}`);
-    assert.equal(ports.get('hanaworldsCanvasV5').status().version, '0.9.0');
+    assert.equal(ports.get('hanaworldsCanvasV5').status().version, '0.10.0');
     assert.doesNotThrow(() => checkContractHandshake(advertised));
     // Public Contracts conformance cases, each patched over Canvas's advertised handshake.
     const patched = c => { const h = { ...advertised, ...c.patch };
