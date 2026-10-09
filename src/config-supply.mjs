@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import canonicalize from 'canonicalize';
-import { contractHandshake, digestValue, schemaBundle, validateType } from 'hanaworlds-contracts';
+import { ContractError, contractHandshake, digestValue, schemaBundle, validateType }
+  from 'hanaworlds-contracts';
 
 /*
  * Stage 1 validation configuration supply: SafetyProfile and CompilationConfig for one World.
@@ -51,11 +52,11 @@ const same = (a, b) => canonicalize(a) === canonicalize(b);
 const observationDigest = value => createHash('sha256')
   .update(`HanaWorlds|canvas|${SUPPLY_PROFILE}\n`).update(canonicalize(value)).digest('hex');
 
+// A ContractError, so a consumer that maps through Contracts publicError() (Workshop does)
+// keeps the exact code/reason instead of a generic decode error. missingSources stays on the
+// thrown object and in Canvas's own readback; the public Error shape has no field for it.
 export function supplyError(code, reason, extra = {}) {
-  const error = new Error(code);
-  error.publicError = { code, phase: 'validate', retryability: 'AFTER_NEW_FACTS',
-    mutationState: 'NONE', transactionRef: null, causeCode: null, reason };
-  return Object.assign(error, extra);
+  return Object.assign(new ContractError(code, 'validate', reason), extra);
 }
 
 /** The bound connection domain of one World, from Canvas's own selections. */

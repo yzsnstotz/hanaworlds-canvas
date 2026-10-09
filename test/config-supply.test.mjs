@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { contractHandshake, digestValue, schemaBundle, validateType } from 'hanaworlds-contracts';
+import { contractHandshake, digestValue, publicError, schemaBundle, validateType }
+  from 'hanaworlds-contracts';
 const { CanvasV5, CanvasStore, CanvasConfigSupply, assembleProfile, apply: applyCanvas } =
   await import(process.env.CANVAS_ENTRY ?? new URL('../src/index.mjs', import.meta.url).href);
 import { g3CellHandshake } from './support/g3-adapter-handshake.mjs';
@@ -84,7 +85,7 @@ test('unbound World: both consumer ports refuse WORLD_NOT_BOUND, no fact is read
     assert.equal(report.current.profiles.safetyProfile.status, 'NOT_BOUND');
     for (const read of [() => supply.readSafetyProfile('local-world'),
       () => supply.readCompilerConfig('local-world')])
-      await assert.rejects(read, error => error.publicError.code === 'WORLD_NOT_BOUND');
+      await assert.rejects(read, error => publicError(error).code === 'WORLD_NOT_BOUND');
     assert.equal(world.catalogueReads, 0);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
@@ -131,7 +132,10 @@ test('bound World: every field names its source; sourceless fields are refused b
       assert.equal(profile.value, null);
       assert.equal(profile.revision, null);
     }
+    // A consumer mapping through Contracts publicError() (Workshop) keeps the exact refusal.
     await assert.rejects(supply.readSafetyProfile('local-world'), error =>
+      publicError(error).code === 'CAPABILITY_UNAVAILABLE' &&
+      publicError(error).reason === 'POLICY_UNAVAILABLE' && publicError(error).phase === 'validate' &&
       error.publicError.code === 'CAPABILITY_UNAVAILABLE' &&
       error.publicError.reason === 'POLICY_UNAVAILABLE' && error.missingSources.length === 5);
     await assert.rejects(supply.readCompilerConfig('local-world'), error =>

@@ -1,4 +1,4 @@
-# HanaWorlds Canvas 0.6.11 local world component
+# HanaWorlds Canvas 0.6.12 local world component
 
 The package exposes `hanaworldsCanvasV5` and consumes the public
 `hanaworldsWorldAdapterV6` port. It uses the root export of the released
@@ -32,6 +32,9 @@ Stage 1 validation configuration supply (0.6.11):
   `compiler-config-…`, the latter is `compilerRevision`). Each change of observation is
   recorded durably in Canvas's store with `invalidationReasons`; reads are otherwise read-only
   (no Adapter call, no World write).
+- Refusals are Contracts `ContractError`s (0.6.12), so a consumer that maps errors through
+  `publicError()` (Workshop) keeps the exact code/reason; `missingSources` is on the thrown
+  object and in `hanaworldsCanvasConfigSupply.read`, not in the public Error shape.
 
 Session-world seam (0.6.7, active only when the installed Contracts declare canvas/v5
 minor 1, i.e. the 0.5.4 candidate; on 0.5.3 nothing below applies):
