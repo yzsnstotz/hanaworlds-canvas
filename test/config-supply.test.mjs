@@ -8,6 +8,8 @@ import { contractHandshake, digestValue, publicError, schemaBundle, validateType
 const { CanvasV5, CanvasStore, CanvasConfigSupply, assembleProfile, apply: applyCanvas } =
   await import(process.env.CANVAS_ENTRY ?? new URL('../src/index.mjs', import.meta.url).href);
 import { g3CellHandshake } from './support/g3-adapter-handshake.mjs';
+const { STAGE1_POLICY_DECLARATION, STAGE1_POLICY_REVISION } = await import(
+  new URL('../src/stage1-policy.mjs', import.meta.url).href);
 import { fixtureSessions } from '../scripts/fixture-sessions.mjs';
 
 // FIXTURE peer inputs only (contracts-shaped Adapter, NativeFacts Catalogue and Session port).
@@ -121,10 +123,21 @@ test('bound World: every field names its source; sourceless fields are refused b
         sourceRevision: digestValue('catalogue', world.catalogue).sha256 } });
     assert.deepEqual(safety.missing.map(row => [row.field, row.sourceKind, row.reason]), [
       ['avatarDimensions', 'ENGINE_FACT', 'REQUIRED_FACT_UNKNOWN'],
-      ['requireBodyClearance', 'DECLARED_POLICY', 'POLICY_UNAVAILABLE'],
       ['requireEntranceConnectivity', 'DECLARED_POLICY', 'POLICY_UNAVAILABLE'],
       ['hazardPolicy', 'DECLARED_POLICY', 'POLICY_UNAVAILABLE'],
       ['optionalLightRule', 'DECLARED_POLICY', 'POLICY_UNAVAILABLE']]);
+    for (const row of safety.missing.slice(1)) {
+      assert.equal(row.cause, 'VALUE_UNDETERMINED');
+      assert.ok(row.impact.length > 0);
+    }
+    // The one value a current non-switchable project rule fixes, attributed to Canvas's record.
+    const body = safety.fields.requireBodyClearance;
+    assert.equal(body.status, 'SUPPLIED');
+    assert.equal(body.value, true);
+    assert.equal(body.provenance.kind, 'CANVAS_DECLARATION');
+    assert.equal(body.provenance.sourceRevision, STAGE1_POLICY_REVISION);
+    assert.equal(body.provenance.basis.id, 'INV-BODY-RECHECK-AT-PREPARE');
+    assert.equal(current.declaration, STAGE1_POLICY_REVISION);
     assert.deepEqual(compile.missing.map(row => [row.field, row.sourceKind]),
       [['backendProfileId', 'UNDEFINED_IN_CONTRACT']]);
     for (const profile of [safety, compile]) {
@@ -137,7 +150,7 @@ test('bound World: every field names its source; sourceless fields are refused b
       publicError(error).code === 'CAPABILITY_UNAVAILABLE' &&
       publicError(error).reason === 'POLICY_UNAVAILABLE' && publicError(error).phase === 'validate' &&
       error.publicError.code === 'CAPABILITY_UNAVAILABLE' &&
-      error.publicError.reason === 'POLICY_UNAVAILABLE' && error.missingSources.length === 5);
+      error.publicError.reason === 'POLICY_UNAVAILABLE' && error.missingSources.length === 4);
     await assert.rejects(supply.readCompilerConfig('local-world'), error =>
       error.publicError.code === 'CAPABILITY_UNAVAILABLE' &&
       error.publicError.reason === 'REQUIRED_FACT_UNKNOWN' &&
@@ -271,4 +284,25 @@ test('host keys: Workshop consumer shapes plus Canvas own provenance readback', 
     await assert.rejects(ports.get('hanaworldsCompilerConfig').read('local-world'),
       error => error.publicError.code === 'CAPABILITY_UNAVAILABLE');
   } finally { await rm(profile, { recursive: true, force: true }); }
+});
+
+test('Stage 1 policy declaration: Canvas-only, cited or UNDETERMINED, never a default', () => {
+  const record = STAGE1_POLICY_DECLARATION;
+  assert.equal(record.declarer, 'hanaworlds-canvas');
+  assert.ok(Object.isFrozen(record) && Object.isFrozen(record.fields.requireBodyClearance));
+  assert.deepEqual(Object.keys(record.fields).sort(), ['hazardPolicy', 'optionalLightRule',
+    'requireBodyClearance', 'requireEntranceConnectivity']);
+  for (const [field, row] of Object.entries(record.fields)) {
+    if (row.status === 'DECLARED') {
+      assert.equal(row.basis.kind, 'PROJECT_RULE', field);
+      assert.match(row.basis.sha256, /^[0-9a-f]{64}$/);
+      assert.match(row.basis.sourceRevision, /^hanaworlds-docs@[0-9a-f]{40}$/);
+      assert.equal(row.basis.switchable, false);
+    } else {
+      assert.equal(row.status, 'UNDETERMINED', field);
+      assert.equal(Object.hasOwn(row, 'value'), false, field);
+      assert.ok(row.checked.length && row.impact, field);
+    }
+  }
+  assert.match(STAGE1_POLICY_REVISION, /^stage1-policy-[0-9a-f]{32}$/);
 });

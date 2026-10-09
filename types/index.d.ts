@@ -65,15 +65,28 @@ export function encodeSnapshot(content: RegionSnapshotContent, before: RegionSum
 export function decodeSnapshot(compressed: Uint8Array, ref: RegionSnapshotRef,
   before: RegionSummary): Promise<RegionSnapshotContent>;
 /** Stage 1 validation configuration supply (Canvas-own observation; not a Contracts wire). */
-export type ConfigFieldSource = 'CONTRACT_SCHEMA' | 'ENGINE_FACT' | 'DECLARED_POLICY' |
-  'UNDEFINED_IN_CONTRACT' | 'UNMAPPED';
+export type ConfigFieldSource = 'CONTRACT_SCHEMA' | 'ENGINE_FACT' | 'CANVAS_DECLARATION' |
+  'DECLARED_POLICY' | 'UNDEFINED_IN_CONTRACT' | 'UNMAPPED';
 export interface ConfigFieldRow {
   status: 'SUPPLIED' | 'MISSING';
   value: unknown;
-  provenance: { kind: ConfigFieldSource; ref: string; sourceRevision: string } | null;
+  provenance: { kind: ConfigFieldSource; ref: string; sourceRevision: string;
+    basis?: Stage1PolicyBasis } | null;
   sourceKind?: ConfigFieldSource; reason?: 'REQUIRED_FACT_UNKNOWN' | 'POLICY_UNAVAILABLE';
-  need?: string; cause?: string;
+  need?: string; cause?: string; impact?: string;
 }
+/** Canvas's own Stage 1 policy declaration (read-only; changes only with the package). */
+export interface Stage1PolicyBasis {
+  kind: 'PROJECT_RULE'; ref: string; sourceRevision: string; sha256: string; id: string;
+  switchable: false; text: string; derivation: string;
+}
+export type Stage1PolicyField = { status: 'DECLARED'; value: unknown; basis: Stage1PolicyBasis } |
+  { status: 'UNDETERMINED'; checked: string[]; impact: string };
+export const STAGE1_POLICY_DECLARATION: Readonly<{
+  profileVersion: 'canvas-stage1-policy-declaration/v1'; declarer: 'hanaworlds-canvas'; scope: string;
+  fields: Readonly<Record<'requireBodyClearance' | 'requireEntranceConnectivity' | 'hazardPolicy' |
+    'optionalLightRule', Stage1PolicyField>> }>;
+export const STAGE1_POLICY_REVISION: string;
 export interface ConfigDomain {
   worldRef: string; connectionRef: string; connectionIncarnationRef: string;
   payloadVersion: string; capabilityRevision: string | null;
@@ -84,10 +97,10 @@ export interface ConfigProfileObservation<T> {
   value: T | null; digest: string | null; revision: string | null;
   fields: Record<string, ConfigFieldRow> | null;
   missing: { profile: string; field: string; sourceKind: ConfigFieldSource; reason: string;
-    need: string; cause: string | null }[];
+    need: string; cause: string | null; impact: string | null }[];
 }
 export interface ConfigObservation {
-  contracts: string; domain: ConfigDomain | null; sessionRefs: string[];
+  contracts: string; declaration: string; domain: ConfigDomain | null; sessionRefs: string[];
   sources: { catalogue: { status: string; digest?: string; cause?: string } } | null;
   profiles: { safetyProfile: ConfigProfileObservation<import('hanaworlds-contracts').SafetyProfile>;
     compilationConfig: ConfigProfileObservation<import('hanaworlds-contracts').CompilationConfig> };

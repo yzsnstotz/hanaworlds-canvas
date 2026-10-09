@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import canonicalize from 'canonicalize';
 import { ContractError, contractHandshake, digestValue, schemaBundle, validateType }
   from 'hanaworlds-contracts';
+import { STAGE1_POLICY_DECLARATION, STAGE1_POLICY_REVISION } from './stage1-policy.mjs';
 
 /*
  * Stage 1 validation configuration supply: SafetyProfile and CompilationConfig for one World.
@@ -15,8 +16,8 @@ import { ContractError, contractHandshake, digestValue, schemaBundle, validateTy
  * Field sources (the whole table; a new schema field not listed here is refused as UNMAPPED):
  * - CONTRACT_SCHEMA: the installed Contracts schema allows exactly one value (`const`).
  * - ENGINE_FACT: read from the bound World through the public NativeFacts port.
- * - DECLARED_POLICY: a policy value somebody must declare. No declaration source exists in
- *   Stage 1 (SafetyProfile management authority is outside MVP), so these are always missing.
+ * - DECLARED_POLICY: Canvas's own Stage 1 declaration record (stage1-policy.mjs). A field it
+ *   declares carries the cited project rule; an UNDETERMINED field is refused with its impact.
  */
 export const SUPPLY_PROFILE = 'canvas-stage1-config-supply/v1';
 const AUTHORITY = 'hanaworlds-canvas';
@@ -27,14 +28,6 @@ const MISSING_SOURCE = {
   // No public Contracts/Adapter port reports the actual player movement/collision envelope.
   avatarDimensions: { sourceKind: 'ENGINE_FACT', reason: 'REQUIRED_FACT_UNKNOWN',
     need: 'actual player collision envelope of this World from a public Adapter fact port' },
-  requireBodyClearance: { sourceKind: 'DECLARED_POLICY', reason: 'POLICY_UNAVAILABLE',
-    need: 'declared Stage 1 safety policy value and its declaring authority' },
-  requireEntranceConnectivity: { sourceKind: 'DECLARED_POLICY', reason: 'POLICY_UNAVAILABLE',
-    need: 'declared Stage 1 safety policy value and its declaring authority' },
-  hazardPolicy: { sourceKind: 'DECLARED_POLICY', reason: 'POLICY_UNAVAILABLE',
-    need: 'declared forbidLiquid / maximumDamagePerSecond and their declaring authority' },
-  optionalLightRule: { sourceKind: 'DECLARED_POLICY', reason: 'POLICY_UNAVAILABLE',
-    need: 'declared light rule (or a declared "no light rule") and its declaring authority' },
   // Contracts 0.5.4 names the field but defines no source or derivation for it.
   backendProfileId: { sourceKind: 'UNDEFINED_IN_CONTRACT', reason: 'REQUIRED_FACT_UNKNOWN',
     need: 'Contracts definition of what backendProfileId identifies and which port supplies it' },
@@ -98,6 +91,15 @@ function resolveField(type, field, facts) {
       ref: `hanaworldsLuantiNativeFacts.readCatalogue(worldRef).modRevisions.${WORLDEDIT_MOD}`,
       sourceRevision: facts.catalogue.digest } };
   }
+  const declared = type === 'SafetyProfile' ? STAGE1_POLICY_DECLARATION.fields[field] : null;
+  if (declared?.status === 'DECLARED') return { status: 'SUPPLIED', value: declared.value,
+    provenance: { kind: 'CANVAS_DECLARATION',
+      ref: `${STAGE1_POLICY_DECLARATION.profileVersion}#${field}`,
+      sourceRevision: STAGE1_POLICY_REVISION, basis: declared.basis } };
+  if (declared) return { status: 'MISSING', value: null, provenance: null,
+    sourceKind: 'DECLARED_POLICY', reason: 'POLICY_UNAVAILABLE', cause: 'VALUE_UNDETERMINED',
+    need: `${STAGE1_POLICY_DECLARATION.profileVersion}#${field}: no current authoritative rule ` +
+      `fixes this value (checked ${declared.checked.join('; ')})`, impact: declared.impact };
   const missing = MISSING_SOURCE[field];
   if (missing) return { status: 'MISSING', value: null, provenance: null, ...missing };
   return { status: 'MISSING', value: null, provenance: null, sourceKind: 'UNMAPPED',
@@ -112,7 +114,7 @@ export function assembleProfile(name, fields, domain) {
   const { type, digestKind, revisionPrefix } = PROFILES[name];
   const missing = Object.entries(fields).filter(([, row]) => row.status !== 'SUPPLIED')
     .map(([field, row]) => ({ profile: type, field, sourceKind: row.sourceKind,
-      reason: row.reason, need: row.need, cause: row.cause ?? null }));
+      reason: row.reason, need: row.need, cause: row.cause ?? null, impact: row.impact ?? null }));
   if (missing.length) return { type, status: 'SOURCE_MISSING', value: null, digest: null,
     revision: null, fields, missing };
   const value = validateType(type, Object.fromEntries(Object.entries(fields)
@@ -132,6 +134,7 @@ function changeReasons(previous, current) {
     (previous.domain ? 'CONNECTION_DOMAIN_CHANGED' : 'WORLD_BOUND') : 'WORLD_UNBOUND');
   if (!same(previous.sources, current.sources)) reasons.push('SOURCE_REVISION_CHANGED');
   if (previous.contracts !== current.contracts) reasons.push('CONTRACTS_CHANGED');
+  if (previous.declaration !== current.declaration) reasons.push('DECLARATION_CHANGED');
   for (const name of Object.keys(PROFILES)) {
     const a = previous.profiles[name], b = current.profiles[name];
     if (a.status !== b.status) reasons.push(`${PROFILES[name].type.toUpperCase()}_STATUS_CHANGED`);
@@ -170,7 +173,8 @@ export class CanvasConfigSupply {
     const before = this.#domain(worldRef);
     let observation;
     if (!before) {
-      observation = { contracts: CONTRACTS_REF, domain: null, sessionRefs: [], sources: null,
+      observation = { contracts: CONTRACTS_REF, declaration: STAGE1_POLICY_REVISION, domain: null,
+        sessionRefs: [], sources: null,
         profiles: Object.fromEntries(Object.entries(PROFILES).map(([name, { type }]) => [name,
           { type, status: 'NOT_BOUND', value: null, digest: null, revision: null, fields: null,
             missing: [] }])) };
@@ -186,7 +190,7 @@ export class CanvasConfigSupply {
           .map(field => [field, resolveField(type, field, facts)]));
         profiles[name] = assembleProfile(name, fields, before.domain);
       }
-      observation = { contracts: CONTRACTS_REF, domain: before.domain,
+      observation = { contracts: CONTRACTS_REF, declaration: STAGE1_POLICY_REVISION, domain: before.domain,
         sessionRefs: [...before.sessionRefs].sort(), profiles,
         sources: { catalogue: catalogue.status === 'READ' ?
           { status: 'READ', digest: catalogue.digest } :

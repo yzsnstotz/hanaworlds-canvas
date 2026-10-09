@@ -1,4 +1,4 @@
-# HanaWorlds Canvas 0.6.12 local world component
+# HanaWorlds Canvas 0.6.13 local world component
 
 The package exposes `hanaworldsCanvasV5` and consumes the public
 `hanaworldsWorldAdapterV6` port. It uses the root export of the released
@@ -24,9 +24,14 @@ Stage 1 validation configuration supply (0.6.11):
   fact read → `STALE_REVISION`.
 - Every field names its source: `CONTRACT_SCHEMA` (schema `const`), `ENGINE_FACT`
   (`worldeditRevision` = bound World's `NativeFacts.readCatalogue(worldRef).modRevisions.worldedit`).
-  `avatarDimensions` (no public fact port), the four policy fields (no declaration source in
-  Stage 1) and `backendProfileId` (no Contracts definition) have no source: the profile is
-  refused `CAPABILITY_UNAVAILABLE` with `missingSources`. No default, fixture value or
+  `CANVAS_DECLARATION` (0.6.13): Canvas is the only declarer of the four Stage 1 policy fields,
+  in the read-only record `canvas-stage1-policy-declaration/v1` (`src/stage1-policy.mjs`,
+  revision in every observation). `requireBodyClearance=true` cites the non-switchable project
+  rule INV-BODY-RECHECK-AT-PREPARE; `requireEntranceConnectivity`, `hazardPolicy` and
+  `optionalLightRule` are UNDETERMINED (no current rule fixes them; each row states its impact).
+  `avatarDimensions` (no public fact port), the undetermined policy fields and
+  `backendProfileId` (no Contracts definition) have no source: the profile is refused
+  `CAPABILITY_UNAVAILABLE` with `missingSources`. No default, fixture value or
   hand-written revision is ever used; there is no editing path.
 - Revisions are Canvas-generated from value + provenance + domain (`safety-config-…`,
   `compiler-config-…`, the latter is `compilerRevision`). Each change of observation is
