@@ -5,7 +5,8 @@ import { promisify } from 'node:util';
 import { gzip, gunzip, constants as zlib } from 'node:zlib';
 import { canonicalJSON, checkProtocolCompatibility, comparePosition, contractProtocols, digestValue,
   expandRegionBlock, expectedRegionSummary, protocolRequirement, publicError,
-  regionBlockBox, regionCapabilities, requireKnownRegion, summarizeRegionStates,
+  regionBlockBox, regionCapabilities, requireKnownRegion, safetyCapabilities,
+  summarizeRegionStates, unmetSafetyCapabilities,
   validateBoundResponse, validateDigestBinding, validateRegionCommit, validateRegionRead,
   validateRegionSnapshotContent, validateRegionUndo, validateRegionWrite, validateRequest,
   validateResponse, validateType } from 'hanaworlds-contracts';
@@ -18,13 +19,13 @@ import { canonicalJSON, checkProtocolCompatibility, comparePosition, contractPro
  */
 export const REGION_WIRE = 'canvas-region/v1';
 export const REGION_ADAPTER = 'world-adapter-region/v1';
-const ADAPTER = 'world-adapter/v6';
-const PACKAGE_VERSION = '0.6.15';
+const ADAPTER = 'world-adapter/v7';
+const PACKAGE_VERSION = '0.7.0';
 export const CANVAS_REGION_CAPABILITIES = Object.freeze(regionCapabilities
   .filter(c => c.owner === 'hanaworlds-canvas').map(c => c.id).sort());
 // A capability id is scoped by its wire ("<wire>:<name>"). Each Adapter requirement takes
 // only its own wire's ids, at the minor the Contracts declare for that protocol, and is
-// checked against the handshake of that port (G3: world-adapter/v6:* on the per-cell port,
+// checked against the handshake of that port (G3: world-adapter/v7:* on the per-cell port,
 // world-adapter-region/v1:* on the region port).
 const ADAPTER_CAPABILITIES = regionCapabilities
   .filter(c => c.owner === 'hanaworlds-adapter-luanti').map(c => c.id);
@@ -40,6 +41,45 @@ export const ADAPTER_CELL_REQUIREMENT = adapterRequirement(ADAPTER);
   const unscoped = ADAPTER_CAPABILITIES.filter(id =>
     !id.startsWith(`${REGION_ADAPTER}:`) && !id.startsWith(`${ADAPTER}:`));
   if (unscoped.length) throw new Error(`CANVAS_ADAPTER_CAPABILITY_UNSCOPED:${unscoped.join(',')}`);
+}
+/*
+ * Engine safety capabilities (Contracts G1 restore-body-recheck, G2 cell-protection, G3
+ * no-body-enclosure) each operation needs from the port that performs its writes. Every write
+ * operation below can also roll back through a restore, so it needs all three of its own wire;
+ * a capability on one wire never stands in for another wire or another operation.
+ */
+const engineSafety = wire => safetyCapabilities
+  .filter(c => c.owner === 'hanaworlds-adapter-luanti' && c.id.startsWith(`${wire}:`) &&
+    ['G1', 'G2', 'G3'].includes(c.gap)).map(c => c.id).sort();
+export const ENGINE_SAFETY_REQUIREMENTS = Object.freeze({
+  ApplyRecoverableCommit: Object.freeze({ port: ADAPTER, ids: engineSafety(ADAPTER) }),
+  Undo: Object.freeze({ port: ADAPTER, ids: engineSafety(ADAPTER) }),
+  Redo: Object.freeze({ port: ADAPTER, ids: engineSafety(ADAPTER) }),
+  ApplyRegionCommit: Object.freeze({ port: REGION_ADAPTER, ids: engineSafety(REGION_ADAPTER) }),
+  UndoRegionCommit: Object.freeze({ port: REGION_ADAPTER, ids: engineSafety(REGION_ADAPTER) }),
+});
+for (const [operation, { ids }] of Object.entries(ENGINE_SAFETY_REQUIREMENTS))
+  if (ids.length !== 3) throw new Error(`CANVAS_ENGINE_SAFETY_UNDECLARED:${operation}`);
+/** The named engine safety capabilities `handshake` lacks for `operation` (none → []). */
+export function unmetEngineSafety(handshake, operation) {
+  const { ids } = ENGINE_SAFETY_REQUIREMENTS[operation];
+  if (handshake === undefined || handshake === null)
+    return ids.map(id => ({ id, cause: safetyCapabilities.find(c => c.id === id).cause }));
+  return unmetSafetyCapabilities(handshake, ids).map(({ id, cause }) => ({ id, cause }));
+}
+/**
+ * Refuse `operation` before any reservation or write when its port does not advertise every
+ * engine safety capability it needs. The public Error is the Contracts absent-capability error;
+ * the missing ids stay on the thrown object and in CanvasV5.readEngineSafety().
+ */
+export function requireEngineSafety(handshake, operation) {
+  const unmet = unmetEngineSafety(handshake, operation);
+  if (!unmet.length) return;
+  const absent = safetyCapabilities.find(c => c.id === unmet[0].id).whenAbsent;
+  const error = regionFail(absent.code, absent.reason, absent.phase);
+  Object.assign(error.publicError, absent, { transactionRef: null });
+  error.unmetCapabilities = unmet;
+  throw error;
 }
 export const SNAPSHOT_COMPRESSION = 'gzip'; // RFC 1952 via Node zlib
 const gz = promisify(gzip);
@@ -143,6 +183,8 @@ export class CanvasRegionV1 {
   constructor(canvas, regionAdapter) {
     this.canvas = canvas;
     this.regionAdapter = regionAdapter;
+    // Lets the cell Canvas report the region port's engine safety in readEngineSafety().
+    if (canvas) canvas.regionHandshake = () => this.regionAdapter?.protocolHandshake;
   }
   get protocolHandshake() { return structuredClone(canvasProtocolHandshake); }
   describe() { return structuredClone({ ...regionToolDescription,
@@ -150,13 +192,18 @@ export class CanvasRegionV1 {
   get store() { return this.canvas.store; }
   #snapshots() { return new SnapshotFiles(this.store.directory); }
 
-  /** Adapter compatibility (region port and per-cell port) before any region read or write. */
-  #adapterCompatible() {
+  /**
+   * Adapter compatibility (region port and per-cell port) before any region read or write, and
+   * the region port's engine safety capabilities for `operation`.
+   */
+  #adapterCompatible(operation) {
     const region = this.regionAdapter?.protocolHandshake;
     if (!this.regionAdapter?.call || region === undefined)
       throw fail('UNSUPPORTED_VERSION', 'VERSION_UNSUPPORTED', 'decode');
     this.canvas.adapterCompatible();
-    return checkProtocolCompatibility(region, [ADAPTER_REGION_REQUIREMENT]);
+    const compatible = checkProtocolCompatibility(region, [ADAPTER_REGION_REQUIREMENT]);
+    requireEngineSafety(region, operation);
+    return compatible;
   }
   async #current(body) {
     const session = this.store.snapshot.sessions[body.sessionRef];
@@ -233,7 +280,7 @@ export class CanvasRegionV1 {
     validateDigestBinding('region-operations', body.operations, body.operationDigest);
     const { replayKey, requestHash, prior } = this.#replay(body, 'ApplyRegionCommit');
     if (prior) return prior.response;
-    this.#adapterCompatible();
+    this.#adapterCompatible('ApplyRegionCommit');
     await this.#current(body);
     const state = this.store.snapshot;
     const positions = specifiedPositions(body.operations);
@@ -385,7 +432,7 @@ export class CanvasRegionV1 {
     const body = validateRequest(REGION_WIRE, 'UndoRegionCommit', raw);
     const { replayKey, requestHash, prior } = this.#replay(body, 'UndoRegionCommit');
     if (prior) return prior.response;
-    this.#adapterCompatible();
+    this.#adapterCompatible('UndoRegionCommit');
     const state = this.store.snapshot;
     const origin = state.transactions[body.originTransactionId];
     if (origin?.kind !== 'REGION' || origin.result.status !== 'VERIFIED')
@@ -509,7 +556,8 @@ export class CanvasRegionV1 {
       if (row.kind !== 'REGION') continue;
       const body = { ...row.body, requestId: `${row.body.requestId}:recover` };
       try {
-        this.#adapterCompatible();
+        // Recovery restores the snapshot: the same region restore safety as a region Undo.
+        this.#adapterCompatible('UndoRegionCommit');
         await this.#current(body);
         const content = await decodeSnapshot(await this.#snapshots().read(row.snapshot),
           row.snapshot, row.beforeSummary);

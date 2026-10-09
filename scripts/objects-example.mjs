@@ -49,14 +49,14 @@ function fixtureEnvironment() {
       stateDigest:createHash('sha256').update('HanaWorlds|contracts@0.4.0|adapter-scoped-cell/v1\n')
         .update(canonicalize({profile,record:record(p)})).digest('hex')}))};
   } };
-  // FIXTURE per-cell port handshake: what a G3 Adapter advertises on world-adapter/v6.
+  // FIXTURE per-cell port handshake: what a G3 Adapter advertises on world-adapter/v7.
   env.adapter = { protocolHandshake:{ profileVersion:'protocol-handshake/v1', component:'objects-fixture-adapter',
     protocols:[{ protocol:'world-adapter', major:6, minor:1 }],
-    capabilities:['world-adapter/v6:callback-free-write','world-adapter/v6:write-path-state-facts'],
+    capabilities:['world-adapter/v7:callback-free-write','world-adapter/v7:write-path-state-facts'],
     provenance:{ packageName:'objects-fixture-adapter', packageVersion:'1.0.0', sourceRevision:null, artifactDigest:null } },
     async call(operation, request) {
-    calls.push({port:'world-adapter/v6',operation,request:structuredClone(request)});
-    const answer = result => ({contractVersion:'world-adapter/v6',requestId:request.requestId,result,error:null});
+    calls.push({port:'world-adapter/v7',operation,request:structuredClone(request)});
+    const answer = result => ({contractVersion:'world-adapter/v7',requestId:request.requestId,result,error:null});
     if (operation==='DiscoverConnections') return answer({capabilityRevision:'fixture-cap-1',connections:[{
       adapterId:'hanaworlds-world-adapter',connectionRef:connection.connectionRef,worldRef,
       displayName:'隔离示例世界',capabilityRevision:'fixture-cap-1',payloadVersion:connection.payloadVersion,
@@ -64,7 +64,7 @@ function fixtureEnvironment() {
     if (operation==='ReadLocalConnection') return answer(connection);
     if (operation==='PrepareRecoverableTransaction') {
       prepared.add(request.transactionId);
-      const payload = {contractVersion:'world-adapter/v6', transactionId:request.transactionId,worldRef,
+      const payload = {contractVersion:'world-adapter/v7', transactionId:request.transactionId,worldRef,
         operationDigest:request.operationDigest,scopeDigest:request.scopeDigest,beforeImageDigest:'3'.repeat(64),localContext:request.localContext};
       return answer({payload,transactionPayloadDigest:D('scoped-transaction-payload',payload),beforeImageDigest:payload.beforeImageDigest,
         scopeDigest:request.scopeDigest,guarantee:'RECOVERABLE_VERIFIED',stateProfile:profile,
@@ -79,7 +79,7 @@ function fixtureEnvironment() {
       const previousWorldRevision = await env.readWorldRevision();
       for (const effect of request.operations.effects) nodes.set(key(effect.position),{...record(effect.position),nodeName:effect.nodeName,param2:effect.param2});
       env.writes.push({port:'cell',transactionId:request.transactionId});
-      return answer({contractVersion:'canvas/v5',transactionId:request.transactionId,operationDigest:request.operationDigest,
+      return answer({contractVersion:'canvas/v6',transactionId:request.transactionId,operationDigest:request.operationDigest,
         transactionPayloadDigest:request.preparedTransaction.transactionPayloadDigest,status:'VERIFIED',previousWorldRevision,
         observedWorldRevision:'fixture-cell-world-1',readbackDigest:D('readback',projection(request)),
         restoreStatus:'NOT_REQUIRED',error:null,localContext:request.localContext});
@@ -144,7 +144,7 @@ export async function createObjectsExample(directory) {
     const response=await service.call(operation,body); trace.push({operation,request:body,response});
     checked(response); return response.result;
   };
-  const base={contractVersion:'canvas/v5',sessionRef:exampleSessionRef,worldRef};
+  const base={contractVersion:'canvas/v6',sessionRef:exampleSessionRef,worldRef};
   const context=await call(canvas,'ReadWorldSelectionContext',{...base,requestId:'fixture-context'});
   const selected=await call(canvas,'SelectWorldConnection',{...base,requestId:'fixture-select',connectionRef:connection.connectionRef,
     connectionIncarnationRef:connection.connectionIncarnationRef,expectedRevision:context.selection.sessionRevision,expectedContext:null});

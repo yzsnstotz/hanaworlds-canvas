@@ -36,8 +36,8 @@ export class CanvasV5 implements CanvasV5ProtocolSource {
   current(sessionRef: string): any;
   /** G3 write-before guard on the per-cell port; throws a public decode error when incompatible. */
   adapterCompatible(): ReturnType<typeof import('hanaworlds-contracts').checkProtocolCompatibility>;
-  call<N extends keyof OperationMap['canvas/v5']>(operation: N,
-    request: unknown): Promise<OperationMap['canvas/v5'][N]['response']>;
+  call<N extends keyof OperationMap['canvas/v6']>(operation: N,
+    request: unknown): Promise<OperationMap['canvas/v6'][N]['response']>;
   readObjectsHistory(sessionRef: string | null): Promise<ObjectsHistoryDisplay>;
   readFootprints(worldRef: string, objectRefs: string[], request: unknown): Promise<any>;
   readHistoryFacts(request: unknown): Promise<any>;

@@ -33,7 +33,7 @@ function fixtureWorld({ catalogue = withWorldedit('fixture-worldedit-1') } = {})
       sessionDeleteSupported: true, imageMediaTypes: [], model: null } });
   env.adapter = { protocolHandshake: g3CellHandshake(), async call(operation, request) {
     env.adapterCalls.push(operation);
-    const answer = result => ({ contractVersion: 'world-adapter/v6', requestId: request.requestId,
+    const answer = result => ({ contractVersion: 'world-adapter/v7', requestId: request.requestId,
       result, error: null });
     if (operation === 'DiscoverConnections') return answer({ capabilityRevision: 'cap-1',
       connections: [{ adapterId: 'hanaworlds-world-adapter', connectionRef: 'local-connection',
@@ -59,11 +59,11 @@ async function boundCanvas(directory, world, sessionRef = 'session-1') {
   return canvas;
 }
 async function select(canvas, world, sessionRef) {
-  const context = await canvas.call('ReadWorldSelectionContext', { contractVersion: 'canvas/v5',
+  const context = await canvas.call('ReadWorldSelectionContext', { contractVersion: 'canvas/v6',
     sessionRef, requestId: `${sessionRef}-context-${world.incarnation}`, worldRef: 'local-world' });
   const selection = context.result.selection;
   const bound = selection.status === 'BOUND';
-  const response = await canvas.call('SelectWorldConnection', { contractVersion: 'canvas/v5',
+  const response = await canvas.call('SelectWorldConnection', { contractVersion: 'canvas/v6',
     sessionRef, requestId: `${sessionRef}-select-${world.incarnation}`, worldRef: 'local-world',
     connectionRef: 'local-connection', connectionIncarnationRef: world.incarnation,
     expectedRevision: bound ? selection.context.selectionRevision : selection.sessionRevision,
@@ -180,9 +180,9 @@ test('changes and invalidation are recorded durably and read back after restart'
     assert.equal(rebound.current.domain.connectionIncarnationRef, 'socket-open-2');
     assert.ok(rebound.history.at(-1).invalidationReasons.includes('CONNECTION_DOMAIN_CHANGED'));
     // Unbinding invalidates the supply for the World.
-    const context = await canvas.call('ReadWorldSelectionContext', { contractVersion: 'canvas/v5',
+    const context = await canvas.call('ReadWorldSelectionContext', { contractVersion: 'canvas/v6',
       sessionRef: 'session-1', requestId: 'context-unbind', worldRef: 'local-world' });
-    const unbound = await canvas.call('UnselectWorldConnection', { contractVersion: 'canvas/v5',
+    const unbound = await canvas.call('UnselectWorldConnection', { contractVersion: 'canvas/v6',
       sessionRef: 'session-1', requestId: 'unbind-1', worldRef: 'local-world',
       expectedRevision: context.result.selection.context.selectionRevision,
       expectedContext: context.result.selection.context.localContext });

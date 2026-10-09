@@ -33,11 +33,11 @@ export async function supplyFixturePeers({ incarnation = 'supply-fixture-incarna
   env.adapter = {
     protocolHandshake: { profileVersion: 'protocol-handshake/v1', component: 'supply-fixture-adapter',
       protocols: [{ protocol: 'world-adapter', major: 6, minor: 1 }],
-      capabilities: ['world-adapter/v6:callback-free-write', 'world-adapter/v6:write-path-state-facts'],
+      capabilities: ['world-adapter/v7:callback-free-write', 'world-adapter/v7:write-path-state-facts'],
       provenance: { packageName: 'supply-fixture-adapter', packageVersion: '1.0.0',
         sourceRevision: null, artifactDigest: null } },
     async call(operation, request) {
-      const answer = result => ({ contractVersion: 'world-adapter/v6', requestId: request.requestId,
+      const answer = result => ({ contractVersion: 'world-adapter/v7', requestId: request.requestId,
         result, error: null });
       if (operation === 'DiscoverConnections') return answer({ capabilityRevision: 'supply-fixture-cap-1',
         connections: [{ adapterId: 'hanaworlds-world-adapter', connectionRef: 'supply-fixture-connection',

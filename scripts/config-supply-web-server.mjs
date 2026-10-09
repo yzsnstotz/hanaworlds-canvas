@@ -66,14 +66,14 @@ export async function createConfigSupplyServer(runDirectory) {
   const supply = new CanvasConfigSupply(canvas);
   let counter = 0;
   const context = async () => (await canvas.call('ReadWorldSelectionContext', {
-    contractVersion: 'canvas/v5', sessionRef: supplySessionRef, requestId: `page-context-${Date.now()}-${++counter}`,
+    contractVersion: 'canvas/v6', sessionRef: supplySessionRef, requestId: `page-context-${Date.now()}-${++counter}`,
     worldRef: supplyWorldRef })).result.selection;
   // Bind the FIXTURE World through Canvas's public SelectWorldConnection.
   async function select() {
     const selection = await context();
     const bound = selection.status === 'BOUND';
     if (bound && selection.context.localContext.connectionIncarnationRef === peers.incarnation) return null;
-    const response = await canvas.call('SelectWorldConnection', { contractVersion: 'canvas/v5',
+    const response = await canvas.call('SelectWorldConnection', { contractVersion: 'canvas/v6',
       sessionRef: supplySessionRef, requestId: `page-select-${Date.now()}-${++counter}`, worldRef: supplyWorldRef,
       connectionRef: 'supply-fixture-connection', connectionIncarnationRef: peers.incarnation,
       expectedRevision: bound ? selection.context.selectionRevision : selection.sessionRevision,
@@ -83,7 +83,7 @@ export async function createConfigSupplyServer(runDirectory) {
   async function unbind() {
     const selection = await context();
     if (selection.status !== 'BOUND') return null;
-    return (await canvas.call('UnselectWorldConnection', { contractVersion: 'canvas/v5',
+    return (await canvas.call('UnselectWorldConnection', { contractVersion: 'canvas/v6',
       sessionRef: supplySessionRef, requestId: `page-unbind-${Date.now()}-${++counter}`, worldRef: supplyWorldRef,
       expectedRevision: selection.context.selectionRevision,
       expectedContext: selection.context.localContext })).error;

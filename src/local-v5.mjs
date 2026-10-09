@@ -12,34 +12,30 @@ import { admitRequest, validateRequest, validateResponse, validateBoundResponse,
 import { checkProtocolCompatibility, contractProtocols, protocolRequirement,
   validateType } from 'hanaworlds-contracts';
 import * as contractsSdk from 'hanaworlds-contracts';
-import { CanvasRegionV1, ADAPTER_CELL_REQUIREMENT } from './region-v1.mjs';
+import { CanvasRegionV1, ADAPTER_CELL_REQUIREMENT, ENGINE_SAFETY_REQUIREMENTS, requireEngineSafety,
+  unmetEngineSafety } from './region-v1.mjs';
 import { CanvasConfigSupply } from './config-supply.mjs';
 
 export { CanvasStore, CanvasRegionV1, CanvasConfigSupply };
-const WIRE = 'canvas/v5';
-const ADAPTER = 'world-adapter/v6';
-const SESSION = 'session/v3';
-// session-world-seam/v1 (canvas/v5 minor 1, Contracts 0.5.4 candidate): the Session↔World
-// additions are active only when the installed Contracts declare them; on canvas/v5 minor 0
-// (Contracts 0.5.3) Canvas keeps its 0.5.3 behaviour exactly.
+const WIRE = 'canvas/v6';
+const ADAPTER = 'world-adapter/v7';
+const SESSION = 'session/v4';
+// canvas/v6 (Contracts 1.x) carries the session-world seam operations at minor 0; there is no
+// pre-seam canvas behaviour left to switch to.
 const canvasProtocol = contractProtocols.find(row => row.protocol === 'canvas');
-if (!canvasProtocol) throw new Error('CANVAS_PROTOCOL_UNDECLARED');
-const SEAM = canvasProtocol.minor >= 1;
-const PACKAGE_VERSION = '0.6.15';
-// The public wire defines canvas major 5, minor 0. Contracts publishes no
+if (!canvasProtocol || canvasProtocol.major !== 6) throw new Error('CANVAS_PROTOCOL_UNDECLARED');
+const PACKAGE_VERSION = '0.7.0';
+// The public wire defines canvas major 6, minor 0. Contracts publishes no
 // per-cell Canvas capability token; regional tokens describe the region port.
 const cellRequirement = protocolRequirement(WIRE, []);
 const cellProtocolHandshake = validateType('ProtocolHandshake', {
   profileVersion: 'protocol-handshake/v1', component: 'hanaworlds-canvas',
-  // The advertised minor is the one the installed Contracts declare for canvas/v5: Canvas
-  // implements every operation that minor adds (minor 1: the session-world seam).
+  // The advertised minor is the one the installed Contracts declare for canvas/v6: Canvas
+  // implements every operation of that minor (including the session-world seam).
   protocols: [{ protocol: cellRequirement.protocol, major: cellRequirement.major,
     minor: canvasProtocol.minor }], capabilities: [...cellRequirement.capabilities],
   provenance: { packageName: 'hanaworlds-canvas', packageVersion: PACKAGE_VERSION,
     sourceRevision: null, artifactDigest: null } });
-// The one revision an unbound Session publishes (ReadWorldSelectionContext UNBOUND
-// sessionRevision); a first SelectWorldConnection names exactly this value.
-const UNBOUND_SESSION_REVISION = 'session-0';
 const hash = (kind, value) => digestValue(kind, value).sha256;
 const stableHash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const rev = prefix => `${prefix}-${randomUUID()}`;
@@ -68,7 +64,7 @@ export class CanvasV5 {
     checkContractHandshake(contractHandshake);
     this.store = store;
     this.adapter = adapter;
-    // Host-bound session/v3 port (Workshop). Its ReadSessionIdentity is the only evidence
+    // Host-bound session/v4 port (Workshop). Its ReadSessionIdentity is the only evidence
     // that a Session exists; Canvas never infers that from a Ref.
     this.sessions = sessions;
     this.nativeFacts = nativeFacts;
@@ -85,7 +81,7 @@ export class CanvasV5 {
   current(sessionRef) { return this.store?.snapshot.sessions[sessionRef] ?? null; }
   /**
    * G3 write-before guard for the per-cell port: its ProtocolHandshake must name
-   * world-adapter major 6 at the Contracts-declared minor with every world-adapter/v6
+   * world-adapter major 6 at the Contracts-declared minor with every world-adapter/v7
    * Adapter capability (callback-free-write, write-path-state-facts). Runs before any
    * reservation or Adapter call of a BUILD, Undo, Redo or region write.
    */
@@ -94,6 +90,22 @@ export class CanvasV5 {
     if (!this.adapter?.call || advertised === undefined)
       throw fail('UNSUPPORTED_VERSION', 'VERSION_UNSUPPORTED', 'decode');
     return checkProtocolCompatibility(advertised, [ADAPTER_CELL_REQUIREMENT]);
+  }
+  /**
+   * Canvas-own readback: for every write operation, the engine safety capabilities it needs from
+   * which port and which of them the bound ports do not advertise. Read-only.
+   */
+  readEngineSafety(regionHandshake = this.regionHandshake?.()) {
+    const handshakes = { [ADAPTER]: this.adapter?.protocolHandshake,
+      'world-adapter-region/v1': regionHandshake };
+    return structuredClone(Object.entries(ENGINE_SAFETY_REQUIREMENTS)
+      .map(([operation, { port, ids }]) => {
+        let unmet;
+        try { unmet = unmetEngineSafety(handshakes[port], operation); }
+        catch { unmet = ids.map(id => ({ id, cause: 'HANDSHAKE_INVALID' })); }
+        return { operation, port, required: [...ids], unmet,
+          status: unmet.length ? 'CAPABILITY_UNAVAILABLE' : 'ADVERTISED' };
+      }));
   }
   async #durable() {
     await this.ready;
@@ -199,6 +211,7 @@ export class CanvasV5 {
       .filter(([, row]) => (row.body?.worldRef ?? row.worldRef) === worldRef)
       .map(([transactionId, row]) => ({ transactionId, mode: row.kind === 'REGION' ? 'REGION' : 'CELL',
         phase: row.phase, recoveryPending: row.phase === 'RESTORE_PENDING',
+        receiptStatus: row.receiptStatus ?? null,
         restoreCode: row.restoreCode ?? null, causeCode: row.causeCode ?? null }))
       .sort((a, b) => a.transactionId.localeCompare(b.transactionId));
     const pending = recovery.length > 0;
@@ -360,6 +373,7 @@ export class CanvasV5 {
     const { replayKey, prior, admission } = await this.#bound('ApplyRecoverableCommit', body);
     if (prior) return prior.response;
     this.adapterCompatible();
+    requireEngineSafety(this.adapter.protocolHandshake, 'ApplyRecoverableCommit');
     const analysis = this.store.snapshot.analyses[body.transactionId];
     if (!analysis || analysis.affectedObjectRefs.length ||
         analysis.worldRef !== body.worldRef || analysis.operationDigest !== body.operationDigest ||
@@ -539,10 +553,34 @@ export class CanvasV5 {
       // stays as an explicit, durable recovery-pending row and blocks the World.
       const restoreCode = restoreError?.publicError?.code ?? restoreError?.code ?? 'RESTORE_FAILED';
       const causeCode = cause?.publicError?.code ?? cause?.code ?? null;
+      // An engine RESTORE_FAILED is answered with the canvas/v6 RESTORE_FAILED receipt (pending
+      // manual recovery). The Adapter's public error is carried as is; one that does not meet the
+      // receipt rule is not repaired and falls through to RECOVERY_PENDING below.
+      let response = null;
+      if (restoreError?.publicError?.code === 'RESTORE_FAILED') {
+        try {
+          response = validateResponse(WIRE, operation, answer(body, {
+            contractVersion: WIRE, transactionId: body.transactionId,
+            operationDigest: body.operationDigest,
+            transactionPayloadDigest: prepared.transactionPayloadDigest, status: 'RESTORE_FAILED',
+            previousWorldRevision: body.expectedWorldRevision, observedWorldRevision: null,
+            readbackDigest: null, restoreStatus: restoreError.publicError.mutationState === 'UNKNOWN' ?
+              'UNKNOWN' : 'FAILED',
+            error: { ...restoreError.publicError, transactionRef: body.transactionId },
+            localContext: body.localContext }));
+        } catch (shapeError) {
+          response = null;
+          restoreError.receiptRejected = shapeError.publicError?.code ?? shapeError.message;
+        }
+      }
       await this.store.commit(state => {
         const row = state.pending[body.transactionId];
-        if (row) Object.assign(row, { phase: 'RESTORE_PENDING', restoreCode, causeCode });
+        if (row) Object.assign(row, { phase: 'RESTORE_PENDING', restoreCode, causeCode,
+          receiptStatus: response ? 'RESTORE_FAILED' : 'RECOVERY_PENDING',
+          receiptRejected: restoreError?.receiptRejected ?? null });
+        if (response) state.replay[replayKey] = { digest: requestHash, response };
       });
+      if (response) return response;
       const pending = fail('RECOVERY_PENDING', 'TRANSPORT_OUTCOME_UNKNOWN', 'apply');
       pending.publicError.retryability = 'SAME_TRANSACTION_QUERY';
       pending.publicError.mutationState = 'UNKNOWN';
@@ -557,6 +595,7 @@ export class CanvasV5 {
     const { replayKey, prior, admission } = await this.#bound(operation, body);
     if (prior) return prior.response;
     this.adapterCompatible();
+    requireEngineSafety(this.adapter.protocolHandshake, operation);
     const redo = operation === 'Redo';
     const state = this.store.snapshot;
     const origin = state.transactions[body.historyTransactionId];
@@ -713,7 +752,7 @@ export class CanvasV5 {
       selection: selection ? { status: 'BOUND', context: selection,
         connectionRef: selection.localContext.connectionRef } :
         { status: 'UNBOUND', sessionRef: body.sessionRef,
-          sessionRevision: SEAM ? identity.sessionRevision : UNBOUND_SESSION_REVISION }
+          sessionRevision: identity.sessionRevision }
     } : inventory;
     const response = validateResponse(WIRE, operation, answer(body, result));
     if (operation === 'ReadWorldSelectionContext') return response;
@@ -877,8 +916,7 @@ export class CanvasV5 {
         throw fail('STALE_REVISION');
       current.orderedSelectedObjectRefs = [...body.objectRefs];
       current.selectionRevision = selectionRevision;
-      // With the seam, sessionRevision is Workshop's revision; Canvas does not change it.
-      if (!SEAM) current.sessionRevision = rev('session');
+      // sessionRevision is Workshop's revision; Canvas does not change it.
       current.localContext.selectionRevision = selectionRevision;
       state.replay[replayKey] = { digest: admission.requestDigest, response };
     });
@@ -911,8 +949,8 @@ export class CanvasV5 {
     const identity = await this.#identity(body);
     this.#worldOpen(this.store.snapshot, body.worldRef);
     // Bound: the published selectionRevision. Unbound: the published UNBOUND sessionRevision
-    // (Workshop's SessionIdentity.sessionRevision with the seam, else Canvas's session-0).
-    const unbound = SEAM ? identity.sessionRevision : UNBOUND_SESSION_REVISION;
+    // (Workshop's SessionIdentity.sessionRevision).
+    const unbound = identity.sessionRevision;
     if (body.expectedRevision !== (previous ? previous.selectionRevision : unbound))
       throw fail('STALE_REVISION');
     const connection = await this.#adapter('ReadLocalConnection', {
@@ -923,7 +961,7 @@ export class CanvasV5 {
     const selectionRevision = rev('selection');
     const current = { currentSession: body.sessionRef, activeWorldRef: body.worldRef,
       orderedSelectedObjectRefs: [],
-      sessionRevision: SEAM ? identity.sessionRevision : rev('session'),
+      sessionRevision: identity.sessionRevision,
       selectionRevision, localContext: this.#context(connection, selectionRevision) };
     const response = validateResponse(WIRE, 'SelectWorldConnection', answer(body, current));
     await this.#commitSelection(body, previous, current, connection, inventory,
@@ -931,7 +969,7 @@ export class CanvasV5 {
     return response;
   }
   /**
-   * canvas/v5 SwitchWorldConnection: the bound Session moves from its current world to
+   * canvas/v6 SwitchWorldConnection: the bound Session moves from its current world to
    * `toWorldRef` over `toConnectionRef`. Canvas alone decides it: CAS on the published
    * selectionRevision (the same convention as SelectWorldConnection) and on the current
    * localContext (`expectedContext`), the target connection's actual readback and
@@ -965,7 +1003,7 @@ export class CanvasV5 {
     const sameWorld = body.toWorldRef === body.fromWorldRef;
     const current = { currentSession: body.sessionRef, activeWorldRef: body.toWorldRef,
       orderedSelectedObjectRefs: sameWorld ? [...previous.orderedSelectedObjectRefs] : [],
-      sessionRevision: SEAM ? identity.sessionRevision : rev('session'), selectionRevision,
+      sessionRevision: identity.sessionRevision, selectionRevision,
       localContext: this.#context(connection, selectionRevision) };
     const response = validateResponse(WIRE, 'SwitchWorldConnection', answer(body, current));
     await this.#commitSelection(body, previous, current, connection, inventory,
@@ -1014,9 +1052,8 @@ export class CanvasV5 {
       state.replay[replayKey] = { digest: admission.requestDigest, response };
     });
   }
-  /** G-S: the Session's identity from Workshop's Host-bound session/v3 port (seam only). */
+  /** G-S: the Session's identity from Workshop's Host-bound session/v4 port. */
   async #identity(body) {
-    if (!SEAM) return null;
     if (typeof this.sessions?.call !== 'function')
       throw fail('CAPABILITY_UNAVAILABLE', 'REQUIRED_FACT_UNKNOWN');
     const request = { contractVersion: SESSION, requestId: `${body.requestId}:session`,
@@ -1172,7 +1209,7 @@ export class CanvasV5 {
       if (!this.store || this.store.unavailable) throw fail('CAPABILITY_UNAVAILABLE',
         'REQUIRED_FACT_UNKNOWN');
       // G-L: a retired Session is unknown to every Canvas operation but its own retirement.
-      if (SEAM && body.sessionRef !== undefined && operation !== 'RetireSessionSelection' &&
+      if (body.sessionRef !== undefined && operation !== 'RetireSessionSelection' &&
           this.store.snapshot.retiredSessions?.[body.sessionRef])
         throw fail('SESSION_NOT_FOUND', 'SCOPE_DENIED');
       if (operation === 'SelectWorldConnection') return await this.#select(body);
@@ -1239,7 +1276,7 @@ export function apply(ctx) {
     adapter: {
       get protocolHandshake() { return ctx.get?.('hanaworldsWorldAdapterV6')?.protocolHandshake; },
       call: (...args) => ctx.get?.('hanaworldsWorldAdapterV6')?.call(...args) },
-    // Workshop's published session/v3 provider (public service key hanaworldsWorkshopV3,
+    // Workshop's published session/v4 provider (public service key hanaworldsWorkshopV3,
     // one WorkshopV3 instance; Workshop 0.4.12 4547f3cf). Read on every call, so a disposed
     // provider is absent → fail closed. No other key is tried.
     sessions: { call: (...args) => {

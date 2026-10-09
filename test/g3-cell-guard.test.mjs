@@ -9,14 +9,15 @@ import { CanvasV5, CanvasStore, CanvasRegionV1, ADAPTER_CELL_REQUIREMENT,
 import { openUndoFixtureWorld, undoConnection, undoSessionRef,
   undoWorldRef } from '../scripts/undo-fixture-world.mjs';
 import { undoWorldFile } from '../scripts/undo-host.mjs';
-import { g3CellHandshake } from './support/g3-adapter-handshake.mjs';
+import { g3CellHandshake, CELL_SAFETY_CAPABILITIES, G3_CELL_CAPABILITIES }
+  from './support/g3-adapter-handshake.mjs';
 import { fixtureSessions } from '../scripts/fixture-sessions.mjs';
 
 /*
- * G3 write-before guard on the per-cell port (world-adapter/v6) for BUILD, Undo and
+ * G3 write-before guard on the per-cell port (world-adapter/v7) for BUILD, Undo and
  * Redo, and on both ports for a region write. FIXTURE: the isolated undo fixture
  * world and its two port handshakes stand in for the Adapter; Canvas, its durable
- * Store and the public canvas/v5 / canvas-region/v1 calls are the real component.
+ * Store and the public canvas/v6 / canvas-region/v1 calls are the real component.
  * "Before any write" is checked as: no mutating Adapter call (Prepare/Apply/Restore,
  * WriteRegion) during the refused call, only the named read-only admission reads,
  * no pending row, unchanged history, and the fixture world file bytes unchanged.
@@ -26,7 +27,7 @@ const MUTATING = new Set(['PrepareRecoverableTransaction', 'ApplyCompiledTransac
 // Canvas's current-world admission (#bound) reads the connection before the guard.
 const ADMISSION_READS = new Set(['ReadLocalConnection']);
 const D = (kind, value) => digestValue(kind, value).sha256;
-const base = { contractVersion: 'canvas/v5', sessionRef: undoSessionRef, worldRef: undoWorldRef };
+const base = { contractVersion: 'canvas/v6', sessionRef: undoSessionRef, worldRef: undoWorldRef };
 const g3 = ADAPTER_CELL_REQUIREMENT.capabilities.length > 0;
 
 async function boot(directory) {
@@ -83,7 +84,7 @@ async function historyRequest(env, operation, id) {
     localContext: actions.localContext };
 }
 /** Sends `request` with the per-cell port advertising `handshake`; proves nothing was written. */
-async function refusedBeforeWrite(env, operation, request, handshake, code, send) {
+async function refusedBeforeWrite(env, operation, request, handshake, code, send, phase = 'decode') {
   await env.world.flush();
   const port = env.canvas.adapter;
   const calls = env.world.calls.length;
@@ -96,7 +97,7 @@ async function refusedBeforeWrite(env, operation, request, handshake, code, send
   await env.world.flush();
   assert.equal(response.error?.code, code, `${operation}: ${JSON.stringify(response.error)}`);
   assert.equal(response.error.mutationState, 'NONE');
-  assert.equal(response.error.phase, 'decode');
+  assert.equal(response.error.phase, phase);
   const reached = env.world.calls.slice(calls).map(call => call.operation);
   assert.deepEqual(reached.filter(name => MUTATING.has(name)), [], `${operation} wrote`);
   assert.deepEqual(reached.filter(name => !ADMISSION_READS.has(name)), [],
@@ -109,30 +110,43 @@ const regionAsCell = { ...g3CellHandshake(), protocols: [{ protocol: 'world-adap
   major: 1, minor: 1 }], capabilities: [...ADAPTER_REGION_REQUIREMENT.capabilities] };
 const refusals = () => [
   ['no per-cell handshake', undefined, 'UNSUPPORTED_VERSION'],
-  ['wrong major', g3CellHandshake({ major: 5 }), 'UNSUPPORTED_VERSION'],
+  ['0.x Adapter major', g3CellHandshake({ major: 6, minor: 1 }), 'UNSUPPORTED_VERSION'],
   ['region handshake on the per-cell port', regionAsCell, 'UNSUPPORTED_VERSION'],
   ...(g3 ? [
-    ['minor below the declared minor', g3CellHandshake({ minor: 0 }), 'UNSUPPORTED_VERSION'],
     ['missing callback-free-write', g3CellHandshake({ capabilities:
-      ['world-adapter/v6:write-path-state-facts'] }), 'CAPABILITY_UNAVAILABLE'],
-    ['missing write-path-state-facts', g3CellHandshake({ capabilities:
-      ['world-adapter/v6:callback-free-write'] }), 'CAPABILITY_UNAVAILABLE'],
-    ['region callback-free-write in place of the v6 one', g3CellHandshake({ capabilities:
-      ['world-adapter-region/v1:callback-free-write', 'world-adapter/v6:write-path-state-facts'] }),
+      ['world-adapter/v7:write-path-state-facts', ...CELL_SAFETY_CAPABILITIES] }),
     'CAPABILITY_UNAVAILABLE'],
+    ['missing write-path-state-facts', g3CellHandshake({ capabilities:
+      ['world-adapter/v7:callback-free-write', ...CELL_SAFETY_CAPABILITIES] }),
+    'CAPABILITY_UNAVAILABLE'],
+    ['region callback-free-write in place of the v7 one', g3CellHandshake({ capabilities:
+      ['world-adapter-region/v1:callback-free-write', 'world-adapter/v7:write-path-state-facts',
+        ...CELL_SAFETY_CAPABILITIES] }), 'CAPABILITY_UNAVAILABLE'],
   ] : []),
 ];
+// Contracts 1.x engine safety on the per-cell port (BUILD, Undo, Redo): each capability missing
+// alone, or the region wire's ids in their place, refuses with the Contracts absent-capability
+// error (phase validate) before any write.
+const safetyRefusals = () => [
+  ...CELL_SAFETY_CAPABILITIES.map(id => [`missing ${id}`, g3CellHandshake({ capabilities:
+    [...G3_CELL_CAPABILITIES, ...CELL_SAFETY_CAPABILITIES.filter(other => other !== id)] }),
+  'CAPABILITY_UNAVAILABLE', 'validate']),
+  ['region safety ids in place of the per-cell ones', g3CellHandshake({ capabilities:
+    [...G3_CELL_CAPABILITIES, ...CELL_SAFETY_CAPABILITIES.map(id =>
+      id.replace('world-adapter/v7:', 'world-adapter-region/v1:'))] }),
+  'CAPABILITY_UNAVAILABLE', 'validate'],
+];
 
-test('per-cell requirement is world-adapter/v6 at the declared minor with the G3 write-path ids',
+test('per-cell requirement is world-adapter/v7 at the declared minor with the G3 write-path ids',
   () => {
     assert.equal(ADAPTER_CELL_REQUIREMENT.protocol, 'world-adapter');
-    assert.equal(ADAPTER_CELL_REQUIREMENT.major, 6);
+    assert.equal(ADAPTER_CELL_REQUIREMENT.major, 7);
     assert.deepEqual(ADAPTER_CELL_REQUIREMENT.capabilities.filter(c =>
-      !c.startsWith('world-adapter/v6:')), []);
+      !c.startsWith('world-adapter/v7:')), []);
     if (g3) {
-      assert.equal(ADAPTER_CELL_REQUIREMENT.minMinor, 1);
-      assert.deepEqual(ADAPTER_CELL_REQUIREMENT.capabilities, ['world-adapter/v6:callback-free-write',
-        'world-adapter/v6:write-path-state-facts']);
+      assert.equal(ADAPTER_CELL_REQUIREMENT.minMinor, 0);
+      assert.deepEqual(ADAPTER_CELL_REQUIREMENT.capabilities, ['world-adapter/v7:callback-free-write',
+        'world-adapter/v7:write-path-state-facts']);
     }
   });
 
@@ -143,14 +157,14 @@ test('BUILD, Undo and Redo refuse an incompatible per-cell port before any Adapt
       const env = await boot(directory);
       // BUILD: every refusal before reservation / Prepare / Apply.
       const build = await buildRequest(env, 'g3-build-1', [[8, 2, 8], [9, 2, 8]]);
-      for (const [label, handshake, code] of refusals()) {
+      for (const [label, handshake, code, phase] of [...refusals(), ...safetyRefusals()]) {
         await refusedBeforeWrite(env, 'ApplyRecoverableCommit',
-          { ...build, requestId: `g3-build-1-${label}` }, handshake, code);
+          { ...build, requestId: `g3-build-1-${label}` }, handshake, code, undefined, phase);
       }
       // A higher minor and extra ids are accepted (provenance never decides).
       env.canvas.adapter = { ...env.canvas.adapter, protocolHandshake: g3CellHandshake({ minor: 4,
-        capabilities: ['world-adapter/v6:callback-free-write', 'world-adapter/v6:future-id',
-          'world-adapter/v6:write-path-state-facts'] }) };
+        capabilities: ['world-adapter/v7:callback-free-write', 'world-adapter/v7:future-id',
+          'world-adapter/v7:write-path-state-facts', ...CELL_SAFETY_CAPABILITIES] }) };
       const built = await env.canvas.call('ApplyRecoverableCommit', build);
       assert.equal(built.error, null, JSON.stringify(built.error));
       assert.equal(built.result.status, 'VERIFIED');
@@ -160,9 +174,9 @@ test('BUILD, Undo and Redo refuse an incompatible per-cell port before any Adapt
       // Undo, then Redo: the same guard, same refusals, then the real move.
       for (const operation of ['Undo', 'Redo']) {
         const request = await historyRequest(env, operation, `g3-${operation}`);
-        for (const [label, handshake, code] of refusals())
+        for (const [label, handshake, code, phase] of [...refusals(), ...safetyRefusals()])
           await refusedBeforeWrite(env, operation, { ...request, requestId: `g3-${operation}-${label}` },
-            handshake, code);
+            handshake, code, undefined, phase);
         const moved = await env.canvas.call(operation, request);
         assert.equal(moved.error, null, JSON.stringify(moved.error));
         assert.equal(moved.result.status, 'VERIFIED');
@@ -211,6 +225,21 @@ test('a region write needs both ports compatible and is refused before any regio
         env.canvas.adapter.protocolHandshake, 'CAPABILITY_UNAVAILABLE', sendWith({ ...regionPort,
           protocolHandshake: { ...preG3, protocols: [{ protocol: 'world-adapter-region', major: 1,
             minor: 1 }] } }));
+      // Contracts 1.x engine safety on the region port: each region capability missing alone,
+      // or the per-cell ids in their place, refuses before any region read or write.
+      const regionSafety = regionPort.protocolHandshake.capabilities.filter(c =>
+        /:(restore-body-recheck|cell-protection|no-body-enclosure)$/.test(c));
+      assert.equal(regionSafety.length, 3);
+      const regionWithout = capabilities => ({ ...regionPort, protocolHandshake: {
+        ...regionPort.protocolHandshake, capabilities: [...capabilities].sort() } });
+      const plain = regionPort.protocolHandshake.capabilities.filter(c => !regionSafety.includes(c));
+      for (const id of regionSafety)
+        await refusedBeforeWrite(env, 'ApplyRegionCommit', { ...request, requestId: `g3-region-no-${id}` },
+          env.canvas.adapter.protocolHandshake, 'CAPABILITY_UNAVAILABLE',
+          sendWith(regionWithout([...plain, ...regionSafety.filter(other => other !== id)])), 'validate');
+      await refusedBeforeWrite(env, 'ApplyRegionCommit', { ...request, requestId: 'g3-region-cell-ids' },
+        env.canvas.adapter.protocolHandshake, 'CAPABILITY_UNAVAILABLE',
+        sendWith(regionWithout([...plain, ...CELL_SAFETY_CAPABILITIES])), 'validate');
       const committed = await send(request);
       assert.equal(committed.error, null, JSON.stringify(committed.error));
       assert.equal(committed.result.status, 'VERIFIED');
@@ -220,20 +249,20 @@ test('a region write needs both ports compatible and is refused before any regio
   });
 
 /*
- * FIXTURE in the shape the Adapter publicly documents (F-AD-WORLD-MANAGE-01 REPORT,
- * "公开 world-adapter/v6 协议握手读取", SOURCE_PUBLIC_PROVIDER): Host service
- * hanaworldsWorldAdapterV6, `protocolHandshake` is a property (not a method),
- * world-adapter 6.1 with exactly the two v6 ids, provenance source/digest null, and
- * `contractHandshake` a separate property naming the Adapter's own package. Not the
- * real Adapter; it proves Canvas's apply() reads that public location.
+ * FIXTURE in the public location the Adapter documents (F-AD-WORLD-MANAGE-01 REPORT,
+ * SOURCE_PUBLIC_PROVIDER): Host service hanaworldsWorldAdapterV6, `protocolHandshake` is a
+ * property (not a method), provenance source/digest null, and `contractHandshake` a separate
+ * property naming the Adapter's own package. The protocol row is the Contracts 1.x per-cell
+ * wire (world-adapter 7.0 with its two write-path ids). Not the real Adapter; it proves
+ * Canvas's apply() reads that public location.
  */
 const publicV6Handshake = () => ({ profileVersion: 'protocol-handshake/v1',
   component: 'hanaworlds-adapter-luanti',
-  protocols: [{ protocol: 'world-adapter', major: 6, minor: 1 }],
-  capabilities: ['world-adapter/v6:callback-free-write', 'world-adapter/v6:write-path-state-facts'],
+  protocols: [{ protocol: 'world-adapter', major: 7, minor: 0 }],
+  capabilities: ['world-adapter/v7:callback-free-write', 'world-adapter/v7:write-path-state-facts'],
   provenance: { packageName: 'hanaworlds-adapter-luanti', packageVersion: '0.7.4',
     sourceRevision: null, artifactDigest: null } });
-const otherPackage = { contracts: 'hanaworlds-contracts@0.5.2' };
+const otherPackage = { contracts: 'hanaworlds-contracts@1.0.0-rc.1' };
 
 test('apply() reads the per-cell handshake from the public hanaworldsWorldAdapterV6 property',
   async () => {
@@ -264,7 +293,7 @@ test('apply() reads the per-cell handshake from the public hanaworldsWorldAdapte
         protocols: [{ protocol: 'world-adapter-region', major: 1, minor: 1 }] }, call }))
         .error.code, 'UNSUPPORTED_VERSION');
       if (g3) assert.equal((await run({ protocolHandshake: { ...publicV6Handshake(),
-        capabilities: ['world-adapter/v6:callback-free-write'] }, call })).error.code,
+        capabilities: ['world-adapter/v7:callback-free-write'] }, call })).error.code,
       'CAPABILITY_UNAVAILABLE');
     } finally { await rm(directory, { recursive: true, force: true }); }
   });

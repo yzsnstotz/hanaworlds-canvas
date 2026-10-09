@@ -12,14 +12,15 @@ import { undoSessionRef, undoWorldRef } from '../scripts/undo-fixture-world.mjs'
 import { fixtureSessions } from '../scripts/fixture-sessions.mjs';
 
 /*
- * Canvas is the only Session↔World selection authority (canvas/v5
+ * Canvas is the only Session↔World selection authority (canvas/v6
  * ReadWorldSelectionContext / SelectWorldConnection / SwitchWorldConnection);
  * selectionRevision is generated here only. FIXTURE: the Adapter below is an
  * in-memory contracts-shaped peer with two live connections (world A, world B); it is
  * not the real Adapter and proves nothing about real multi-connection support.
  */
 // Store values are null-prototype objects; compare canonical JSON.
-const SEAM = contractProtocols.find(row => row.protocol === 'canvas').minor >= 1;
+// canvas/v6 (Contracts 1.x) always carries the session-world seam.
+const SEAM = contractProtocols.find(row => row.protocol === 'canvas').major === 6;
 const same = (a, b, message) => assert.equal(canonicalJSON(a), canonicalJSON(b), message);
 const stateProfile = { profileVersion: 'state-profile/v2',
   nodeFields: ['nodeName', 'param1', 'param2'], metadataMode: 'exact',
@@ -38,7 +39,7 @@ function fixtureAdapter() {
   const adapter = { live, calls: [], protocolHandshake: g3CellHandshake(),
     async call(operation, request) {
       adapter.calls.push(operation);
-      const respond = result => ({ contractVersion: 'world-adapter/v6',
+      const respond = result => ({ contractVersion: 'world-adapter/v7',
         requestId: request.requestId, result, error: null });
       if (operation === 'DiscoverConnections') return respond({ capabilityRevision: 'cap-1',
         connections: Object.entries(live).map(([connectionRef, row]) => ({
@@ -54,7 +55,7 @@ function fixtureAdapter() {
     } };
   return adapter;
 }
-const base = sessionRef => ({ contractVersion: 'canvas/v5', sessionRef });
+const base = sessionRef => ({ contractVersion: 'canvas/v6', sessionRef });
 async function boot(t) {
   const directory = await mkdtemp(join(tmpdir(), 'canvas-session-world-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
@@ -215,7 +216,7 @@ test('a Session switch is refused while one of its own transactions is unfinishe
 });
 
 /*
- * I-K2 typed selected-object / objectRevision snapshot over EXISTING public canvas/v5
+ * I-K2 typed selected-object / objectRevision snapshot over EXISTING public canvas/v6
  * routes only (no new wire, nothing read from display, request echo, a first ref or a
  * private map): R1 = ReadWorldSelectionContext (typed CurrentContext: currentSession,
  * activeWorldRef, orderedSelectedObjectRefs 0..n, selectionRevision, sessionRevision,
@@ -226,13 +227,13 @@ test('a Session switch is refused while one of its own transactions is unfinishe
  */
 
 async function selectedSnapshot(canvas, sessionRef, worldRef, id) {
-  const read = async n => canvas.call('ReadWorldSelectionContext', { contractVersion: 'canvas/v5',
+  const read = async n => canvas.call('ReadWorldSelectionContext', { contractVersion: 'canvas/v6',
     sessionRef, requestId: `${id}-read-${n}`, worldRef });
   const r1 = await read(1);
   if (r1.error) return { refused: r1.error.code };
   if (r1.result.selection.status === 'UNBOUND') return { unbound: r1.result.selection };
   const context = r1.result.selection.context;
-  const listed = await canvas.call('ListObjects', { contractVersion: 'canvas/v5', sessionRef,
+  const listed = await canvas.call('ListObjects', { contractVersion: 'canvas/v6', sessionRef,
     requestId: `${id}-list`, worldRef, expectedRevision: null, localContext: context.localContext });
   if (listed.error) return { refused: listed.error.code };
   const r2 = await read(2);
@@ -260,16 +261,16 @@ test('I-K2 snapshot: zero and multi selection, objectRevision, Session/world/inc
     assert.deepEqual(zero.snapshot?.selected, [], JSON.stringify(zero));
     assert.equal(zero.snapshot.connectionIncarnationRef, 'undo-fixture-incarnation');
     // Multi selection, in the caller's order, each with its current objectRevision.
-    const listed = await canvas.call('ListObjects', { contractVersion: 'canvas/v5',
+    const listed = await canvas.call('ListObjects', { contractVersion: 'canvas/v6',
       sessionRef: undoSessionRef, requestId: 'all', worldRef: undoWorldRef, expectedRevision: null,
-      localContext: (await canvas.call('ReadWorldSelectionContext', { contractVersion: 'canvas/v5',
+      localContext: (await canvas.call('ReadWorldSelectionContext', { contractVersion: 'canvas/v6',
         sessionRef: undoSessionRef, requestId: 'ctx', worldRef: undoWorldRef }))
         .result.selection.context.localContext });
     const refs = listed.result.objects.map(row => row.objectRef).reverse();
     assert.equal(refs.length, 2);
-    const before = (await canvas.call('ReadWorldSelectionContext', { contractVersion: 'canvas/v5',
+    const before = (await canvas.call('ReadWorldSelectionContext', { contractVersion: 'canvas/v6',
       sessionRef: undoSessionRef, requestId: 'ctx-2', worldRef: undoWorldRef })).result.selection.context;
-    const set = await canvas.call('SetObjectSelection', { contractVersion: 'canvas/v5',
+    const set = await canvas.call('SetObjectSelection', { contractVersion: 'canvas/v6',
       sessionRef: undoSessionRef, requestId: 'select-two', worldRef: undoWorldRef, objectRefs: refs,
       expectedSelectionRevision: before.selectionRevision, localContext: before.localContext });
     assert.equal(set.error, null, JSON.stringify(set.error));
@@ -280,7 +281,7 @@ test('I-K2 snapshot: zero and multi selection, objectRevision, Session/world/inc
         .objectRevision);
     assert.notEqual(multi.snapshot.selectionRevision, zero.snapshot.selectionRevision);
     // A stale localContext (old selectionRevision) is refused by Canvas admission.
-    const stale = await canvas.call('ListObjects', { contractVersion: 'canvas/v5',
+    const stale = await canvas.call('ListObjects', { contractVersion: 'canvas/v6',
       sessionRef: undoSessionRef, requestId: 'stale', worldRef: undoWorldRef, expectedRevision: null,
       localContext: before.localContext });
     assert.equal(stale.error?.code, 'CURRENT_WORLD_MISMATCH');

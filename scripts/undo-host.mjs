@@ -10,7 +10,7 @@ export const undoWorldFile = directory => join(directory, 'fixture-world.json');
 
 /**
  * Isolated /undo host. Canvas owns every decision and durable record; this host
- * only turns the page's click into the public canvas/v5 Undo or Redo Canvas itself
+ * only turns the page's click into the public canvas/v6 Undo or Redo Canvas itself
  * published in readHistoryActions, then reads the result back.
  */
 export async function openUndoHost(directory, { world: preparedWorld } = {}) {
@@ -50,7 +50,7 @@ export async function openUndoHost(directory, { world: preparedWorld } = {}) {
       const step = object[action];
       if (!step.available) return { error: { code: step.reason } };
       const id = `undo-web-${action}-${randomUUID()}`;
-      const request = { contractVersion: 'canvas/v5', sessionRef: undoSessionRef, requestId: id,
+      const request = { contractVersion: 'canvas/v6', sessionRef: undoSessionRef, requestId: id,
         worldRef: actions.worldRef, objectRef, transactionId: id, historyTransactionId: step.historyTransactionId,
         expectedHistoryRevision: step.expectedHistoryRevision, expectedWorldRevision: step.expectedWorldRevision,
         expectedObjectRevisions: step.expectedObjectRevisions,

@@ -1,7 +1,8 @@
 import { open, readFile, rename, rm } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import canonicalize from 'canonicalize';
-import { digestValue, encodeRegionBlock, expandRegionBlock, regionChunksOfBox } from 'hanaworlds-contracts';
+import { digestValue, encodeRegionBlock, expandRegionBlock, regionChunksOfBox, safetyCapabilities }
+  from 'hanaworlds-contracts';
 
 // Explicit, isolated fixture world for the /undo development page. Only the world and
 // its Adapter are fixtures: Canvas decides, verifies, reads back and stores every
@@ -10,6 +11,10 @@ import { digestValue, encodeRegionBlock, expandRegionBlock, regionChunksOfBox } 
 export const undoSessionRef = 'undo-fixture-session';
 export const undoWorldRef = 'undo-fixture-world';
 const D = (kind, value) => digestValue(kind, value).sha256;
+// FIXTURE claim: the fixture Adapter advertises the Contracts engine safety capabilities of each
+// wire so the dev pages can exercise Canvas writes; it implements no engine check.
+const fixtureSafety = wire => safetyCapabilities.filter(c => c.id.startsWith(`${wire}:`) &&
+  ['G1', 'G2', 'G3'].includes(c.gap)).map(c => c.id);
 export const undoStateProfile = { profileVersion:'state-profile/v2', nodeFields:['nodeName','param1','param2'],
   metadataMode:'exact', inventoryMode:'exact', timerMode:'exact', derivedLightMode:'recompute-with-readback' };
 export const undoConnection = { connectionRef:'undo-fixture-connection', connectionIncarnationRef:'undo-fixture-incarnation',
@@ -69,15 +74,16 @@ export async function openUndoFixtureWorld(file, { create = false } = {}) {
       stateDigest:createHash('sha256').update('HanaWorlds|contracts@0.4.0|adapter-scoped-cell/v1\n')
         .update(canonicalize({ profile:undoStateProfile, record:record(p) })).digest('hex') })) };
   } };
-  // FIXTURE per-cell port handshake: what a G3 Adapter advertises on world-adapter/v6.
+  // FIXTURE per-cell port handshake: what a G3 Adapter advertises on world-adapter/v7.
   env.adapter = { protocolHandshake:{ profileVersion:'protocol-handshake/v1', component:'undo-fixture-adapter',
-    protocols:[{ protocol:'world-adapter', major:6, minor:1 }],
-    capabilities:['world-adapter/v6:callback-free-write','world-adapter/v6:write-path-state-facts'],
+    protocols:[{ protocol:'world-adapter', major:7, minor:0 }],
+    capabilities:['world-adapter/v7:callback-free-write','world-adapter/v7:write-path-state-facts',
+      ...fixtureSafety('world-adapter/v7')].sort(),
     provenance:{ packageName:'undo-fixture-adapter', packageVersion:'1.0.0', sourceRevision:null, artifactDigest:null } },
     async call(operation, request) {
-    env.calls.push({ port:'world-adapter/v6', operation, transactionId:request.transactionId ?? null });
-    const answer = result => ({ contractVersion:'world-adapter/v6', requestId:request.requestId, result, error:null });
-    const refuse = (code, reason) => ({ contractVersion:'world-adapter/v6', requestId:request.requestId, result:null,
+    env.calls.push({ port:'world-adapter/v7', operation, transactionId:request.transactionId ?? null });
+    const answer = result => ({ contractVersion:'world-adapter/v7', requestId:request.requestId, result, error:null });
+    const refuse = (code, reason) => ({ contractVersion:'world-adapter/v7', requestId:request.requestId, result:null,
       error:{ code, phase:'validate', retryability:'AFTER_NEW_FACTS', mutationState:'NONE', transactionRef:null, causeCode:null, reason } });
     if (operation === 'DiscoverConnections') return answer({ capabilityRevision:'undo-fixture-cap-1', connections:[{
       adapterId:'hanaworlds-world-adapter', connectionRef:undoConnection.connectionRef, worldRef:undoWorldRef,
@@ -94,7 +100,7 @@ export async function openUndoFixtureWorld(file, { create = false } = {}) {
       const positions = request.scope.checkedPositions;
       world.images[request.transactionId] = { positions, before:positions.map(record), after:null };
       await save();
-      const payload = { contractVersion:'world-adapter/v6', transactionId:request.transactionId, worldRef:undoWorldRef,
+      const payload = { contractVersion:'world-adapter/v7', transactionId:request.transactionId, worldRef:undoWorldRef,
         operationDigest:request.operationDigest, scopeDigest:request.scopeDigest, beforeImageDigest:D('readback', projection(positions)),
         localContext:request.localContext };
       return answer({ payload, transactionPayloadDigest:D('scoped-transaction-payload', payload), beforeImageDigest:payload.beforeImageDigest,
@@ -108,7 +114,7 @@ export async function openUndoFixtureWorld(file, { create = false } = {}) {
       image.after = image.positions.map(record);
       const observedWorldRevision = nextRevision();
       await save();
-      return answer({ contractVersion:'canvas/v5', transactionId:request.transactionId, operationDigest:request.operationDigest,
+      return answer({ contractVersion:'canvas/v6', transactionId:request.transactionId, operationDigest:request.operationDigest,
         transactionPayloadDigest:request.preparedTransaction.transactionPayloadDigest, status:'VERIFIED', previousWorldRevision,
         observedWorldRevision, readbackDigest:D('readback', projection(image.positions)), restoreStatus:'NOT_REQUIRED', error:null,
         localContext:request.localContext });
@@ -120,7 +126,7 @@ export async function openUndoFixtureWorld(file, { create = false } = {}) {
       image.before.forEach(put);
       const observedWorldRevision = nextRevision();
       await save();
-      return answer({ contractVersion:'canvas/v5', transactionId:request.originTransactionId, operationDigest:request.operationDigest,
+      return answer({ contractVersion:'canvas/v6', transactionId:request.originTransactionId, operationDigest:request.operationDigest,
         transactionPayloadDigest:'5'.repeat(64), status:'ROLLED_BACK', previousWorldRevision, observedWorldRevision,
         readbackDigest:D('readback', projection(image.positions)), restoreStatus:'VERIFIED_RESTORED', error:null, localContext:request.localContext });
     }
@@ -150,7 +156,7 @@ export async function openUndoFixtureWorld(file, { create = false } = {}) {
       image.after = image.positions.map(record);
       const observedWorldRevision = nextRevision();
       await save();
-      return answer({ contractVersion:'canvas/v5', transactionId:request.transactionId, operationDigest:request.historyOperationDigest,
+      return answer({ contractVersion:'canvas/v6', transactionId:request.transactionId, operationDigest:request.historyOperationDigest,
         transactionPayloadDigest:request.preparedHistoryTransaction.transactionPayloadDigest, status:'VERIFIED',
         previousWorldRevision:await env.readWorldRevision(), observedWorldRevision,
         readbackDigest:D('readback', projection(image.positions)), restoreStatus:'NOT_REQUIRED', error:null, localContext:request.localContext });
@@ -161,7 +167,8 @@ export async function openUndoFixtureWorld(file, { create = false } = {}) {
     protocols:[{ protocol:'world-adapter-region', major:1, minor:1 }], capabilities:[
       'world-adapter-region/v1:callback-free-write',
       'world-adapter-region/v1:chunked-read','world-adapter-region/v1:chunked-write','world-adapter-region/v1:lighting-complete',
-      'world-adapter-region/v1:load-then-know','world-adapter-region/v1:restore-state'],
+      'world-adapter-region/v1:load-then-know','world-adapter-region/v1:restore-state',
+      ...fixtureSafety('world-adapter-region/v1')].sort(),
     provenance:{ packageName:'undo-fixture-adapter', packageVersion:'1.0.0', sourceRevision:null, artifactDigest:null } },
     async call(operation, request) {
       env.calls.push({ port:'world-adapter-region/v1', operation, transactionId:request.transactionId ?? null });
