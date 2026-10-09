@@ -26,24 +26,13 @@ let h='<h2>来源权威 <span class="real">REAL Canvas 代码</span></h2><div cl
 h+='<h2>适用域（Canvas 自己的选择表；连接来自 <span class="fixture">FIXTURE 输入</span>）</h2><div class="box">'+(c.domain?Object.entries(c.domain).map(([k,v])=>esc(k)+' '+j(v)).join('<br>')+'<br>sessions '+j(c.sessionRefs):'<span class="NOT_BOUND">NOT_BOUND</span>：该 World 没有被任何 Session 绑定')+'</div>';
 h+='<div class="box">本次观察 #'+esc(c.observedSequence)+' '+j(c.observationDigest)+' · '+esc(c.observedAt)+(c.sources?' · Catalogue <span class="fixture">FIXTURE 输入</span> '+j(c.sources.catalogue):'')+'</div>';
 h+='<h2>Safety 规则</h2><div class="box">来源：<b>玩家确认</b>（skill 提案 → 玩家确认 → 合约纯函数）。Canvas 不声明、不供给 SafetyProfile，也没有 hanaworldsSafetyProfile 服务。</div>';
-h+='<h2>引擎安全能力（Canvas 事务角色）</h2><table><tr><th>能力</th><th>Canvas 侧</th></tr>'+d.engine.map(r=>'<tr><td>'+esc(r.name)+'</td><td class="'+r.status+'">'+esc(r.status)+'</td></tr><tr><td colspan="2">'+esc(r.detail)+'</td></tr>').join('')+'</table>';
+h+='<h2>引擎安全能力（按写操作；对端握手 <span class="fixture">FIXTURE 输入</span>）</h2><table><tr><th>操作</th><th>端口</th><th>状态</th><th>缺少（合约能力名 · cause）</th></tr>'+d.engine.map(r=>'<tr><td>'+esc(r.operation)+'</td><td>'+esc(r.port)+'</td><td class="'+(r.unmet.length?'MISSING':'SUPPLIED')+'">'+esc(r.status)+'</td><td>'+(r.unmet.length?r.unmet.map(u=>'<code>'+esc(u.id)+'</code> · '+esc(u.cause)).join('<br>'):'—')+'</td></tr>').join('')+'</table><div class="box">缺任一项时该操作在任何写入前被拒（CAPABILITY_UNAVAILABLE）。回滚遇到 RESTORE_FAILED 时事务记为待恢复（canvas/v6 RESTORE_FAILED receipt），不报成功。</div>';
 h+=profile('CompilationConfig',c.profiles.compilationConfig,d.ports.compilerConfig);
 h+='<h2>变更 / 失效记录（持久，'+d.report.history.length+' 条）</h2><table><tr><th>#</th><th>观察</th><th>被取代</th><th>原因</th></tr>';for(const r of [...d.report.history].reverse())h+='<tr><td>'+esc(r.observedSequence)+'</td><td>'+j(r.observationDigest.slice(0,16))+'</td><td>'+esc(r.supersededAt)+'</td><td>'+esc(r.invalidationReasons.join(', '))+'</td></tr>';h+='</table>';$('#out').innerHTML=h;}
 function renderFixture(f){$('#fixture').innerHTML='<div class="fixbox"><span class="fixture">FIXTURE</span> 对端输入（不是配置来源权威）：'+j(f)+'<br><button data-a="worldedit">改 FIXTURE worldedit revision</button><button data-a="noworldedit">FIXTURE Catalogue 去掉 worldedit</button><button data-a="rebind">FIXTURE 新连接 incarnation 并重选</button><button data-a="unbind">经 Canvas 解绑</button></div>';
 for(const b of document.querySelectorAll('#fixture button'))b.onclick=async()=>{const r=await post('/api/fixture/'+b.dataset.a);if(r.fixture)renderFixture(r.fixture);await read();};}
 async function read(){const w=$('#world').value;const r=await fetch('/api/supply?worldRef='+encodeURIComponent(w));const d=await r.json();if(d.fixture)renderFixture(d.fixture);render(d);}
 $('#read').onsubmit=e=>{e.preventDefault();read();};fetch('/api/fixture').then(r=>r.json()).then(d=>renderFixture(d.fixture));`;
-
-// Canvas-side state of the engine safety capabilities. The public capability names and refusal
-// codes are the Contracts' (v1.0.0 candidate); until those bytes exist nothing is claimed here.
-const ENGINE_CAPABILITIES = [
-  { name: 'G1 回滚身体复查（RESTORE_FAILED）', status: 'SUPPLIED',
-    detail: 'Canvas 收到 RESTORE_FAILED → 事务记为待恢复（RESTORE_PENDING，可读，不报成功）。引擎复查由 Adapter 实现。' },
-  { name: 'G2 逐格保护', status: 'MISSING',
-    detail: 'Canvas 提交前按合约能力名检查、缺失即具名拒绝：等待 hanaworlds-contracts v1.0.0-rc.1 的能力名，尚未接入。' },
-  { name: 'G3 不封住玩家', status: 'MISSING',
-    detail: 'Canvas 提交前按合约能力名检查、缺失即具名拒绝：等待 hanaworlds-contracts v1.0.0-rc.1 的能力名，尚未接入。' },
-];
 
 async function portOutcome(key, read) {
   try { return { key, ok: true, value: await read() }; }
@@ -128,7 +117,7 @@ export async function createConfigSupplyServer(runDirectory) {
         const report = await supply.read(worldRef);
         const ports = {
           compilerConfig: await portOutcome('hanaworldsCompilerConfig', () => supply.readCompilerConfig(worldRef)) };
-        return reply(res, 200, { report, ports, engine: ENGINE_CAPABILITIES, fixture: peers.describe() });
+        return reply(res, 200, { report, ports, engine: canvas.readEngineSafety(), fixture: peers.describe() });
       }
       return reply(res, 404, { error: 'NOT_FOUND' });
     } catch (error) {
@@ -137,7 +126,7 @@ export async function createConfigSupplyServer(runDirectory) {
   });
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const runDirectory = resolve(process.argv[2] ?? '');
   if (!process.argv[2]) throw new Error('usage: config-supply-web-server.mjs <run-dir> [port]');
   const port = Number(process.argv[3] ?? 47613);

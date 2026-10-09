@@ -32,7 +32,8 @@ export async function supplyFixturePeers({ incarnation = 'supply-fixture-incarna
       imageMediaTypes: [], model: null } });
   env.adapter = {
     protocolHandshake: { profileVersion: 'protocol-handshake/v1', component: 'supply-fixture-adapter',
-      protocols: [{ protocol: 'world-adapter', major: 6, minor: 1 }],
+      // FIXTURE: Contracts 1.x per-cell wire, no engine safety capability advertised.
+      protocols: [{ protocol: 'world-adapter', major: 7, minor: 0 }],
       capabilities: ['world-adapter/v7:callback-free-write', 'world-adapter/v7:write-path-state-facts'],
       provenance: { packageName: 'supply-fixture-adapter', packageVersion: '1.0.0',
         sourceRevision: null, artifactDigest: null } },

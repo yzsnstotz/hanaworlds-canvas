@@ -3,7 +3,11 @@ import { createHash } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import canonicalize from 'canonicalize';
-import { digestValue, encodeRegionBlock, expandRegionBlock, regionChunksOfBox, comparePosition } from 'hanaworlds-contracts';
+import { digestValue, encodeRegionBlock, expandRegionBlock, regionChunksOfBox, comparePosition,
+  safetyCapabilities } from 'hanaworlds-contracts';
+// FIXTURE claim only: the example Adapter advertises the Contracts engine safety ids of each wire.
+const fixtureSafety = wire => safetyCapabilities.filter(c => c.id.startsWith(`${wire}:`) &&
+  ['G1', 'G2', 'G3'].includes(c.gap)).map(c => c.id);
 import { CanvasV5, CanvasStore, CanvasRegionV1 } from '../src/index.mjs';
 import { objectsRunRoot } from './objects-web-server.mjs';
 import { fixtureSessions } from './fixture-sessions.mjs';
@@ -51,8 +55,9 @@ function fixtureEnvironment() {
   } };
   // FIXTURE per-cell port handshake: what a G3 Adapter advertises on world-adapter/v7.
   env.adapter = { protocolHandshake:{ profileVersion:'protocol-handshake/v1', component:'objects-fixture-adapter',
-    protocols:[{ protocol:'world-adapter', major:6, minor:1 }],
-    capabilities:['world-adapter/v7:callback-free-write','world-adapter/v7:write-path-state-facts'],
+    protocols:[{ protocol:'world-adapter', major:7, minor:0 }],
+    capabilities:['world-adapter/v7:callback-free-write','world-adapter/v7:write-path-state-facts',
+      ...fixtureSafety('world-adapter/v7')].sort(),
     provenance:{ packageName:'objects-fixture-adapter', packageVersion:'1.0.0', sourceRevision:null, artifactDigest:null } },
     async call(operation, request) {
     calls.push({port:'world-adapter/v7',operation,request:structuredClone(request)});
@@ -90,7 +95,8 @@ function fixtureEnvironment() {
     protocols:[{protocol:'world-adapter-region',major:1,minor:1}],capabilities:[
       'world-adapter-region/v1:callback-free-write',
       'world-adapter-region/v1:chunked-read','world-adapter-region/v1:chunked-write','world-adapter-region/v1:lighting-complete',
-      'world-adapter-region/v1:load-then-know','world-adapter-region/v1:restore-state'],
+      'world-adapter-region/v1:load-then-know','world-adapter-region/v1:restore-state',
+      ...fixtureSafety('world-adapter-region/v1')].sort(),
     provenance:{packageName:'objects-fixture-adapter',packageVersion:'1.0.0',sourceRevision:null,artifactDigest:null}},
     async call(operation, request) {
       calls.push({port:'world-adapter-region/v1',operation,request:structuredClone(request)});

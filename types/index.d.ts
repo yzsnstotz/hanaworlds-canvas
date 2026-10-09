@@ -44,12 +44,28 @@ export class CanvasV5 implements CanvasV5ProtocolSource {
   readWorldRevision(worldRef: string): Promise<string>;
   /** Plugin-owned read: per-object Undo/Redo availability plus every unfinished transaction of
    * the World; a rollback the engine refused stays `recoveryPending` (phase RESTORE_PENDING). */
+  /** Canvas-own read: per write operation, the engine safety it needs and what is missing. */
+  readEngineSafety(regionHandshake?: unknown): EngineSafetyRow[];
   readHistoryActions(sessionRef: string): Promise<{ state: string; worldRef: string | null;
     objects: any[]; recovery?: RecoveryRow[] } & Record<string, unknown>>;
 }
 export interface RecoveryRow {
   transactionId: string; mode: 'CELL' | 'REGION'; phase: string; recoveryPending: boolean;
+  /** CELL: RESTORE_FAILED (canvas/v6 receipt, manual recovery) or RECOVERY_PENDING (unknown). */
+  receiptStatus: 'RESTORE_FAILED' | 'RECOVERY_PENDING' | null;
   restoreCode: string | null; causeCode: string | null;
+}
+export type EngineSafetyOperation = 'ApplyRecoverableCommit' | 'Undo' | 'Redo' |
+  'ApplyRegionCommit' | 'UndoRegionCommit';
+/** Engine safety capabilities (Contracts G1–G3 ids) each write operation needs from its port. */
+export const ENGINE_SAFETY_REQUIREMENTS: Readonly<Record<EngineSafetyOperation, Readonly<{
+  port: 'world-adapter/v7' | 'world-adapter-region/v1';
+  ids: readonly import('hanaworlds-contracts').SafetyCapabilityId[] }>>>;
+export function unmetEngineSafety(handshake: unknown, operation: EngineSafetyOperation):
+  { id: import('hanaworlds-contracts').SafetyCapabilityId; cause: string }[];
+export interface EngineSafetyRow {
+  operation: EngineSafetyOperation; port: string; required: string[];
+  unmet: { id: string; cause: string }[]; status: 'ADVERTISED' | 'CAPABILITY_UNAVAILABLE';
 }
 /** Data directory name under `<dsh home>/data` for the 1.x store; 0.x data is never read. */
 export const STORE_ROOT: 'hanaworlds-canvas-v1';
