@@ -9,6 +9,7 @@ import { openRuntime } from './support/cordis-runtime.mjs';
 const consumer = await import(process.env.CANVAS_CONSUMER_ENTRY ?? 'hanaworlds-contracts');
 import { readFile, writeFile } from 'node:fs/promises';
 import { digestValue, checkContractHandshake, contractHandshake } from 'hanaworlds-contracts';
+import majorCompat from 'hanaworlds-contracts/fixtures/contracts-major-compat' with { type: 'json' };
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import canonicalize from 'canonicalize';
@@ -570,19 +571,21 @@ test('host exposes durable Canvas facts as separate public ports', async () => {
     assert.equal(typeof ports.get('hanaworldsWorldRevisionOracle')?.read, 'function');
     assert.equal(ports.has('hanaworldsLuantiInspectionContext'), false);
     const advertised = ports.get('hanaworldsCanvasV5').contractHandshake;
-    // Canvas advertises the exact identity of the Contracts package it runs on (the pin
-    // itself is the lockfile's job). A consumer on another package must reject that
-    // exact identity; its cell admission uses ProtocolHandshake.
+    // Canvas advertises the identity of the Contracts package it runs on (the resolved
+    // commit is the lockfile's job). Consumers decide it with the Contracts same-major
+    // predicate only; its cell admission uses ProtocolHandshake.
     const entry = process.env.CANVAS_ENTRY ?? new URL('../src/index.mjs', import.meta.url).href;
     const running = createRequire(entry)('hanaworlds-contracts/package.json');
     assert.equal(advertised.contracts, `hanaworlds-contracts@${running.version}`);
     assert.equal(ports.get('hanaworldsCanvasV5').status().version, '0.6.15');
-    if (advertised.contracts === contractHandshake.contracts)
-      assert.doesNotThrow(() => checkContractHandshake(advertised));
-    else
-      assert.throws(() => checkContractHandshake(advertised),
-        error => error.code === 'UNSUPPORTED_VERSION');
-    assert.throws(() => checkContractHandshake({ ...advertised,
-      contracts: 'hanaworlds-contracts@0.4.2' }), error => error.code === 'UNSUPPORTED_VERSION');
+    assert.doesNotThrow(() => checkContractHandshake(advertised));
+    // Public Contracts conformance cases, each patched over Canvas's advertised handshake.
+    const patched = c => { const h = { ...advertised, ...c.patch };
+      if (c.dropWire) h.wireVersions = h.wireVersions.filter(w => w !== c.dropWire); return h; };
+    for (const c of majorCompat.contractHandshake.accept)
+      assert.equal(checkContractHandshake(patched(c)).result, c.expect, c.title);
+    for (const c of majorCompat.contractHandshake.reject)
+      assert.throws(() => checkContractHandshake(patched(c)), error =>
+        error.code === c.error.code && error.reason === c.error.reason, c.title);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });

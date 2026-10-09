@@ -77,7 +77,7 @@
   },
   "dependencies": {
     "canonicalize": "5.1.0",
-    "hanaworlds-contracts": "https://codeload.github.com/yzsnstotz/hanaworlds-contracts/tar.gz/dcbe648576de5f666bed11a90d015cc30bdf2bc9",
+    "hanaworlds-contracts": "git+https://github.com/yzsnstotz/hanaworlds-contracts.git#semver:^0.5.6",
     "icu": "2.3.1"
   },
   "devDependencies": {
