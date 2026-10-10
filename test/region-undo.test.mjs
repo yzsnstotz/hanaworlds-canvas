@@ -360,6 +360,7 @@ test('partial chunk write or readback mismatch rolls the whole region back witho
       assert.equal(regionRollbackCauseOf(commit(localContext, terrain()), failed).cause, 'REPORTED');
       assert.equal(failed.result.rollbackCause.error.code, 'APPLY_FAILED');
       assert.equal(failed.result.rollbackCause.error.phase, 'apply');
+      assert.equal(failed.result.rollbackCause.error.mutationState, 'UNKNOWN');
       assert.equal(failed.result.rollbackCause.guardRefusal, null);
       assert.deepEqual(failed.result.actualSummary, failed.result.beforeSummary);
       assert.equal(picture(world), before);
@@ -378,6 +379,7 @@ test('partial chunk write or readback mismatch rolls the whole region back witho
       assert.equal(mismatch.result.status, 'ROLLED_BACK');
       assert.equal(mismatch.result.rollbackCause.error.code, 'READBACK_MISMATCH');
       assert.equal(mismatch.result.rollbackCause.error.phase, 'readback');
+      assert.equal(mismatch.result.rollbackCause.error.mutationState, 'PARTIAL');
       assert.equal(canvas.store.snapshot.transactions['region-tx-2'].causeCode, 'READBACK_MISMATCH');
       assert.equal(picture(world), before);
     } finally { await rm(directory, { recursive: true, force: true }); }
@@ -668,7 +670,7 @@ test('protocol major + capabilities decide compatibility; patch and provenance d
         'PROTOCOL_COMPATIBLE');
       assert.throws(() => checkProtocolCompatibility(canvasProtocolHandshake,
         [protocolRequirement('canvas-region/v3')]), e => e.code === 'UNSUPPORTED_VERSION');
-      assert.equal(canvas.status().version, '0.13.1');
+      assert.equal(canvas.status().version, '0.13.2');
     } finally { await rm(directory, { recursive: true, force: true }); }
   });
 
@@ -816,7 +818,7 @@ test('confirmed REGION: own source is retained, A-to-B and stale/missing/foreign
 
 // SOURCE/FIXTURE: public Adapter failures and raw lost transport, no real engine or writer attribution.
 test('rollback reports observed Adapter cause or UNKNOWN and replays the stored response after reopen', async () => {
-  for (const mode of ['error', 'guard', 'unreported', 'restore-phase', 'foreign-transaction', 'invalid-mutation', 'invalid-guard']) {
+  for (const mode of ['error', 'error-none', 'guard', 'unreported', 'restore-phase', 'foreign-transaction', 'invalid-mutation', 'invalid-guard']) {
     const directory = await mkdtemp(join(tmpdir(), 'canvas-region-cause-'));
     try {
       const world = fixtureWorld();
@@ -825,6 +827,7 @@ test('rollback reports observed Adapter cause or UNKNOWN and replays the stored 
       const observed = mode === 'guard' ? guardRefusalError(guard, {transactionRef: 'region-tx-1'}) :
         {code: 'APPLY_FAILED', phase: 'apply', retryability: 'AFTER_NEW_FACTS', mutationState: 'PARTIAL',
           transactionRef: 'region-tx-1', causeCode: null, reason: 'APPLY_ERROR'};
+      if (mode === 'error-none') observed.mutationState = 'NONE';
       world.region.call = async (operation, request) => {
         if (operation === 'WriteRegion' && request.purpose === 'APPLY') {
           world.writes.push({purpose: 'APPLY', chunks: request.writes.length});
@@ -851,7 +854,7 @@ test('rollback reports observed Adapter cause or UNKNOWN and replays the stored 
       assert.equal(response.result.status, 'ROLLED_BACK');
       assert.equal(picture(world), before);
       const read = regionRollbackCauseOf(body, response);
-      if (!['error', 'guard'].includes(mode)) {
+      if (!['error', 'error-none', 'guard'].includes(mode)) {
         assert.equal(read.cause, 'UNKNOWN');assert.equal(read.failure, null);
         assert.ok(!Object.hasOwn(response.result, 'rollbackCause'));
       } else {
@@ -867,5 +870,69 @@ test('rollback reports observed Adapter cause or UNKNOWN and replays the stored 
       assert.equal(world.calls.length, calls);assert.equal(world.writes.length, writes);
       assert.ok(region.protocolHandshake.capabilities.includes('canvas-region/v2:rollback-cause'));
     } finally { await rm(directory, {recursive: true, force: true}); }
+  }
+});
+
+
+// Public interrupted-result shape projected from I-K3 E23/E26; no real Adapter/World.
+test('Canvas incomplete APPLY cause states its validated write progress, not default NONE', async () => {
+  const captured = JSON.parse(await readFile(new URL('./fixtures/captured-region-interrupted-apply.json', import.meta.url), 'utf8'));
+  for (const [mode, expected] of [['captured-partial', 'PARTIAL'], ['not-written', 'NONE'],
+    ['unknown', 'UNKNOWN'], ['written-no-change', 'UNKNOWN']]) {
+    const directory = await mkdtemp(join(tmpdir(), 'canvas-region-progress-'));
+    try {
+      const world = fixtureWorld();
+      for (const state of captured.beforeStates) {
+        const {box, indices, palette} = expandRegionBlock(state.block);
+        const [sx, sy] = state.block.size;
+        for (let i = 0; i < indices.length; i++) {
+          const position = [box.min[0] + i % sx, box.min[1] + Math.floor(i / sx) % sy,
+            box.min[2] + Math.floor(i / (sx * sy))];
+          world.nodes.set(k(position), {...palette[indices[i]]});
+        }
+      }
+      const originalCall = world.region.call.bind(world.region);
+      let observed = null;
+      world.region.call = async (operation, request) => {
+        if (operation !== 'WriteRegion' || request.purpose !== 'APPLY') return originalCall(operation, request);
+        let first = null;
+        if (['captured-partial', 'written-no-change'].includes(mode)) {
+          const writes = [structuredClone(request.writes[0])];
+          if (mode === 'written-no-change') writes[0].ops = captured.beforeStates[0].block;
+          first = (await originalCall(operation, {...request, writes})).result;
+        } else world.writes.push({purpose:'APPLY', chunks:request.writes.length});
+        const response = {contractVersion:'world-adapter-region/v2', requestId:request.requestId,
+          error:null, guardRefusal:null, result:{transactionId:request.transactionId,
+            worldRef:request.worldRef, purpose:'APPLY', localContext:request.localContext,
+            chunks:request.writes.map((w,i) => i === 0 && first ? first.chunks[0] :
+              {chunkPos:w.chunkPos, status:mode === 'unknown' && i === 0 ? 'UNKNOWN' : 'NOT_WRITTEN', readbackDigest:null}),
+            lighting:{status:'NOT_COMPLETE',box:{min:[-18,8,3],max:[21,8,6]}, method:'FIXTURE:captured-interruption-shape'}}};
+        observed = {request, response}; return response;
+      };
+      let {canvas,region} = await boot(directory,world);
+      const localContext = await select(canvas), operations = structuredClone(captured.operations);
+      const body = commit(localContext,{operations,operationDigest:D('region-operations',operations)});
+      const before = canonicalJSON([...world.nodes]);
+      const response = await region.call('ApplyRegionCommit',body);
+      assert.equal(response.result?.status,'ROLLED_BACK',JSON.stringify(response));
+      const cause = regionRollbackCauseOf(body,response);
+      assert.equal(cause.cause,'REPORTED');assert.equal(cause.failure.error.code,'APPLY_FAILED');
+      assert.equal(cause.failure.error.mutationState,expected);
+      assert.equal(cause.failure.error.transactionRef,body.transactionId);
+      assert.equal(cause.failure.guardRefusal,null);
+      assert.equal(observed.response.error,null);assert.equal(observed.response.guardRefusal,null);
+      if (mode === 'captured-partial') {
+        assert.deepEqual(observed.response.result.chunks.map(c=>c.status),captured.interruptedStatuses);
+        assert.notEqual(observed.response.result.chunks[0].readbackDigest,observed.request.writes[0].expectedCurrentDigest);
+      }
+      assert.equal(canonicalJSON([...world.nodes]),before);
+      assert.equal(canonicalJSON(response.result.actualSummary),canonicalJSON(response.result.beforeSummary));
+      const calls = world.calls.length, writes = world.writes.length;
+      assert.equal(canonicalJSON(await region.call('ApplyRegionCommit',body)),canonicalJSON(response));
+      ({canvas,region} = await boot(directory,world));
+      assert.equal(canonicalJSON(await region.call('ApplyRegionCommit',body)),canonicalJSON(response));
+      assert.equal(world.calls.length,calls);assert.equal(world.writes.length,writes);
+      assert.deepEqual(canvas.store.snapshot.pending,{});
+    } finally {await rm(directory,{recursive:true,force:true});}
   }
 });

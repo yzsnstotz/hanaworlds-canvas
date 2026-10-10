@@ -1,0 +1,316 @@
+{
+  "evidenceLevel": "PUBLIC_SHAPE_FIXTURE_FROM_CAPTURED_REAL_EVIDENCE_NOT_NEW_REAL",
+  "source": "I-K3 E23/E26 formal-c120-ws074-20261010",
+  "normalization": "World/session/context and placement admission use ordinary fixture selection; exact 4 chunk blocks/160-cell operation domain and public before states preserved",
+  "operations": {
+    "contractVersion": "region-operations/v1",
+    "buildDigest": "90a6e27809deacd3b5a6b70c4a9811bffa40598a1efc8279bc250a9e8fc59f31",
+    "compilerRevision": "compiler-config-6b16b29f93fdb5b325cb22d9b1065f96",
+    "worldRef": "local-world",
+    "catalogueDigest": "d7d17721afb93714b2f5c93c8903467eba8b93de10caae8d2ba76ea9b004f810",
+    "chunkEdge": 16,
+    "chunks": [
+      {
+        "chunkPos": [
+          -2,
+          0,
+          0
+        ],
+        "block": {
+          "profileVersion": "region-voxels/v1",
+          "origin": [
+            -18,
+            8,
+            3
+          ],
+          "size": [
+            2,
+            1,
+            4
+          ],
+          "indexOrder": "X_FASTEST_THEN_Y_THEN_Z",
+          "palette": [
+            {
+              "nodeName": "mcl_core:stone",
+              "param2": 0
+            }
+          ],
+          "runs": [
+            [
+              8,
+              0
+            ]
+          ]
+        }
+      },
+      {
+        "chunkPos": [
+          -1,
+          0,
+          0
+        ],
+        "block": {
+          "profileVersion": "region-voxels/v1",
+          "origin": [
+            -16,
+            8,
+            3
+          ],
+          "size": [
+            16,
+            1,
+            4
+          ],
+          "indexOrder": "X_FASTEST_THEN_Y_THEN_Z",
+          "palette": [
+            {
+              "nodeName": "mcl_core:stone",
+              "param2": 0
+            }
+          ],
+          "runs": [
+            [
+              64,
+              0
+            ]
+          ]
+        }
+      },
+      {
+        "chunkPos": [
+          0,
+          0,
+          0
+        ],
+        "block": {
+          "profileVersion": "region-voxels/v1",
+          "origin": [
+            0,
+            8,
+            3
+          ],
+          "size": [
+            16,
+            1,
+            4
+          ],
+          "indexOrder": "X_FASTEST_THEN_Y_THEN_Z",
+          "palette": [
+            {
+              "nodeName": "air",
+              "param2": 0
+            },
+            {
+              "nodeName": "mcl_core:stone",
+              "param2": 0
+            }
+          ],
+          "runs": [
+            [
+              2,
+              1
+            ],
+            [
+              14,
+              0
+            ],
+            [
+              2,
+              1
+            ],
+            [
+              14,
+              0
+            ],
+            [
+              2,
+              1
+            ],
+            [
+              14,
+              0
+            ],
+            [
+              2,
+              1
+            ],
+            [
+              14,
+              0
+            ]
+          ]
+        }
+      },
+      {
+        "chunkPos": [
+          1,
+          0,
+          0
+        ],
+        "block": {
+          "profileVersion": "region-voxels/v1",
+          "origin": [
+            16,
+            8,
+            3
+          ],
+          "size": [
+            6,
+            1,
+            4
+          ],
+          "indexOrder": "X_FASTEST_THEN_Y_THEN_Z",
+          "palette": [
+            {
+              "nodeName": "air",
+              "param2": 0
+            }
+          ],
+          "runs": [
+            [
+              24,
+              0
+            ]
+          ]
+        }
+      }
+    ]
+  },
+  "beforeStates": [
+    {
+      "profileVersion": "region-state/v1",
+      "worldRef": "local-world",
+      "block": {
+        "profileVersion": "region-voxels/v1",
+        "origin": [
+          -18,
+          8,
+          3
+        ],
+        "size": [
+          2,
+          1,
+          4
+        ],
+        "indexOrder": "X_FASTEST_THEN_Y_THEN_Z",
+        "palette": [
+          {
+            "nodeName": "mcl_core:dirt_with_grass",
+            "param2": 0
+          }
+        ],
+        "runs": [
+          [
+            8,
+            0
+          ]
+        ]
+      },
+      "extras": [],
+      "derivedLightMode": "recompute-with-readback"
+    },
+    {
+      "profileVersion": "region-state/v1",
+      "worldRef": "local-world",
+      "block": {
+        "profileVersion": "region-voxels/v1",
+        "origin": [
+          -16,
+          8,
+          3
+        ],
+        "size": [
+          16,
+          1,
+          4
+        ],
+        "indexOrder": "X_FASTEST_THEN_Y_THEN_Z",
+        "palette": [
+          {
+            "nodeName": "mcl_core:dirt_with_grass",
+            "param2": 0
+          }
+        ],
+        "runs": [
+          [
+            64,
+            0
+          ]
+        ]
+      },
+      "extras": [],
+      "derivedLightMode": "recompute-with-readback"
+    },
+    {
+      "profileVersion": "region-state/v1",
+      "worldRef": "local-world",
+      "block": {
+        "profileVersion": "region-voxels/v1",
+        "origin": [
+          0,
+          8,
+          3
+        ],
+        "size": [
+          16,
+          1,
+          4
+        ],
+        "indexOrder": "X_FASTEST_THEN_Y_THEN_Z",
+        "palette": [
+          {
+            "nodeName": "mcl_core:dirt_with_grass",
+            "param2": 0
+          }
+        ],
+        "runs": [
+          [
+            64,
+            0
+          ]
+        ]
+      },
+      "extras": [],
+      "derivedLightMode": "recompute-with-readback"
+    },
+    {
+      "profileVersion": "region-state/v1",
+      "worldRef": "local-world",
+      "block": {
+        "profileVersion": "region-voxels/v1",
+        "origin": [
+          16,
+          8,
+          3
+        ],
+        "size": [
+          6,
+          1,
+          4
+        ],
+        "indexOrder": "X_FASTEST_THEN_Y_THEN_Z",
+        "palette": [
+          {
+            "nodeName": "mcl_core:dirt_with_grass",
+            "param2": 0
+          }
+        ],
+        "runs": [
+          [
+            24,
+            0
+          ]
+        ]
+      },
+      "extras": [],
+      "derivedLightMode": "recompute-with-readback"
+    }
+  ],
+  "interruptedStatuses": [
+    "WRITTEN",
+    "NOT_WRITTEN",
+    "NOT_WRITTEN",
+    "NOT_WRITTEN"
+  ],
+  "nonzeroFirstChunkCells": 8
+}

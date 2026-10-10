@@ -20,7 +20,7 @@ import { canonicalJSON, checkProtocolCompatibility, comparePosition, contractPro
 export const REGION_WIRE = 'canvas-region/v2';
 export const REGION_ADAPTER = 'world-adapter-region/v2';
 const ADAPTER = 'world-adapter/v7';
-const PACKAGE_VERSION = '0.13.1';
+const PACKAGE_VERSION = '0.13.2';
 export const CANVAS_REGION_CAPABILITIES = Object.freeze(regionCapabilities
   .filter(c => c.owner === 'hanaworlds-canvas').map(c => c.id).sort());
 // A capability id is scoped by its wire ("<wire>:<name>"). Each Adapter requirement takes
@@ -131,6 +131,23 @@ export function regionFail(code, reason = 'REVISION_CHANGED', phase = 'validate'
   return error;
 }
 const fail = regionFail;
+
+// Canvas's own incomplete APPLY/readback step, not an Adapter Error. The bound,
+// validated result reports all chunks of this write. Unknown outcomes stay
+// UNKNOWN; a changed WRITTEN digest proves partial mutation before restoration.
+// A no-op WRITTEN digest alone does not prove that the whole step made no writes.
+function applyProgressFailure(body, written, before, code = 'APPLY_FAILED',
+  reason = 'APPLY_ERROR', phase = 'apply') {
+  const chunks = written.response.result.chunks;
+  const mutationState = chunks.some(c => c.status === 'UNKNOWN') ? 'UNKNOWN' :
+    chunks.some((c, i) => c.status === 'WRITTEN' &&
+      c.readbackDigest !== before.chunks[i].stateDigest) ? 'PARTIAL' :
+    chunks.every(c => c.status === 'NOT_WRITTEN') ? 'NONE' : 'UNKNOWN';
+  const error = fail(code, reason, phase);
+  error.publicError.mutationState = mutationState;
+  error.publicError.transactionRef = body.transactionId;
+  return error;
+}
 
 // Only a public failure actually observed before restore can be reported. A raw
 // transport exception, invalid detail or foreign transaction remains unreported.
@@ -394,11 +411,12 @@ export class CanvasRegionV1 {
           expectedCurrentDigest: before.chunks[i].stateDigest, ops: c.block, state: null })),
         'apply');
       lighting = written.response.result?.lighting ?? null;
-      if (!written.allWritten) throw fail('APPLY_FAILED', 'APPLY_ERROR', 'apply');
+      if (!written.allWritten) throw applyProgressFailure(body, written, before);
       const after = await this.#read(body, box, 'READBACK', 'after', layout);
       const actualSummary = this.#summary(body.worldRef, after);
       if (!same(actualSummary, expectedAfterSummary))
-        throw fail('READBACK_MISMATCH', 'READBACK_ERROR', 'readback');
+        throw applyProgressFailure(body, written, before,
+          'READBACK_MISMATCH', 'READBACK_ERROR', 'readback');
       return await this.#record(body, { beforeSummary, expectedAfterSummary, actualSummary,
         snapshot: snapshot.ref, lighting, positions, box, layout, replayKey, requestHash });
     } catch (cause) {
