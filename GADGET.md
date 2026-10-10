@@ -35,7 +35,7 @@ Stage 1 validation configuration supply (v1 batch; earlier 0.6.11–0.6.15 notes
   `invalidationReasons`; reads are otherwise read-only (no Adapter call, no World write).
 - Store: the 1.x store lives in `<dsh home>/data/hanaworlds-canvas-v1/canvas-v6.json`
   (schemaVersion 6). A 0.x store is never read, migrated or accepted.
-- Contracts `#semver:^1.1.0-rc.1` (0.12.0; confirmed-placement candidate): canvas/v6, world-adapter/v7, session/v4,
+- Contracts `#semver:^1.1.0` (0.12.1; confirmed-placement formal 1.1.0): canvas/v6, world-adapter/v7, session/v4,
   canvas-region/v2, world-adapter-region/v2; the session-world seam is unconditional. Host
   service keys are unchanged (`hanaworldsCanvasV5`, `hanaworldsCanvasRegionV1`,
   `hanaworldsWorldAdapterV6`, `hanaworldsWorldAdapterRegionV1`, `hanaworldsWorkshopV3`, ...).
@@ -341,7 +341,7 @@ pending until the complete original before image is read back. A lost Abort repl
 `UNKNOWN`. The trial page shows this same projection. These are existing Canvas-owned
 evidence, not additional engine facts or a new transaction outcome.
 
-### Confirmed placement (0.12.0 / Contracts1.1 candidate)
+### Confirmed placement (0.12.1 / Contracts1.1 formal)
 
 Public wires and capability IDs keep their v1 identifiers. New placement/binding fields are
 optional and cannot be null: leave them absent when no structured placement was confirmed.
