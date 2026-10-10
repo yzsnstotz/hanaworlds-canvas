@@ -9,7 +9,7 @@ import { canonicalJSON, checkProtocolCompatibility, comparePosition, contractHan
   guardRefusalError, validateResponse,
   encodeRegionBlock, expandRegionBlock, protocolRequirement, regionChunksOfBox,
   validateRegionSnapshotContent, createPlacementProposal, confirmedPlacementBinding,
-  validateRegionCommitSubmission } from 'hanaworlds-contracts';
+  validateRegionCommitSubmission, regionRollbackCauseOf } from 'hanaworlds-contracts';
 import { restoreFailedResponse as regionRestoreFailedResponse } from '../src/region-v1.mjs';
 import { CanvasV5, CanvasStore, CanvasRegionV1, canvasProtocolHandshake,
   ADAPTER_REGION_REQUIREMENT, ADAPTER_CELL_REQUIREMENT, apply as applyCanvas } from '../src/index.mjs';
@@ -357,6 +357,10 @@ test('partial chunk write or readback mismatch rolls the whole region back witho
       const failed = await region.call('ApplyRegionCommit', commit(localContext, terrain()));
       assert.equal(failed.error, null, JSON.stringify(failed.error));
       assert.equal(failed.result.status, 'ROLLED_BACK');
+      assert.equal(regionRollbackCauseOf(commit(localContext, terrain()), failed).cause, 'REPORTED');
+      assert.equal(failed.result.rollbackCause.error.code, 'APPLY_FAILED');
+      assert.equal(failed.result.rollbackCause.error.phase, 'apply');
+      assert.equal(failed.result.rollbackCause.guardRefusal, null);
       assert.deepEqual(failed.result.actualSummary, failed.result.beforeSummary);
       assert.equal(picture(world), before);
       assert.equal(canonicalJSON(world.get([9, -1, 1]).extra), canonicalJSON(sign));
@@ -372,6 +376,8 @@ test('partial chunk write or readback mismatch rolls the whole region back witho
       const mismatch = await region.call('ApplyRegionCommit', commit(localContext, terrain(),
         { requestId: 'region-2', transactionId: 'region-tx-2' }));
       assert.equal(mismatch.result.status, 'ROLLED_BACK');
+      assert.equal(mismatch.result.rollbackCause.error.code, 'READBACK_MISMATCH');
+      assert.equal(mismatch.result.rollbackCause.error.phase, 'readback');
       assert.equal(canvas.store.snapshot.transactions['region-tx-2'].causeCode, 'READBACK_MISMATCH');
       assert.equal(picture(world), before);
     } finally { await rm(directory, { recursive: true, force: true }); }
@@ -662,7 +668,7 @@ test('protocol major + capabilities decide compatibility; patch and provenance d
         'PROTOCOL_COMPATIBLE');
       assert.throws(() => checkProtocolCompatibility(canvasProtocolHandshake,
         [protocolRequirement('canvas-region/v3')]), e => e.code === 'UNSUPPORTED_VERSION');
-      assert.equal(canvas.status().version, '0.12.0');
+      assert.equal(canvas.status().version, '0.13.0');
     } finally { await rm(directory, { recursive: true, force: true }); }
   });
 
@@ -806,4 +812,60 @@ test('confirmed REGION: own source is retained, A-to-B and stale/missing/foreign
       join(process.env.CANVAS_PLACEMENT_EVIDENCE,'region-own-placement-results.json'),JSON.stringify({level:'SOURCE/FIXTURE',ownPublicInspection:inspected,
       negative:results,workshopMissingBindingRefused:true,committed,replay,undone,rawOriginalCR:'confirmed A 112 cells / east-shifted B',newRealWorld:false},null,2));
   } finally {await rm(directory,{recursive:true,force:true});}
+});
+
+// SOURCE/FIXTURE: public Adapter failures and raw lost transport, no real engine or writer attribution.
+test('rollback reports observed Adapter cause or UNKNOWN and replays the stored response after reopen', async () => {
+  for (const mode of ['error', 'guard', 'unreported', 'restore-phase', 'foreign-transaction', 'invalid-mutation', 'invalid-guard']) {
+    const directory = await mkdtemp(join(tmpdir(), 'canvas-region-cause-'));
+    try {
+      const world = fixtureWorld();
+      const originalCall = world.region.call.bind(world.region);
+      const guard = { guard: 'BODY_CLEARANCE', stage: 'REGION_APPLY', finding: 'BODY_OCCUPIED' };
+      const observed = mode === 'guard' ? guardRefusalError(guard, {transactionRef: 'region-tx-1'}) :
+        {code: 'APPLY_FAILED', phase: 'apply', retryability: 'AFTER_NEW_FACTS', mutationState: 'PARTIAL',
+          transactionRef: 'region-tx-1', causeCode: null, reason: 'APPLY_ERROR'};
+      world.region.call = async (operation, request) => {
+        if (operation === 'WriteRegion' && request.purpose === 'APPLY') {
+          world.writes.push({purpose: 'APPLY', chunks: request.writes.length});
+          world.nodes.set('9,-1,0', {nodeName: 'mcl_core:glass', param2: 0});
+          if (mode === 'unreported') throw new Error('fixture lost transport without public failure detail');
+          if (mode === 'restore-phase') throw Object.assign(new Error('fixture wrong phase'),
+            {publicError: {...observed, phase: 'restore'}});
+          if (mode === 'foreign-transaction') throw Object.assign(new Error('fixture wrong binding'),
+            {publicError: {...observed, transactionRef: 'other-tx'}});
+          if (mode === 'invalid-mutation') throw Object.assign(new Error('fixture invalid mutation'),
+            {publicError: {...observed, mutationState: 'VERIFIED'}});
+          if (mode === 'invalid-guard') throw Object.assign(new Error('fixture unrelated guard'),
+            {publicError: observed, guardRefusal: guard});
+          return {contractVersion: 'world-adapter-region/v2', requestId: request.requestId,
+            result: null, error: observed, guardRefusal: mode === 'guard' ? guard : null};
+        }
+        return originalCall(operation, request);
+      };
+      let {canvas, region} = await boot(directory, world);
+      const localContext = await select(canvas), body = commit(localContext, terrain());
+      const before = picture(world);
+      const response = await region.call('ApplyRegionCommit', body);
+      assert.equal(response.error, null, JSON.stringify(response.error));
+      assert.equal(response.result.status, 'ROLLED_BACK');
+      assert.equal(picture(world), before);
+      const read = regionRollbackCauseOf(body, response);
+      if (!['error', 'guard'].includes(mode)) {
+        assert.equal(read.cause, 'UNKNOWN');assert.equal(read.failure, null);
+        assert.ok(!Object.hasOwn(response.result, 'rollbackCause'));
+      } else {
+        assert.equal(read.cause, 'REPORTED');
+        assert.equal(canonicalJSON(read.failure),
+          canonicalJSON({error: observed, guardRefusal: mode === 'guard' ? guard : null}));
+      }
+      assert.equal(canonicalJSON(canvas.store.snapshot.transactions[body.transactionId].result), canonicalJSON(response.result));
+      const calls = world.calls.length, writes = world.writes.length;
+      assert.equal(canonicalJSON(await region.call('ApplyRegionCommit', body)), canonicalJSON(response));
+      ({canvas, region} = await boot(directory, world));
+      assert.equal(canonicalJSON(await region.call('ApplyRegionCommit', body)), canonicalJSON(response));
+      assert.equal(world.calls.length, calls);assert.equal(world.writes.length, writes);
+      assert.ok(region.protocolHandshake.capabilities.includes('canvas-region/v2:rollback-cause'));
+    } finally { await rm(directory, {recursive: true, force: true}); }
+  }
 });

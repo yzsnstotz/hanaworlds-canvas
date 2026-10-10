@@ -20,7 +20,7 @@ import { canonicalJSON, checkProtocolCompatibility, comparePosition, contractPro
 export const REGION_WIRE = 'canvas-region/v2';
 export const REGION_ADAPTER = 'world-adapter-region/v2';
 const ADAPTER = 'world-adapter/v7';
-const PACKAGE_VERSION = '0.12.1';
+const PACKAGE_VERSION = '0.13.0';
 export const CANVAS_REGION_CAPABILITIES = Object.freeze(regionCapabilities
   .filter(c => c.owner === 'hanaworlds-canvas').map(c => c.id).sort());
 // A capability id is scoped by its wire ("<wire>:<name>"). Each Adapter requirement takes
@@ -131,6 +131,18 @@ export function regionFail(code, reason = 'REVISION_CHANGED', phase = 'validate'
   return error;
 }
 const fail = regionFail;
+
+// Only a public failure actually observed before restore can be reported. A raw
+// transport exception, invalid detail or foreign transaction remains unreported.
+function observedRollbackCause(cause, transactionId) {
+  const error = cause?.publicError;
+  if (!error || error.phase === 'restore' ||
+      !['NONE', 'PARTIAL', 'UNKNOWN'].includes(error.mutationState) ||
+      (error.transactionRef !== null && error.transactionRef !== transactionId)) return null;
+  try {
+    return validateType('FailureDetail', { error, guardRefusal: cause.guardRefusal ?? null });
+  } catch { return null; }
+}
 
 /**
  * A restore the engine refused (RESTORE_FAILED, e.g. a guard at RESTORE/REGION_RESTORE) as the
@@ -506,6 +518,8 @@ export class CanvasRegionV1 {
       expectedAfterSummary, actualSummary: restored.actual, snapshot,
       historyRevision: rev('history-none'), lighting, affectedObjectRefs: [],
       localContext: body.localContext };
+    const rollbackCause = observedRollbackCause(cause, body.transactionId);
+    if (rollbackCause) result.rollbackCause = rollbackCause;
     const response = this.#answer(body, 'ApplyRegionCommit', result);
     validateRegionCommit(body, response);
     await this.store.commit(state => {

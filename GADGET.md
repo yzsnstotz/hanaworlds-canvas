@@ -35,7 +35,7 @@ Stage 1 validation configuration supply (v1 batch; earlier 0.6.11–0.6.15 notes
   `invalidationReasons`; reads are otherwise read-only (no Adapter call, no World write).
 - Store: the 1.x store lives in `<dsh home>/data/hanaworlds-canvas-v1/canvas-v6.json`
   (schemaVersion 6). A 0.x store is never read, migrated or accepted.
-- Contracts `#semver:^1.1.0` (0.12.1; confirmed-placement formal 1.1.0): canvas/v6, world-adapter/v7, session/v4,
+- Contracts `#semver:^1.2.0-rc.1` (0.13.0; rollback-cause candidate 1.2.0-rc.1): canvas/v6, world-adapter/v7, session/v4,
   canvas-region/v2, world-adapter-region/v2; the session-world seam is unconditional. Host
   service keys are unchanged (`hanaworldsCanvasV5`, `hanaworldsCanvasRegionV1`,
   `hanaworldsWorldAdapterV6`, `hanaworldsWorldAdapterRegionV1`, `hanaworldsWorkshopV3`, ...).
@@ -341,7 +341,7 @@ pending until the complete original before image is read back. A lost Abort repl
 `UNKNOWN`. The trial page shows this same projection. These are existing Canvas-owned
 evidence, not additional engine facts or a new transaction outcome.
 
-### Confirmed placement (0.12.1 / Contracts1.1 formal)
+### Confirmed placement (0.12.1+ / Contracts1.1+)
 
 Public wires and capability IDs keep their v1 identifiers. New placement/binding fields are
 optional and cannot be null: leave them absent when no structured placement was confirmed.
@@ -359,3 +359,15 @@ closed. Existing guard, complete readback and whole-transaction restore paths re
 This supply is SOURCE/FIXTURE/PACK only. New target/source negative tests issue zero snapshots,
 before-image reads and writes. Original 47622 UNKNOWN transaction and accepted instances are
 preserved; these checks do not establish real World/product/owner acceptance.
+
+### Region rollback cause (0.13.0 / Contracts1.2 candidate)
+
+`canvas-region/v2:rollback-cause` reports the actual public failure Canvas observed before
+successful ApplyRegionCommit restoration in `result.rollbackCause` (FailureDetail).
+Adapter errors and explaining guard refusals are preserved; Canvas's own apply/readback
+conclusions are reported as observed. Missing or invalid details are omitted: the public
+`regionRollbackCauseOf(request, response)` reader returns UNKNOWN, without a guessed cause.
+The field is only present on ROLLED_BACK, never on VERIFIED, failed restoration or Undo.
+The terminal response is stored durably and exact replay, including after reopen, returns
+it unchanged without Adapter reads or writes. This reports no instrumentation identity,
+natural simulation attribution or cells outside operation boxes. Undo scope is unchanged.
