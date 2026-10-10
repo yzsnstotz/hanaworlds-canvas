@@ -9,7 +9,7 @@ import { canonicalJSON, checkProtocolCompatibility, comparePosition, contractPro
   summarizeRegionStates, unmetEngineGuards,
   validateBoundResponse, validateDigestBinding, validateRegionCommit, validateRegionRead,
   validateRegionSnapshotContent, validateRegionUndo, validateRegionWrite, validateRequest,
-  validateResponse, validateType } from 'hanaworlds-contracts';
+  validateResponse, validateType, validateRegionCommitRequest, checkConfirmedRegionPlacementCommit } from 'hanaworlds-contracts';
 
 /*
  * canvas-region/v2 over the public Contracts 1.x region v2 shapes.
@@ -20,7 +20,7 @@ import { canonicalJSON, checkProtocolCompatibility, comparePosition, contractPro
 export const REGION_WIRE = 'canvas-region/v2';
 export const REGION_ADAPTER = 'world-adapter-region/v2';
 const ADAPTER = 'world-adapter/v7';
-const PACKAGE_VERSION = '0.10.5';
+const PACKAGE_VERSION = '0.12.0';
 export const CANVAS_REGION_CAPABILITIES = Object.freeze(regionCapabilities
   .filter(c => c.owner === 'hanaworlds-canvas').map(c => c.id).sort());
 // A capability id is scoped by its wire ("<wire>:<name>"). Each Adapter requirement takes
@@ -334,13 +334,20 @@ export class CanvasRegionV1 {
   }
 
   async #commit(raw) {
-    const body = validateRequest(REGION_WIRE, 'ApplyRegionCommit', raw);
-    validateDigestBinding('region-operations', body.operations, body.operationDigest);
+    const body = validateRegionCommitRequest(raw);
     const { replayKey, requestHash, prior } = this.#replay(body, 'ApplyRegionCommit');
     if (prior) return prior.response;
     this.#adapterCompatible();
     await this.#guarded(body, 'ApplyRegionCommit');
     const state = this.store.snapshot;
+    if (body.confirmedPlacement !== undefined) {
+      const recorded = state.placementInspections[body.confirmedPlacement.placement.source.inspectionId];
+      if (!recorded?.inspection || recorded.sessionRef !== body.sessionRef ||
+          recorded.worldRef !== body.worldRef || !same(recorded.localContext, body.localContext))
+        throw fail('INSPECTION_FAILED', 'REQUIRED_FACT_UNKNOWN');
+      // No snapshot, before-image read or write can precede this retained-source check.
+      checkConfirmedRegionPlacementCommit(body, recorded.inspection, state.worldRevisions[body.worldRef]);
+    }
     const positions = specifiedPositions(body.operations);
     if (this.#footprintConflicts(body.worldRef, positions).length)
       throw fail('OTHER_OBJECTS_AFFECTED', 'SCOPE_DENIED');

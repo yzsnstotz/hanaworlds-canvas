@@ -9,7 +9,7 @@ import { openRuntime } from './support/cordis-runtime.mjs';
 const consumer = await import(process.env.CANVAS_CONSUMER_ENTRY ?? 'hanaworlds-contracts');
 import { readFile, writeFile } from 'node:fs/promises';
 import { digestValue, checkContractHandshake, contractHandshake, guardRefusalError,
-  validateResponse } from 'hanaworlds-contracts';
+  validateResponse, createPlacementProposal, confirmedPlacementBinding, confirmedPlacement } from 'hanaworlds-contracts';
 import majorCompat from 'hanaworlds-contracts/fixtures/contracts-major-compat' with { type: 'json' };
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
@@ -403,6 +403,34 @@ test('build commits only after complete readback and stores one durable history 
         inspectionId: 'unregistered-inspection' } });
     assert.equal(wrongInspection.error?.code, 'INSPECTION_FAILED');
     assert.equal(writes, 0);
+    // Confirmed placement is made by the public contract from this actual fixture inspection.
+    const proposal = createPlacementProposal(regionInspection, { kind: 'EXACT_CELLS', cells: [position] });
+    const intent = { ...fixture.request.intent, confirmedIntent: {
+      ...fixture.request.intent.confirmedIntent, placement: proposal } };
+    apply.regionInspectionBinding.confirmedPlacement = confirmedPlacementBinding(intent);
+    const shiftedOperations = { ...operations, effects: operations.effects.map(effect => ({
+      ...effect, position: [effect.position[0] + 1, effect.position[1], effect.position[2]] })) };
+    const shifted = await canvas.call('ApplyRecoverableCommit', { ...apply,
+      requestId: 'apply-confirmed-A-effects-B', operations: shiftedOperations,
+      operationDigest: D('operations', shiftedOperations) });
+    const targetFailure = confirmedPlacement.namedFailures.find(f => f.failure === 'PLACEMENT_TARGET_MISMATCH');
+    assert.equal(shifted.error?.code, targetFailure.code);
+    assert.equal(shifted.error?.reason, targetFailure.reason);
+    assert.equal(writes, 0, 'confirmed A / effects B is refused before any write');
+    assert.equal(scopedFactReads, 0);
+    const storedInspection = structuredClone(canvas.store.snapshot.placementInspections[regionInspection.inspectionId]);
+    // SOURCE/FIXTURE: simulate a recorded source being replaced, with the same frame/facts/revision.
+    // The old checks accepted this; the new public source identity check must run before facts or writes.
+    await canvas.store.commit(next => {
+      next.placementInspections[regionInspection.inspectionId].inspection.inspectionId = 'changed-recorded-inspection';
+    });
+    const sourceChanged = await canvas.call('ApplyRecoverableCommit', { ...apply, requestId: 'apply-changed-source' });
+    const sourceFailure = confirmedPlacement.namedFailures.find(f => f.failure === 'PLACEMENT_INSPECTION_CHANGED');
+    assert.equal(sourceChanged.error?.code, sourceFailure.code);
+    assert.equal(sourceChanged.error?.reason, sourceFailure.reason);
+    assert.equal(writes, 0, 'changed confirmation source cannot issue any Adapter write');
+    assert.equal(scopedFactReads, 0, 'confirmed source is checked before new scoped facts');
+    await canvas.store.commit(next => { next.placementInspections[regionInspection.inspectionId] = storedInspection; });
     const completed = await canvas.call('ApplyRecoverableCommit', apply);
     assert.equal(completed.error, null, JSON.stringify({ calls, completed,
       pending: canvas.store.snapshot.pending }));
@@ -494,7 +522,7 @@ test('build commits only after complete readback and stores one durable history 
     const conflict = await canvas.call('ApplyRecoverableCommit', {
       ...apply, requestId: 'apply-conflict', transactionId: 'conflict-1',
       analysisDigest: D('affected-analysis', conflictAnalysis.result),
-      expectedWorldRevision: 'world-2' });
+      expectedWorldRevision: 'world-2', regionInspectionBinding: { inspectionId: apply.regionInspectionBinding.inspectionId, build: apply.regionInspectionBinding.build } });
     assert.equal(conflict.error.code, 'OTHER_OBJECTS_AFFECTED');
     assert.equal(writes, 1);
     const undoRequest = { contractVersion: 'canvas/v6',
@@ -780,7 +808,7 @@ test('host exposes durable Canvas facts as separate public ports', async () => {
     const entry = process.env.CANVAS_ENTRY ?? new URL('../src/index.mjs', import.meta.url).href;
     const running = createRequire(entry)('hanaworlds-contracts/package.json');
     assert.equal(advertised.contracts, `hanaworlds-contracts@${running.version}`);
-    assert.equal(ports.get('hanaworldsCanvasV5').status().version, '0.10.5');
+    assert.equal(ports.get('hanaworldsCanvasV5').status().version, '0.12.0');
     assert.doesNotThrow(() => checkContractHandshake(advertised));
     // Public Contracts conformance cases, each patched over Canvas's advertised handshake.
     const patched = c => { const h = { ...advertised, ...c.patch };

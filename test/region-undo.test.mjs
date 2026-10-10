@@ -8,7 +8,8 @@ import { gunzipSync } from 'node:zlib';
 import { canonicalJSON, checkProtocolCompatibility, comparePosition, contractHandshake, digestValue,
   guardRefusalError, validateResponse,
   encodeRegionBlock, expandRegionBlock, protocolRequirement, regionChunksOfBox,
-  validateRegionSnapshotContent } from 'hanaworlds-contracts';
+  validateRegionSnapshotContent, createPlacementProposal, confirmedPlacementBinding,
+  validateRegionCommitSubmission } from 'hanaworlds-contracts';
 import { restoreFailedResponse as regionRestoreFailedResponse } from '../src/region-v1.mjs';
 import { CanvasV5, CanvasStore, CanvasRegionV1, canvasProtocolHandshake,
   ADAPTER_REGION_REQUIREMENT, ADAPTER_CELL_REQUIREMENT, apply as applyCanvas } from '../src/index.mjs';
@@ -57,7 +58,7 @@ const cellHandshake = (major = 7, minor = 0, capabilities = CELL_CAPS) =>
 const k = p => p.join(',');
 const REGION_G1 = { guard: 'BODY_CLEARANCE', stage: 'REGION_RESTORE', finding: 'BODY_OCCUPIED' };
 
-function fixtureWorld({ protocolHandshake = handshake(), worldRef = WORLD } = {}) {
+function fixtureWorld({ protocolHandshake = handshake(), worldRef = WORLD, inspection = null } = {}) {
   const connection = connectionOf(worldRef);
   const nodes = new Map(); // "x,y,z" -> {nodeName, param2, extra?}
   const loaded = new Set(['0,-1,0', '0,0,0']);
@@ -103,6 +104,14 @@ function fixtureWorld({ protocolHandshake = handshake(), worldRef = WORLD } = {}
         connectionIncarnationRef: world.incarnation }] });
     if (operation === 'ReadLocalConnection')
       return respond({ ...connection, connectionIncarnationRef: world.incarnation });
+    if (operation === 'InspectRegion' && inspection) {
+      const targetFacts = { ...inspection.targetFacts, worldRef, worldRevision: request.expectedWorldRevision };
+      return respond({ outcome: 'REGION_INSPECTED', inspection: { ...inspection,
+        inspectionId: request.inspectionId, placementSettings: request.placementSettings,
+        targetFacts, targetFactsDigest: D('target-facts', targetFacts),
+        evidence: { ...inspection.evidence, worldRef, worldRevision: request.expectedWorldRevision } } });
+    }
+
     throw new Error(`unexpected v6 operation ${operation}`);
   } };
   world.region = { protocolHandshake, async call(operation, request) {
@@ -653,7 +662,7 @@ test('protocol major + capabilities decide compatibility; patch and provenance d
         'PROTOCOL_COMPATIBLE');
       assert.throws(() => checkProtocolCompatibility(canvasProtocolHandshake,
         [protocolRequirement('canvas-region/v3')]), e => e.code === 'UNSUPPORTED_VERSION');
-      assert.equal(canvas.status().version, '0.10.5');
+      assert.equal(canvas.status().version, '0.12.0');
     } finally { await rm(directory, { recursive: true, force: true }); }
   });
 
@@ -716,3 +725,85 @@ test('Contracts public region fixture operations reproduce the contract summarie
       assert.equal(canonicalJSON(undone.result.actualSummary), canonicalJSON(fixture.undoResponse.result.actualSummary));
     } finally { await rm(directory, { recursive: true, force: true }); }
   });
+
+// Real Canvas/store decisions over explicit official-contract Adapter/Session/engine FIXTURES.
+test('confirmed REGION: own source is retained, A-to-B and stale/missing/foreign sources refuse before snapshots or writes', async () => {
+  const fx=JSON.parse(await readFile(new URL(import.meta.resolve('hanaworlds-contracts/fixtures/confirmed-placement'))));
+  const official=fx.canvasRegion.accept[0], selectedWorld=official.commit.worldRef;
+  const directory=await mkdtemp(join(tmpdir(),'canvas-confirmed-region-'));
+  const results=[];
+  try {
+    const world=fixtureWorld({worldRef:selectedWorld,inspection:fx.inspections.regionView});
+    const {canvas,region}=await boot(directory,world),localContext=await select(canvas,selectedWorld);
+    const inspected=await canvas.call('InspectPlacementRegion',{contractVersion:'canvas/v6',
+      sessionRef:'session-1',requestId:'region-source-inspection',worldRef:selectedWorld,
+      anchor:{kind:'CURRENT_VIEW',invocationId:'region-confirmation-fixture'},footprint:{widthCells:20,heightCells:2,depthCells:3},localContext});
+    assert.equal(inspected.error,null,JSON.stringify(inspected));
+    const source=inspected.result.inspection, sourceId=source.inspectionId;
+    const placement=createPlacementProposal(source,official.intent.confirmedIntent.placement.target);
+    const brief={...official.brief,controls:{...official.brief.controls,placement}};
+    const intent={...official.intent,referenceBriefDigest:D('reference-brief',brief),
+      confirmedIntent:{...official.intent.confirmedIntent,placement}};
+    const good={...official.commit,sessionRef:'session-1',worldRef:selectedWorld,localContext,
+      confirmedPlacement:confirmedPlacementBinding(intent)};
+    validateRegionCommitSubmission(intent,brief,good);
+    const saved=structuredClone(canvas.store.snapshot.placementInspections[sourceId]);
+    const files=await readdir(directory), initialRevision=await canvas.readWorldRevision(selectedWorld);
+    let serial=0;
+    const refuse=async(name,request,code,reason)=>{
+      const beforeWrites=world.writes.length,beforeReads=world.calls.filter(x=>x.startsWith('ReadRegion:')).length;
+      const beforeFiles=(await readdir(directory)).sort();
+      const raw={...request,requestId:`confirmed-refusal-${++serial}`,transactionId:`confirmed-refusal-tx-${serial}`};
+      const response=await region.call('ApplyRegionCommit',raw);
+      if(process.env.CANVAS_PLACEMENT_EVIDENCE && (response.error?.code!==code || world.writes.length!==beforeWrites))
+        await (await import('node:fs/promises')).writeFile(join(process.env.CANVAS_PLACEMENT_EVIDENCE,'region-negative-observed.json'),
+          JSON.stringify({level:'SOURCE/FIXTURE',name,request:raw,response,writes:world.writes,
+          calls:world.calls,files:await readdir(directory),expectedCode:code},null,2));
+
+      assert.equal(response.error?.code,code,JSON.stringify({name,response}));
+      if(reason)assert.equal(response.error.reason,reason,name);
+      assert.equal(world.writes.length,beforeWrites,name+' no Adapter write');
+      assert.equal(world.calls.filter(x=>x.startsWith('ReadRegion:')).length,beforeReads,name+' no before-image read');
+      assert.deepEqual((await readdir(directory)).sort(),beforeFiles,name+' no snapshot');
+      assert.equal(canvas.store.snapshot.pending[raw.transactionId],undefined,name+' no reservation');
+      results.push({name,request:raw,response,writes:0,beforeImageReads:0,snapshots:0});
+    };
+    await refuse('CR exact confirmed A / east-shifted B',{...good,operations:fx.canvasRegion.reject[0].commit.operations,
+      operationDigest:fx.canvasRegion.reject[0].commit.operationDigest},'INTENT_UNCONFIRMED','INVALID_GEOMETRY');
+    await refuse('one confirmed cell missing',{...good,operations:fx.canvasRegion.reject[1].commit.operations,
+      operationDigest:fx.canvasRegion.reject[1].commit.operationDigest},'INTENT_UNCONFIRMED','INVALID_GEOMETRY');
+    const extent=createPlacementProposal(source,fx.canvasRegion.reject[2].commit.confirmedPlacement.placement.target);
+    const extentIntent={...intent,confirmedIntent:{...intent.confirmedIntent,placement:extent}};
+    await refuse('extent boundary crossed',{...good,confirmedPlacement:confirmedPlacementBinding(extentIntent),
+      operations:fx.canvasRegion.reject[2].commit.operations,operationDigest:fx.canvasRegion.reject[2].commit.operationDigest},'INTENT_UNCONFIRMED','INVALID_GEOMETRY');
+    await refuse('null is invalid',{...good,confirmedPlacement:null},'SCHEMA_INVALID');
+    await canvas.store.commit(next=>{next.placementInspections[sourceId].inspection.inspectionId='changed-source';});
+    await refuse('own source inspection changed',good,'TARGET_FACTS_STALE','PAYLOAD_CHANGED');
+    await canvas.store.commit(next=>{next.placementInspections[sourceId]=structuredClone(saved);next.worldRevisions[selectedWorld]='changed-world-revision';});
+    await refuse('current revision changed',good,'TARGET_FACTS_STALE','REVISION_CHANGED');
+    await canvas.store.commit(next=>{next.worldRevisions[selectedWorld]=initialRevision;delete next.placementInspections[sourceId];});
+    await refuse('source missing',good,'INSPECTION_FAILED','REQUIRED_FACT_UNKNOWN');
+    await canvas.store.commit(next=>{next.placementInspections[sourceId]={...structuredClone(saved),sessionRef:'another-session'};});
+    await refuse('source owned by another Session',good,'INSPECTION_FAILED','REQUIRED_FACT_UNKNOWN');
+    await canvas.store.commit(next=>{next.placementInspections[sourceId]={...structuredClone(saved),localContext:{...localContext,connectionIncarnationRef:'old-incarnation'}};});
+    await refuse('source context changed',good,'INSPECTION_FAILED','REQUIRED_FACT_UNKNOWN');
+    await canvas.store.commit(next=>{next.placementInspections[sourceId]=structuredClone(saved);});
+    const {confirmedPlacement:omitted,...missingBinding}=good;
+    assert.throws(()=>validateRegionCommitSubmission(intent,brief,missingBinding),error=>error.code==='INTENT_UNCONFIRMED'&&error.reason==='IDENTITY_UNVERIFIED');
+    assert.equal(world.writes.length,0,'Workshop omission refuses before calling Canvas');
+    const committed=await region.call('ApplyRegionCommit',{...good,requestId:'confirmed-A',transactionId:'confirmed-A-tx'});
+    assert.equal(committed.result?.status,'VERIFIED',JSON.stringify(committed));
+    assert.deepEqual(world.writes,[{purpose:'APPLY',chunks:6}]);
+    const writeCount=world.writes.length;
+    const replay=await region.call('ApplyRegionCommit',{...good,requestId:'confirmed-A',transactionId:'confirmed-A-tx'});
+    assert.deepEqual(replay,committed);assert.equal(world.writes.length,writeCount);
+    const undone=await region.call('UndoRegionCommit',undo(localContext,committed.result.historyRevision,{
+      worldRef:selectedWorld,originTransactionId:'confirmed-A-tx',undoTransactionId:'confirmed-A-undo',requestId:'confirmed-A-undo-request'}));
+    assert.equal(undone.result?.status,'VERIFIED',JSON.stringify(undone));
+    assert.deepEqual(undone.result.actualSummary,committed.result.beforeSummary);
+    assert.deepEqual(canvas.store.snapshot.pending,{});
+    if(process.env.CANVAS_PLACEMENT_EVIDENCE)await (await import('node:fs/promises')).writeFile(
+      join(process.env.CANVAS_PLACEMENT_EVIDENCE,'region-own-placement-results.json'),JSON.stringify({level:'SOURCE/FIXTURE',ownPublicInspection:inspected,
+      negative:results,workshopMissingBindingRefused:true,committed,replay,undone,rawOriginalCR:'confirmed A 112 cells / east-shifted B',newRealWorld:false},null,2));
+  } finally {await rm(directory,{recursive:true,force:true});}
+});

@@ -8,7 +8,7 @@ import { admitRequest, validateRequest, validateResponse, validateBoundResponse,
   validateCurrentRequest, validateWorldSelection, validateCommitReadback,
   projectScopedPreparedTransaction, checkContractHandshake, contractHandshake,
   digestValue, requestDigest, publicError, validateExactEffects,
-  validateRegionInspection } from 'hanaworlds-contracts';
+  validateRegionInspection, checkConfirmedPlacementApply } from 'hanaworlds-contracts';
 import { checkProtocolCompatibility, contractProtocols, protocolRequirement,
   validateType } from 'hanaworlds-contracts';
 import * as contractsSdk from 'hanaworlds-contracts';
@@ -25,7 +25,7 @@ const SESSION = 'session/v4';
 // pre-seam canvas behaviour left to switch to.
 const canvasProtocol = contractProtocols.find(row => row.protocol === 'canvas');
 if (!canvasProtocol || canvasProtocol.major !== 6) throw new Error('CANVAS_PROTOCOL_UNDECLARED');
-const PACKAGE_VERSION = '0.10.5';
+const PACKAGE_VERSION = '0.12.0';
 // The public wire defines canvas major 6, minor 0. Contracts publishes no
 // per-cell Canvas capability token; regional tokens describe the region port.
 const cellRequirement = protocolRequirement(WIRE, []);
@@ -457,9 +457,11 @@ export class CanvasV5 {
         body.regionInspectionBinding.inspectionId];
       const inspection = recorded?.inspection;
       if (!inspection || recorded.sessionRef !== body.sessionRef ||
-          recorded.worldRef !== body.worldRef ||
-          recorded.worldRevision !== body.expectedWorldRevision ||
-          !same(recorded.localContext, body.localContext) ||
+          recorded.worldRef !== body.worldRef || !same(recorded.localContext, body.localContext))
+        throw fail('INSPECTION_FAILED', 'REQUIRED_FACT_UNKNOWN');
+      // Canvas's retained source and current revision, before scoped facts/reservation/write.
+      checkConfirmedPlacementApply(body, inspection, this.store.snapshot.worldRevisions[body.worldRef]);
+      if (recorded.worldRevision !== body.expectedWorldRevision ||
           inspection.targetFactsDigest !== body.operations.targetFactsDigest ||
           build.targetFactsDigest !== inspection.targetFactsDigest ||
           !same(build.coordinateFrame, inspection.frame) ||

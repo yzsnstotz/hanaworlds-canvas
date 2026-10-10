@@ -35,7 +35,7 @@ Stage 1 validation configuration supply (v1 batch; earlier 0.6.11–0.6.15 notes
   `invalidationReasons`; reads are otherwise read-only (no Adapter call, no World write).
 - Store: the 1.x store lives in `<dsh home>/data/hanaworlds-canvas-v1/canvas-v6.json`
   (schemaVersion 6). A 0.x store is never read, migrated or accepted.
-- Contracts `#semver:^1.0.0` (0.10.1; formal v1.0.0, same content as rc.4): canvas/v6, world-adapter/v7, session/v4,
+- Contracts `#semver:^1.1.0-rc.1` (0.12.0; confirmed-placement candidate): canvas/v6, world-adapter/v7, session/v4,
   canvas-region/v2, world-adapter-region/v2; the session-world seam is unconditional. Host
   service keys are unchanged (`hanaworldsCanvasV5`, `hanaworldsCanvasRegionV1`,
   `hanaworldsWorldAdapterV6`, `hanaworldsWorldAdapterRegionV1`, `hanaworldsWorkshopV3`, ...).
@@ -340,3 +340,22 @@ as a fabricated TRANSACTION_MISMATCH error and never leaves PREPARED stranded.
 pending until the complete original before image is read back. A lost Abort reply is still
 `UNKNOWN`. The trial page shows this same projection. These are existing Canvas-owned
 evidence, not additional engine facts or a new transaction outcome.
+
+### Confirmed placement (0.12.0 / Contracts1.1 candidate)
+
+Public wires and capability IDs keep their v1 identifiers. New placement/binding fields are
+optional and cannot be null: leave them absent when no structured placement was confirmed.
+Workshop makes bindings with the public Contracts helper and checks omission at submission;
+Canvas does not create a second intent or human-confirmation source.
+
+Canvas cell apply checks its retained inspection and current world revision with
+`checkConfirmedPlacementApply` before scoped facts, reservation and writes. REGION admission
+uses `validateRegionCommitRequest`; a confirmed commit uses Canvas's own source inspection,
+Session/World/context and current revision with `checkConfirmedRegionPlacementCommit` before
+any snapshot, before-image ReadRegion or WriteRegion. Exact confirmed cells match in full;
+anchored extents remain within the confirmed bounds. Missing/foreign/stale source records fail
+closed. Existing guard, complete readback and whole-transaction restore paths remain in force.
+
+This supply is SOURCE/FIXTURE/PACK only. New target/source negative tests issue zero snapshots,
+before-image reads and writes. Original 47622 UNKNOWN transaction and accepted instances are
+preserved; these checks do not establish real World/product/owner acceptance.
