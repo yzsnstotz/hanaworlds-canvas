@@ -685,12 +685,39 @@ test('host provides the region port, its handshake and tool description beside c
       const canvas = applyCanvas(ctx);
       await canvas.ready;
       const port = ports.get('hanaworldsCanvasRegionV1');
-      assert.deepEqual(port.describe().operations, ['ApplyRegionCommit', 'UndoRegionCommit']);
-      assert.match(port.describe().typicalScale, /mapblocks/);
+      const description = await port.describe();
+      assert.deepEqual(description.operations, ['ApplyRegionCommit', 'UndoRegionCommit']);
+      assert.equal(description.worldSource.status, 'UNBOUND');
+      assert.doesNotMatch(JSON.stringify(description), /mapblocks|16x16x16/);
       assert.equal(port.protocolHandshake.protocols[0].protocol, 'canvas-region');
       assert.equal(port.regionAdapter.protocolHandshake.component, 'fixture-adapter');
     } finally { await rm(directory, { recursive: true, force: true }); }
   });
+
+test('region self-description reads the current world-source geometry without defaults', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'canvas-region-description-'));
+  try {
+    const world = fixtureWorld();
+    const { canvas, region } = await boot(directory, world);
+    await select(canvas);
+    world.connection.capabilities.worldGeometry.partition = { edge: [8, 4, 8] };
+    world.connection.capabilities.worldGeometry.postWriteLighting = 'NONE';
+    const description = await region.describe('session-1');
+    assert.equal(description.worldSource.status, 'AVAILABLE');
+    assert.deepEqual(description.worldSource.partition.edge, [8, 4, 8]);
+    assert.deepEqual(description.worldSource.geometryProfiles, ['voxel-grid/v1']);
+    assert.deepEqual(description.worldSource.engineBounds, world.connection.capabilities.engineBounds);
+    assert.equal(description.worldSource.postWriteLighting, 'NONE');
+    assert.match(description.typicalScale, /8x4x8/);
+    assert.doesNotMatch(JSON.stringify(description), /mapblocks|16x16x16|major 1|major 6/);
+    description.worldSource.partition.edge[0] = 100;
+    world.connection.capabilities.worldGeometry.partition = { edge: [4, 2, 4] };
+    assert.match((await region.describe('session-1')).typicalScale, /4x2x4/);
+    world.connection.capabilities.worldGeometry = null;
+    await assert.rejects(region.describe('session-1'), e => e.publicError?.code === 'CAPABILITY_GAP');
+    await assert.rejects(region.describe('missing-session'), e => e.publicError?.code === 'WORLD_NOT_BOUND');
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
 
 test('Contracts public region fixture operations reproduce the contract summaries exactly',
   async () => {

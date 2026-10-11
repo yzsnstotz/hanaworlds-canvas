@@ -107,23 +107,37 @@ export const canvasProtocolHandshake = Object.freeze(validateType('ProtocolHands
   provenance: { packageName: 'hanaworlds-canvas', packageVersion: PACKAGE_VERSION,
     sourceRevision: null, artifactDigest: null } }));
 
-/** Self-description for the skill: purpose, typical scale and prerequisites, no thresholds. */
-export const regionToolDescription = Object.freeze({
+/** Generate the skill's description from a current world-source declaration. */
+export function regionToolDescription(capabilities = null) {
+  const geometry = capabilities && requireGeometryProfile(capabilities.worldGeometry, 'voxel-grid/v1');
+  return {
   tool: 'canvas.region',
   operations: ['ApplyRegionCommit', 'UndoRegionCommit'],
-  purpose: 'Commit one compiled region (fill and explicit air carve) across mapblocks ' +
+  purpose: 'Commit one compiled region (fill and explicit empty-material carve) across world-source partitions ' +
     'as one logical transaction, and undo that whole region in one step.',
-  typicalScale: 'Terrain shaping and large fills or carves spanning several 16x16x16 ' +
-    'mapblocks. Cell-by-cell BUILD with per-cell Undo stays the tool for fine ' +
+  typicalScale: 'Terrain shaping and large fills or carves spanning world-source partitions' +
+    (geometry ? ` (${geometry.partition.edge.join('x')} cells per partition). ` :
+      '; select a world to read its partition size. ') +
+    'Cell-by-cell BUILD with per-cell Undo stays the tool for fine ' +
     'adjustment; which one to use is the skill\'s choice.',
   prerequisites: ['a current world connection selected in Canvas',
     'region operations compiled by Brush (region-operations/v2) with their digest',
     'no registered object footprint inside the specified cells',
-    'every touched mapblock KNOWN after Adapter load',
-    'Adapter advertising world-adapter-region major 1 and world-adapter major 6 at the ' +
-      'Contracts-declared minors with every Adapter capability of that wire'],
-  unspecifiedCells: 'left untouched; only an explicit air palette entry carves',
-});
+    'every touched partition KNOWN after world-source load',
+    `world source advertising ${ADAPTER_REGION_REQUIREMENT.protocol} major ` +
+      `${ADAPTER_REGION_REQUIREMENT.major} and ${ADAPTER_CELL_REQUIREMENT.protocol} major ` +
+      `${ADAPTER_CELL_REQUIREMENT.major} at the Contracts-declared minors with every required capability`],
+  unspecifiedCells: 'left untouched; only an explicit empty-material palette entry carves',
+  worldSource: geometry ? { status: 'AVAILABLE', worldRef: capabilities.worldRef,
+    capabilityRevision: capabilities.capabilityRevision,
+    geometryProfiles: structuredClone(capabilities.worldGeometry.geometryProfiles),
+    partition: structuredClone(geometry.partition),
+    engineBounds: structuredClone(capabilities.engineBounds),
+    postWriteLighting: geometry.postWriteLighting } :
+    { status: 'UNBOUND', geometryProfiles: null, partition: null,
+      engineBounds: null, postWriteLighting: null },
+  };
+}
 
 export function regionFail(code, reason = 'REVISION_CHANGED', phase = 'validate') {
   const error = new Error(code);
@@ -269,8 +283,25 @@ export class CanvasRegionV1 {
     this.regionAdapter = regionAdapter;
   }
   get protocolHandshake() { return structuredClone(canvasProtocolHandshake); }
-  describe() { return structuredClone({ ...regionToolDescription,
-    protocolHandshake: canvasProtocolHandshake }); }
+  async describe(sessionRef = null) {
+    await this.canvas.ready;
+    let capabilities = null;
+    if (sessionRef !== null) {
+      const session = this.canvas.current(sessionRef);
+      if (!session) throw fail('WORLD_NOT_BOUND', 'SCOPE_DENIED');
+      const body = { sessionRef, worldRef: session.activeWorldRef,
+        localContext: session.localContext, requestId: `describe-${randomUUID()}` };
+      const connection = await this.#current(body);
+      const current = this.canvas.current(sessionRef);
+      if (!current || !same(current.localContext, body.localContext) ||
+          connection.connectionRef !== body.localContext.connectionRef ||
+          connection.capabilities.worldRef !== body.worldRef)
+        throw fail('CURRENT_WORLD_MISMATCH', 'SCOPE_DENIED');
+      capabilities = connection.capabilities;
+    }
+    return structuredClone({ ...regionToolDescription(capabilities),
+      protocolHandshake: canvasProtocolHandshake });
+  }
   get store() { return this.canvas.store; }
   #snapshots() { return new SnapshotFiles(this.store.directory); }
 

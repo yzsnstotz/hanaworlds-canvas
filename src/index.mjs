@@ -1,4 +1,4 @@
-export { CanvasV5, CanvasStore, name, inject, apply, STORE_ROOT } from './local-v5.mjs';
+export { CanvasV5, CanvasStore, name, inject, Config, apply, STORE_ROOT } from './local-v5.mjs';
 export { CanvasConfigSupply, SUPPLY_PROFILE, assembleProfile, boundDomain }
   from './config-supply.mjs';
 export { CanvasRegionV1, canvasProtocolHandshake, regionToolDescription, encodeSnapshot,

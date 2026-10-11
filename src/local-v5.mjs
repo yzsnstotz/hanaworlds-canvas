@@ -18,9 +18,11 @@ import { CanvasRegionV1, ADAPTER_CELL_REQUIREMENT, ENGINE_GUARD_REQUIREMENTS, re
 import { CanvasConfigSupply } from './config-supply.mjs';
 import { expectedWrittenRecord, withDerivedReadback } from './state-profile.mjs';
 import { resolveHistoryOutcome } from './history-recovery.mjs';
+import { Config } from './placement-config.mjs';
 import packageJson from '../package.json' with { type: 'json' };
 
 export { CanvasStore, CanvasRegionV1, CanvasConfigSupply };
+export { Config };
 const WIRE = 'canvas/v7';
 const ADAPTER = 'world-adapter/v8';
 const SESSION = 'session/v5';
@@ -78,7 +80,7 @@ function engineRefusal(receipt) {
 
 /** Current local Canvas. Adapter is a public v6 port; it never decides history. */
 export class CanvasV5 {
-  constructor({ store, adapter, nativeFacts, sessions,
+  constructor({ store, adapter, nativeFacts, sessions, config,
     adapterId = 'hanaworlds-world-adapter' }) {
     checkContractHandshake(contractHandshake);
     this.store = store;
@@ -88,6 +90,7 @@ export class CanvasV5 {
     this.sessions = sessions;
     this.nativeFacts = nativeFacts;
     this.adapterId = adapterId;
+    this.placementConfig = structuredClone(Config(config).placement);
     this.ready = Promise.resolve();
     this.storageState = store ? 'READY' : 'UNAVAILABLE';
     this.activeHistoryTransactions = new Set();
@@ -100,6 +103,30 @@ export class CanvasV5 {
     canvasContract: WIRE, adapterContract: ADAPTER, storage: this.storageState,
     productReadiness: 'UNPROVEN' }; }
   current(sessionRef) { return this.store?.snapshot.sessions[sessionRef] ?? null; }
+  // Called during host startup, before any request can observe an old search policy.
+  async syncPlacementSettings() {
+    await this.store.commit(state => {
+      for (const worldRef of Object.keys(state.placementSettings))
+        this.#placementSettings(state, worldRef);
+    });
+  }
+  #placementSettings(state, worldRef) {
+    const previous = state.placementSettings[worldRef];
+    const values = previous && Object.fromEntries(Object.keys(this.placementConfig)
+      .map(key => [key, previous[key]]));
+    if (same(values, this.placementConfig)) return;
+    state.placementSettings[worldRef] = { ...this.placementConfig,
+      settingsRevision: previous ? rev('placement') : 'placement-0' };
+    if (!previous) return;
+    for (const [id, row] of Object.entries(state.placementInspections))
+      if (row.worldRef === worldRef) delete state.placementInspections[id];
+    // An inspection replay cannot continue to return the old settings after a reload.
+    for (const [id, row] of Object.entries(state.replay)) {
+      const result = row.response?.result;
+      const settings = result?.inspection?.placementSettings ?? result?.choice?.placementSettings;
+      if (settings && same(settings, previous)) delete state.replay[id];
+    }
+  }
   /** Plugin-owned same-transaction query/recovery, scoped to its active Session and context. */
   async resolvePendingHistory(request) {
     await this.ready;
@@ -1183,10 +1210,7 @@ export class CanvasV5 {
       state.connections[body.sessionRef] = connection;
       state.connectionInventories[body.sessionRef] = inventory;
       state.worldRevisions[worldRef] ??= 'world-0';
-      state.placementSettings[worldRef] ??= {
-        frontGapCells: 2, forwardSearchCells: 16,
-        lateralSearchCells: 8, verticalSearchCells: 4,
-        settingsRevision: 'placement-0' };
+      this.#placementSettings(state, worldRef);
       state.replay[replayKey] = { digest: admission.requestDigest, response };
     });
   }
@@ -1411,8 +1435,8 @@ async function nativeDirectory(ctx) {
   }
   return directory;
 }
-export function apply(ctx) {
-  const service = new CanvasV5({ store: null,
+export function apply(ctx, config) {
+  const service = new CanvasV5({ store: null, config,
     adapter: {
       get protocolHandshake() { return ctx.get?.('hanaworldsWorldAdapterV6')?.protocolHandshake; },
       call: (...args) => ctx.get?.('hanaworldsWorldAdapterV6')?.call(...args) },
@@ -1469,9 +1493,10 @@ export function apply(ctx) {
   service.storageState = 'INITIALIZING';
   service.ready = (async () => {
     try { service.store = await CanvasStore.open(await nativeDirectory(ctx));
+      await service.syncPlacementSettings();
       service.storageState = 'READY'; }
     catch { service.storageState = 'UNAVAILABLE'; }
   })();
   return service;
 }
-export default { name, inject, apply };
+export default { name, inject, Config, apply };

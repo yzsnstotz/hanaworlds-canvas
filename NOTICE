@@ -25,3 +25,7 @@ https://github.com/evanw/esbuild, builds the client bundle and is not a runtime.
 ReactDOM 18.3.1 (MIT) renders isolated tests only; the independent fixture pages
 are archived outside the shipped package. DSH registry/gateway/util-crypto
 0.2.0-rc.2 (MIT) are development dependencies for the official remote test path.
+
+@deepseek-ai/schemastery 3.18.4 (MIT), from
+https://github.com/deepseek-ai/deepseek-harness (vendor/schemastery), is a
+separately installed runtime dependency for the plugin management Config schema.
