@@ -3,15 +3,17 @@ import { mkdir, open, readFile, rename } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { gzip, gunzip, constants as zlib } from 'node:zlib';
+import { VOXEL_GRID, requireVoxelGrid, positionKey as key, regionPositions as specifiedPositions,
+  affectedObjectRefs } from './voxel-grid.mjs';
 import packageJson from '../package.json' with { type: 'json' };
 import { trustedSessionWorld, withTargetWorld } from './world-error.mjs';
-import { canonicalJSON, checkProtocolCompatibility, comparePosition, contractProtocols, digestValue,
-  expandRegionBlock, expectedRegionSummary, protocolRequirement, publicError,
+import { canonicalJSON, checkProtocolCompatibility, contractProtocols, digestValue,
+  expectedRegionSummary, protocolRequirement, publicError,
   regionBlockBox, regionCapabilities, requireKnownRegion, guardRefusalError,
   summarizeRegionStates, unmetEngineGuards,
   validateBoundResponse, validateDigestBinding, validateRegionCommit, validateRegionRead,
   validateRegionSnapshotContent, validateRegionUndo, validateRegionWrite, validateRequest,
-  validateResponse, validateType, validateRegionCommitRequest, checkConfirmedRegionPlacementCommit, requireGeometryProfile } from 'hanaworlds-contracts';
+  validateResponse, validateType, validateRegionCommitRequest, checkConfirmedRegionPlacementCommit } from 'hanaworlds-contracts';
 
 /*
  * canvas-region/v3 over the public Contracts 1.x region v2 shapes.
@@ -101,7 +103,6 @@ const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const D = (kind, value) => digestValue(kind, value).sha256;
 const same = (a, b) => canonicalJSON(a) === canonicalJSON(b);
 const rev = prefix => `${prefix}-${randomUUID()}`;
-const key = position => position.join(',');
 // Any unfinished Canvas transaction (cell or region) on the same world blocks a new reservation.
 const inFlight = (state, worldRef) => Object.values(state.pending)
   .some(row => row.body?.worldRef === worldRef);
@@ -115,7 +116,7 @@ export const canvasProtocolHandshake = Object.freeze(validateType('ProtocolHands
 
 /** Generate the skill's description from a current world-source declaration. */
 export function regionToolDescription(capabilities = null) {
-  const geometry = capabilities && requireGeometryProfile(capabilities.worldGeometry, 'voxel-grid/v1');
+  const geometry = capabilities && requireVoxelGrid(VOXEL_GRID, capabilities.worldGeometry);
   return {
   tool: 'canvas.region',
   operations: ['ApplyRegionCommit', 'UndoRegionCommit'],
@@ -268,17 +269,6 @@ function unionBox(boxes) {
   return { min: [0, 1, 2].map(a => Math.min(...boxes.map(b => b.min[a]))),
     max: [0, 1, 2].map(a => Math.max(...boxes.map(b => b.max[a]))) };
 }
-function specifiedPositions(operations) {
-  const positions = [];
-  for (const chunk of operations.chunks) {
-    const { box, indices } = expandRegionBlock(chunk.block);
-    const sx = box.max[0] - box.min[0] + 1, sy = box.max[1] - box.min[1] + 1;
-    indices.forEach((v, i) => { if (v !== -1) positions.push([box.min[0] + i % sx,
-      box.min[1] + Math.floor(i / sx) % sy, box.min[2] + Math.floor(i / (sx * sy))]); });
-  }
-  return positions.sort(comparePosition);
-}
-
 /**
  * Region transactions over the same Canvas durable store, world revisions,
  * footprints and history rows as cell BUILD. Not a second transaction system.
@@ -322,7 +312,9 @@ export class CanvasRegionV1 {
   /** The current connection, then the engine guards `operation` needs from its declaration. */
   async #guarded(body, operation) {
     const connection = await this.#current(body);
-    const geometry = requireGeometryProfile(connection.capabilities.worldGeometry, 'voxel-grid/v1');
+    const geometry = requireVoxelGrid(VOXEL_GRID, connection.capabilities.worldGeometry);
+    for (const chunk of body.operations?.chunks ?? [])
+      requireVoxelGrid(chunk.block.geometryProfile, geometry);
     if (body.operations && !same(body.operations.partition, geometry.partition))
       throw fail('CAPABILITY_GAP', 'GEOMETRY_PROFILE_UNSUPPORTED');
     requireGuards(connection.capabilities.engineGuards, operation);
@@ -380,18 +372,15 @@ export class CanvasRegionV1 {
   }
   async #geometry(body) {
     const connection = await this.#current(body);
-    return requireGeometryProfile(connection.capabilities.worldGeometry, 'voxel-grid/v1');
+    return requireVoxelGrid(VOXEL_GRID, connection.capabilities.worldGeometry);
   }
   #summary(worldRef, read) {
     return summarizeRegionStates(worldRef, read.partition, read.chunks.map(c => ({ chunkPos: c.chunkPos,
       state: c.state })));
   }
   #footprintConflicts(worldRef, positions, exceptObjectRef = null) {
-    const checked = new Set(positions.map(key));
-    return Object.entries(this.store.snapshot.footprints[worldRef] ?? {})
-      .filter(([objectRef, row]) => objectRef !== exceptObjectRef &&
-        row.positions.some(position => checked.has(key(position))))
-      .map(([objectRef]) => objectRef).sort();
+    return affectedObjectRefs(this.store.snapshot.footprints[worldRef], positions,
+      VOXEL_GRID, exceptObjectRef);
   }
   #replay(body, operation) {
     const replayKey = `${body.sessionRef}\0${REGION_WIRE}:${operation}\0${body.requestId}`;

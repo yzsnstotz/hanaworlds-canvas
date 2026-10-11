@@ -20,6 +20,8 @@ import { expectedWrittenRecord, withDerivedReadback } from './state-profile.mjs'
 import { resolveHistoryOutcome } from './history-recovery.mjs';
 import { Config } from './placement-config.mjs';
 import { nameTargetWorld, refOrUndefined, trustedSessionWorld, withTargetWorld } from './world-error.mjs';
+import { VOXEL_GRID, requireVoxelGrid, positionKey as key, cellPositions, affectedObjectRefs,
+  boxCells, footprintBounds } from './voxel-grid.mjs';
 import packageJson from '../package.json' with { type: 'json' };
 
 export { CanvasStore, CanvasRegionV1, CanvasConfigSupply };
@@ -47,18 +49,11 @@ const hash = (kind, value) => digestValue(kind, value).sha256;
 const stableHash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const rev = prefix => `${prefix}-${randomUUID()}`;
 const same = (a, b) => canonicalize(a) === canonicalize(b);
-const key = position => position.join(',');
 function fail(code, reason = 'REVISION_CHANGED', phase = 'validate') {
   const error = new Error(code);
   error.publicError = { code, phase, retryability: 'AFTER_NEW_FACTS',
     mutationState: 'NONE', transactionRef: null, causeCode: null, reason };
   return error;
-}
-function boxCells(box) {
-  const cells = [];
-  for (let z = box.min[2]; z <= box.max[2]; z++) for (let y = box.min[1]; y <= box.max[1]; y++)
-    for (let x = box.min[0]; x <= box.max[0]; x++) cells.push([x, y, z]);
-  return cells;
 }
 function answer(body, result, error = null) {
   return { contractVersion: WIRE, requestId: body.requestId, result, error };
@@ -252,12 +247,7 @@ export class CanvasV5 {
     if (this.store.snapshot !== snapshot) throw fail('STALE_REVISION');
     const objects = registered.map(object => {
       const positions = footprints.objects.find(row => row.objectRef === object.objectRef).positions;
-      let bounds = null;
-      if (positions.length) {
-        const min = [0,1,2].map(axis => positions.reduce((v, p) => Math.min(v, p[axis]), Infinity));
-        const max = [0,1,2].map(axis => positions.reduce((v, p) => Math.max(v, p[axis]), -Infinity));
-        bounds = { min, max, size: min.map((v, axis) => max[axis] - v + 1) };
-      }
+      const bounds = footprintBounds(positions, VOXEL_GRID);
       return { objectRef: object.objectRef, name: object.displayName,
         occupiedCells: positions.length, bounds };
     });
@@ -392,7 +382,7 @@ export class CanvasV5 {
           originTransactionId: rows[0]?.transactionId ?? null, applied: !undone,
           footprint: s.footprints[worldRef]?.[object.objectRef]?.positions ?? [],
           // Cells this entry changes: the verified cell scope, or the committed region box.
-          cells: region ? boxCells(s.transactions[rows[0].transactionId].box) :
+          cells: region ? boxCells(s.transactions[rows[0].transactionId].box, VOXEL_GRID) :
             s.transactions[rows[0].transactionId].after.coveredPositions,
           undo, redo };
       });
@@ -480,22 +470,13 @@ export class CanvasV5 {
       throw fail('CURRENT_WORLD_MISMATCH', 'SCOPE_DENIED');
     return { replayKey, prior, admission, connection };
   }
-  #positions(operations) {
-    const positions = operations.effects.map(effect => effect.position);
-    if (positions.length === 0 || new Set(positions.map(key)).size !== positions.length)
-      throw fail('INVALID_OPERATIONS', 'PAYLOAD_CHANGED');
-    return positions;
-  }
   #affected(worldRef, positions) {
-    const checked = new Set(positions.map(key));
-    return Object.entries(this.store.snapshot.footprints[worldRef] ?? {})
-      .filter(([, row]) => row.positions.some(position => checked.has(key(position))))
-      .map(([objectRef]) => objectRef).sort();
+    return affectedObjectRefs(this.store.snapshot.footprints[worldRef], positions, VOXEL_GRID);
   }
   async #analyze(body) {
     const { replayKey, prior, admission, connection } = await this.#bound('AnalyzeAffectedObjects', body);
     if (prior) return prior.response;
-    for (const effect of body.operations.effects) requireGeometryProfile(connection.capabilities.worldGeometry, effect.geometryProfile);
+    const positions = cellPositions(body.operations, connection.capabilities.worldGeometry);
     const session = this.current(body.sessionRef);
     if (body.expectedSelectionRevision !== session.selectionRevision ||
         body.expectedRegistryRevision !==
@@ -504,7 +485,7 @@ export class CanvasV5 {
       throw fail('STALE_REVISION');
     if (hash('operations', body.operations) !== body.operationDigest)
       throw fail('DIGEST_MISMATCH', 'PAYLOAD_CHANGED');
-    const affectedObjectRefs = this.#affected(body.worldRef, this.#positions(body.operations));
+    const affectedObjectRefs = this.#affected(body.worldRef, positions);
     const analysis = { contractVersion: WIRE, worldRef: body.worldRef,
       worldRevision: this.store.snapshot.worldRevisions[body.worldRef],
       registryRevision: body.expectedRegistryRevision,
@@ -512,10 +493,26 @@ export class CanvasV5 {
       operationDigest: body.operationDigest,
       orderedSelectedRefs: [...session.orderedSelectedObjectRefs], affectedObjectRefs };
     const response = respond('AnalyzeAffectedObjects', answer(body, analysis));
+    const unselected = affectedObjectRefs.filter(ref => !analysis.orderedSelectedRefs.includes(ref));
+    const decision = unselected.length ? { transactionId: body.transactionId,
+      analysisDigest: hash('affected-analysis', analysis), decisionRevision: rev('affected-decision'),
+      decisionKind: 'BLOCK_AND_NOTIFY', affectedObjectRefs: [...affectedObjectRefs],
+      orderedSelectedRefs: [...analysis.orderedSelectedRefs] } : null;
+    const notification = decision ? respond('DecideAffectedObjectNotification', answer(body, decision)) : null;
     await this.store.commit(state => {
+      if (state.worldRevisions[body.worldRef] !== analysis.worldRevision ||
+          (state.registryRevisions[body.worldRef] ?? 'registry-0') !== analysis.registryRevision ||
+          state.sessions[body.sessionRef]?.selectionRevision !== analysis.selectionRevision)
+        throw fail('STALE_REVISION');
       state.analyses[body.transactionId] = analysis;
+      if (decision) {
+        state.affectedDecisions ??= {};
+        state.affectedDecisions[body.transactionId] = decision;
+      }
       state.replay[replayKey] = { digest: admission.requestDigest, response };
     });
+    if (notification) await this.publishEvent('AffectedObjectNotificationRequired',
+      'DecideAffectedObjectNotification', notification);
     return response;
   }
   async #read(body, positions, stateProfile, suffix) {
@@ -535,7 +532,7 @@ export class CanvasV5 {
     const { replayKey, prior, admission, connection } = await this.#bound('ApplyRecoverableCommit', body);
     if (prior) return prior.response;
     this.adapterCompatible();
-    for (const effect of body.operations.effects) requireGeometryProfile(connection.capabilities.worldGeometry, effect.geometryProfile);
+    const positions = cellPositions(body.operations, connection.capabilities.worldGeometry);
     requireGuards(connection.capabilities.engineGuards, 'ApplyRecoverableCommit');
     const analysis = this.store.snapshot.analyses[body.transactionId];
     if (!analysis || analysis.affectedObjectRefs.length ||
@@ -566,7 +563,6 @@ export class CanvasV5 {
         throw fail('DIGEST_MISMATCH', 'PAYLOAD_CHANGED');
       validateExactEffects(build.operations, build.materials, body.operations.effects);
     }
-    const positions = this.#positions(body.operations);
     if (this.#affected(body.worldRef, positions).length)
       throw fail('OTHER_OBJECTS_AFFECTED', 'SCOPE_DENIED');
     const stateProfile = this.store.snapshot.connections[body.sessionRef].capabilities.stateProfile;
@@ -1022,6 +1018,7 @@ export class CanvasV5 {
       return prior.response;
     }
     validatePlacementRegionRequest(body, connection);
+    requireVoxelGrid(body.footprint.geometryProfile, connection.capabilities.worldGeometry);
     const worldRevision = state.worldRevisions[body.worldRef];
     const inspectionId = rev('inspection');
     const result = await this.#adapter('InspectRegion', {
@@ -1029,7 +1026,8 @@ export class CanvasV5 {
       requestId: `${body.requestId}:region`, worldRef: body.worldRef,
       expectedWorldRevision: worldRevision, inspectionId,
       anchor: body.anchor, footprint: { widthCells: body.footprint.widthCells,
-        depthCells: body.footprint.depthCells, heightCells: body.footprint.heightCells },
+        depthCells: body.footprint.depthCells, heightCells: body.footprint.heightCells,
+        geometryProfile: body.footprint.geometryProfile },
       placementSettings: settings, localContext: body.localContext });
     if (result.outcome === 'REGION_INSPECTED') {
       const inspection = validateRegionInspection(result.inspection);

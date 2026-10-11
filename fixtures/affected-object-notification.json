@@ -1,0 +1,18 @@
+{
+  "contractVersion": "canvas/v7",
+  "event": "AffectedObjectNotificationRequired",
+  "operation": "DecideAffectedObjectNotification",
+  "receipt": {
+    "contractVersion": "canvas/v7",
+    "requestId": "fixture-overlap-analysis",
+    "result": {
+      "transactionId": "fixture-overlap-transaction",
+      "analysisDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "decisionRevision": "fixture-affected-decision-1",
+      "decisionKind": "BLOCK_AND_NOTIFY",
+      "affectedObjectRefs": ["fixture-object-house"],
+      "orderedSelectedRefs": []
+    },
+    "error": null
+  }
+}

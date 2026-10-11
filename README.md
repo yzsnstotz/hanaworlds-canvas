@@ -55,6 +55,31 @@ with unknown world geometry. Missing geometry is refused with `CAPABILITY_GAP`.
 The exported `regionToolDescription(capabilities)` generates the same description
 from an explicit world-source declaration.
 
+`src/voxel-grid.mjs` owns cell footprints, region specified-cell expansion, bounds
+and overlap calculation. Admission checks the payload's explicit geometry profile
+against the current world source before interpreting cells. Unsupported placement
+selectors and undeclared voxel geometry return `CAPABILITY_GAP` without writing;
+placement forwards its profile unchanged to `InspectRegion`. The Contracts v2
+cell/region payload schemas define only `voxel-grid/v1`; malformed variants still
+fail strict contract decoding.
+
+When `AnalyzeAffectedObjects` finds affected objects outside the current selection,
+Canvas durably records a `BLOCK_AND_NOTIFY` policy decision beside the analysis and
+emits `AffectedObjectNotificationRequired`. Its receipt carries `transactionId`,
+`analysisDigest`, `decisionRevision`, `affectedObjectRefs` and `orderedSelectedRefs`.
+The object references identify exactly which registered objects overlap; material
+references and orientation indices remain opaque to Canvas. Apply still refuses
+overlapping writes with `OTHER_OBJECTS_AFFECTED`. Disjoint or wholly selected overlap
+analyses emit no notification. Exact replay, including after reopening the store,
+returns the stored analysis without repeating the event. A consumer failure leaves
+the durable analysis and blocking decision intact.
+
+[`fixtures/affected-object-notification.json`](fixtures/affected-object-notification.json)
+is a validated illustrative event (its IDs and digest are explicit fixture data).
+`test/voxel-grid.test.mjs` uses the minimal isolated Adapter/Session implementations
+in `test/support/undo-fixture-world.mjs` and `scripts/fixture-sessions.mjs` to exercise
+analysis, refusal, notification and reopen through the public Canvas operations.
+
 World selection uses the published Contracts v2.2.1 SDK (`canvas/v7` wire).
 `ReadWorldSelectionContext` always returns that Session's current selection; its
 `worldRef` argument only scopes the connection inventory. Two Sessions can share
