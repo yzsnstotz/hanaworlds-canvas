@@ -19,6 +19,7 @@ import { CanvasConfigSupply } from './config-supply.mjs';
 import { expectedWrittenRecord, withDerivedReadback } from './state-profile.mjs';
 import { resolveHistoryOutcome } from './history-recovery.mjs';
 import { Config } from './placement-config.mjs';
+import { nameTargetWorld, refOrUndefined, trustedSessionWorld, withTargetWorld } from './world-error.mjs';
 import packageJson from '../package.json' with { type: 'json' };
 
 export { CanvasStore, CanvasRegionV1, CanvasConfigSupply };
@@ -348,7 +349,12 @@ export class CanvasV5 {
     return structuredClone({ state: objects.length ? 'READY' : 'EMPTY', worldRef,
       worldRevision, localContext: session.localContext, objects, recovery });
   }
+  /** Host port. A world-unavailability refusal names the request's own world (Contracts 2.7.0). */
   async readHistoryFacts(request) {
+    try { return await this.#historyFacts(request); }
+    catch (error) { throw nameTargetWorld(error, { worldRef: refOrUndefined(request?.worldRef) }); }
+  }
+  async #historyFacts(request) {
     const state = await this.#durable();
     this.#currentFacts(state, request, request?.worldRef);
     const origin = state.transactions[request?.originTransactionId];
@@ -370,7 +376,12 @@ export class CanvasV5 {
       affectedObjectRefs: [...origin.history.affectedObjectRefs],
       originVerifiedReceiptDigest: origin.history.receiptDigest });
   }
+  /** Host port. A world-unavailability refusal names the asked world (Contracts 2.7.0). */
   async readWorldRevision(worldRef) {
+    try { return await this.#worldRevision(worldRef); }
+    catch (error) { throw nameTargetWorld(error, { worldRef: refOrUndefined(worldRef) }); }
+  }
+  async #worldRevision(worldRef) {
     const state = await this.#durable();
     if (!Object.values(state.sessions).some(session => session.activeWorldRef === worldRef))
       throw fail('WORLD_NOT_BOUND', 'SCOPE_DENIED');
@@ -1414,8 +1425,11 @@ export class CanvasV5 {
       if (operation === 'HistoryQuery') return await this.#historyQuery(body);
       throw fail('CAPABILITY_UNAVAILABLE', 'REQUIRED_FACT_UNKNOWN');
     } catch (error) {
-      const response = answer(body ?? { requestId: raw?.requestId ?? 'invalid-request' },
-        null, error.publicError ?? publicError(error));
+      const failure = error.publicError ?? publicError(error);
+      // Contracts 2.7.0: only an admitted request may name its target world; an undecoded raw
+      // selector is never echoed.
+      const response = answer(body ?? { requestId: raw?.requestId ?? 'invalid-request' }, null,
+        body ? withTargetWorld(failure, body, trustedSessionWorld(this.store, body)) : failure);
       // Guard refusals (pre-flight or forwarded from the Adapter) travel with their error.
       if (GUARDED_OPERATIONS.has(operation)) response.guardRefusal = error.guardRefusal ?? null;
       return operation === 'InspectPlacementRegion' ?
@@ -1461,7 +1475,13 @@ export function apply(ctx, config) {
     emitEvent: event => ctx.parallel?.(event.event, event),
     adapter: {
       get protocolHandshake() { return ctx.get?.('hanaworldsWorldAdapterV6')?.protocolHandshake; },
-      call: (...args) => ctx.get?.('hanaworldsWorldAdapterV6')?.call(...args) },
+      // No Adapter service on the Host (world not started) is the world being unavailable,
+      // never an undecodable Adapter response.
+      call: (...args) => {
+        const port = ctx.get?.('hanaworldsWorldAdapterV6');
+        if (typeof port?.call !== 'function') throw fail('CAPABILITY_UNAVAILABLE', 'REQUIRED_FACT_UNKNOWN');
+        return port.call(...args);
+      } },
     // Workshop's published session/v5 provider (public service key hanaworldsWorkshopV3,
     // one WorkshopV3 instance; Workshop 0.4.12 4547f3cf). Read on every call, so a disposed
     // provider is absent → fail closed. No other key is tried.

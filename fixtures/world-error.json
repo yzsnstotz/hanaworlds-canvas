@@ -1,0 +1,108 @@
+{
+  "evidence": "SOURCE/FIXTURE only: produced by CanvasV5.call in an isolated temp store; no real world, Adapter or Session was read.",
+  "contracts": "hanaworlds-contracts 2.7.0 Error.worldRef (optional; absent = no world context)",
+  "exchanges": [
+    {
+      "title": "Canvas store unavailable: the request worldRef names the target world",
+      "wire": "canvas/v7",
+      "operation": "SelectWorldConnection",
+      "request": {
+        "contractVersion": "canvas/v7",
+        "sessionRef": "fixture-session-S1",
+        "requestId": "world-error-store",
+        "worldRef": "fixture-world-A",
+        "connectionRef": "fixture-connection-A",
+        "connectionIncarnationRef": "fixture-incarnation-A-1",
+        "expectedRevision": "fixture-selection-0",
+        "expectedContext": null
+      },
+      "response": {
+        "contractVersion": "canvas/v7",
+        "error": {
+          "causeCode": null,
+          "code": "CAPABILITY_UNAVAILABLE",
+          "mutationState": "NONE",
+          "phase": "validate",
+          "reason": "REQUIRED_FACT_UNKNOWN",
+          "retryability": "AFTER_NEW_FACTS",
+          "transactionRef": null,
+          "worldRef": "fixture-world-A"
+        },
+        "requestId": "world-error-store",
+        "result": null
+      }
+    },
+    {
+      "title": "no Adapter service (world not started): the target world is named",
+      "wire": "canvas/v7",
+      "operation": "ReadWorldSelectionContext",
+      "request": {
+        "contractVersion": "canvas/v7",
+        "sessionRef": "fixture-session-S1",
+        "requestId": "world-error-adapter-absent",
+        "worldRef": "fixture-world-A"
+      },
+      "response": {
+        "contractVersion": "canvas/v7",
+        "error": {
+          "causeCode": null,
+          "code": "CAPABILITY_UNAVAILABLE",
+          "mutationState": "NONE",
+          "phase": "validate",
+          "reason": "REQUIRED_FACT_UNKNOWN",
+          "retryability": "AFTER_NEW_FACTS",
+          "transactionRef": null,
+          "worldRef": "fixture-world-A"
+        },
+        "requestId": "world-error-adapter-absent",
+        "result": null
+      }
+    },
+    {
+      "title": "Adapter reports ADAPTER_UNAVAILABLE: its error is kept and names the target world",
+      "wire": "canvas/v7",
+      "operation": "ReadWorldSelectionContext",
+      "request": {
+        "contractVersion": "canvas/v7",
+        "sessionRef": "fixture-session-S1",
+        "requestId": "world-error-adapter-unavailable",
+        "worldRef": "fixture-world-A"
+      },
+      "response": {
+        "contractVersion": "canvas/v7",
+        "error": {
+          "causeCode": null,
+          "code": "ADAPTER_UNAVAILABLE",
+          "mutationState": "NONE",
+          "phase": "validate",
+          "reason": "REQUIRED_FACT_UNKNOWN",
+          "retryability": "AFTER_NEW_FACTS",
+          "transactionRef": null,
+          "worldRef": "fixture-world-A"
+        },
+        "requestId": "world-error-adapter-unavailable",
+        "result": null
+      }
+    }
+  ],
+  "undecoded": {
+    "title": "undecodable raw bytes (UTF-8 of raw) are refused without echoing their selector",
+    "wire": "canvas/v7",
+    "operation": "SelectWorldConnection",
+    "raw": "{\"contractVersion\":\"canvas/v7\",\"sessionRef\":\"fixture-session-S1\",\"requestId\":\"world-error-raw\",\"worldRef\":\"fixture-world-A\"",
+    "response": {
+      "contractVersion": "canvas/v7",
+      "error": {
+        "causeCode": null,
+        "code": "SCHEMA_INVALID",
+        "mutationState": "NONE",
+        "phase": "decode",
+        "reason": "INVALID_SHAPE",
+        "retryability": "NEVER",
+        "transactionRef": null
+      },
+      "requestId": "invalid-request",
+      "result": null
+    }
+  }
+}

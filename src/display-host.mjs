@@ -66,7 +66,9 @@ export class CanvasDisplayService extends TypertRemoteService {
       if (response.error || response.result?.status !== 'VERIFIED')
         throw new RemoteError('canvas/undo-failed', `Canvas Undo did not verify: ${response.error?.code ?? response.result?.status}.`,
           { reason: response.error?.code ?? response.result?.status ?? 'UNKNOWN', transactionId,
-            mutationState: response.error?.mutationState ?? null });
+            mutationState: response.error?.mutationState ?? null,
+            // Contracts 2.7.0: the world Canvas needed, as Canvas's own public error named it.
+            worldRef: response.error?.worldRef ?? null });
       // Written state is shown only from Canvas's own public read after the commit.
       return { status: response.result.status, transactionId, originTransactionId: historyTransactionId,
         objectRef, view: await canvas.readObjectsHistory(sessionRef) };

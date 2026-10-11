@@ -140,7 +140,10 @@ async function guardRefusedBeforeWrite(env, operation, request, declaration, sen
     // rc.4: the envelope names the first uncovered guard x stage, explained by its error.
     const [first] = unmetEngineGuards(declaration, ENGINE_GUARD_REQUIREMENTS[operation]);
     assert.deepEqual({ ...response.guardRefusal }, { ...first }, operation);
-    assert.deepEqual({ ...response.error }, { ...guardRefusalError(first, { preflight: true }) });
+    // Contracts 2.7.0: the pre-flight error also names the admitted request's world; the
+    // guardRefusal and every other error field stay exactly the SDK's.
+    assert.deepEqual({ ...response.error }, { ...guardRefusalError(first, { preflight: true }),
+      worldRef: request.worldRef });
     validateResponse(send ? 'canvas-region/v3' : 'canvas/v7', operation, response);
   } finally { delete env.world.engineGuards; }
 }
