@@ -14,12 +14,12 @@ async function profile(t) {
 async function load(homePath) {
   let service;
   apply({ get(key) { return key === 'dshHomePath' ? homePath : undefined; },
-    provide(key, value) { if (key === 'hanaworldsCanvasV4') service = value; } });
+    provide(key, value) { if (key === 'hanaworldsCanvasV5') service = value; } });
   await service.ready;
   return service;
 }
 
-const directory = root => join(root, 'data', 'hanaworlds-canvas-v1');
+const directory = root => join(root, 'data', 'hanaworlds-canvas-v2');
 const native = root => (...parts) => join(root, ...parts);
 async function withHome(root, work) {
   const original = process.env.DSH_HOME;
@@ -31,7 +31,7 @@ async function withHome(root, work) {
   }
 }
 
-test('Canvas uses native DSH home path for durable schema-3 state across reload', async t => {
+test('Canvas uses native DSH home path for durable schema-7 state across reload', async t => {
   const root = await profile(t);
   await withHome(root, async () => {
     const first = await load(native(root));
@@ -44,7 +44,7 @@ test('Canvas uses native DSH home path for durable schema-3 state across reload'
     });
     const restarted = await load(native(root));
     assert.equal(restarted.storageState, 'READY');
-    assert.equal(restarted.store.snapshot.schemaVersion, 3);
+    assert.equal(restarted.store.snapshot.schemaVersion, 7);
     assert.equal(restarted.store.snapshot.objects.world.object.objectRef, 'object');
     assert.equal(restarted.store.snapshot.placementSettings.world.settingsRevision, '7');
     assert.equal(restarted.store.snapshot.placementInspections.inspect.worldRef, 'world');
@@ -85,7 +85,7 @@ test('native home accepts DSH_HOME tilde expansion under an isolated HOME', asyn
   }
 });
 
-test('Canvas native path opens existing schema-2 state with exact pre-v4 backup', async t => {
+test('Canvas ignores legacy state without migration or backup', async t => {
   const root = await profile(t);
   await mkdir(directory(root), { recursive: true });
   const bytes = Buffer.from(` ${JSON.stringify({ schemaVersion: 2,
@@ -94,8 +94,10 @@ test('Canvas native path opens existing schema-2 state with exact pre-v4 backup'
   await withHome(root, async () => {
     const service = await load(native(root));
     assert.equal(service.storageState, 'READY');
-    assert.equal(service.store.snapshot.schemaVersion, 3);
-    assert.deepEqual(await readFile(join(directory(root), 'canvas-v2.pre-v4.json')), bytes);
+    assert.equal(service.store.snapshot.schemaVersion, 7);
+    assert.deepEqual(await readFile(join(directory(root), 'canvas-v2.json')), bytes);
+    assert.deepEqual(service.store.snapshot.objects, {});
+    await assert.rejects(() => lstat(join(directory(root), 'canvas-v2.pre-v4.json')), { code: 'ENOENT' });
   });
 });
 

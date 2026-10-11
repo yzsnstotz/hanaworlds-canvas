@@ -5,7 +5,7 @@ import { fixtureSessions } from '../../scripts/fixture-sessions.mjs';
 const canvasModule = await import(process.env.CANVAS_ENTRY ??
   new URL('../../src/index.mjs', import.meta.url).href);
 
-// Only Host paths, Adapter/world facts and the FIXTURE session/v4 port are fixtures.
+// Only Host paths, Adapter/world facts and the FIXTURE session/v5 port are fixtures.
 // Cordis, Canvas apply(), public service registration, and the Canvas fsynced store are real.
 export async function openRuntime(profile, { adapter, nativeFacts,
   sessions = fixtureSessions() } = {}) {

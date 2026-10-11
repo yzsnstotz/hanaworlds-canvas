@@ -26,11 +26,11 @@ function timeLabel(value) {
   if (value === null) return '未记录时间';
   return new Date(value).toLocaleString('zh-CN', { hour12: false });
 }
-export function ObjectsHistoryView({ view, sample, toggleSample, refresh, pending = false, error = null, emptyReason, allowSampleRefresh = false, sampleDescription = '这些对象与时间线仅用于展示，不来自当前世界，也不会写入世界。', footer = '这里仅供查看。建造或撤回请使用对应面板。', actions = null, undo = null }) {
+export function ObjectsHistoryView({ view, refresh, pending = false, error = null, emptyReason, footer = '这里仅供查看。建造或撤回请使用对应面板。', actions = null, undo = null }) {
   const objects = view?.objects ?? [];
   const history = view?.history ?? [];
   // Undo controls appear only when the caller supplies Canvas's published actions (App panel, live data).
-  const steps = !sample && actions && undo ? new Map(actions.objects.map(object => [object.objectRef, object.undo])) : null;
+  const steps = actions && undo ? new Map(actions.objects.map(object => [object.objectRef, object.undo])) : null;
   const undoButtons = entry => {
     const step = steps?.get(entry.objectRef);
     if (!step?.available || step.historyTransactionId !== entry.transactionId) return null;
@@ -46,13 +46,8 @@ export function ObjectsHistoryView({ view, sample, toggleSample, refresh, pendin
       h('div', null, h('div', { className: 'hw-canvas-eyebrow' }, 'CANVAS · 世界记录'),
         h('h1', null, '对象与历史'), h('p', null, '看看世界里的作品，以及每一次已提交的改动。')),
       h('div', { className: 'hw-canvas-actions' },
-        h('button', { type: 'button', role: 'switch', 'aria-checked': sample,
-          className: sample ? 'hw-canvas-example active' : 'hw-canvas-example', onClick: toggleSample },
-        sample ? '关闭示例数据' : '查看示例数据'),
-        h('button', { type: 'button', onClick: refresh, disabled: sample && !allowSampleRefresh || pending }, pending ? '正在读取…' : '刷新'))),
-    sample && h('div', { className: 'hw-canvas-fixture', role: 'status' },
-      h('strong', null, '示例数据'), h('span', null, sampleDescription)),
-    !sample && h('div', { className: 'hw-canvas-source' }, steps ? '当前世界 · 可撤回每个对象的最近一笔' : '当前世界 · 只读'),
+        h('button', { type: 'button', onClick: refresh, disabled: pending }, pending ? '正在读取…' : '刷新'))),
+    h('div', { className: 'hw-canvas-source' }, steps ? '当前世界 · 可撤回每个对象的最近一笔' : '当前世界 · 只读'),
     steps && undo?.message && h('p', { role: 'status', className: 'hw-canvas-done' }, undo.message),
     steps && undo?.error && h('p', { role: 'alert', className: 'hw-canvas-error' }, '撤回失败：', undo.error),
     error && h('p', { role: 'alert', className: 'hw-canvas-error' }, '读取失败：', error),

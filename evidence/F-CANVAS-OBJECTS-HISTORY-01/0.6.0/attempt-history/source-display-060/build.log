@@ -1,9 +1,0 @@
-
-> hanaworlds-canvas@0.6.0 build
-> node --check src/index.mjs && node --check src/local-v5.mjs && node --check src/store-v5.mjs && node --check src/region-v1.mjs && node --check src/display-host.mjs && node --check src/display-remote.mjs && node scripts/build-display.mjs
-
-npm notice
-npm notice New minor version of npm available! 11.8.0 -> 11.21.0
-npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.21.0
-npm notice To update run: npm install -g npm@11.21.0
-npm notice

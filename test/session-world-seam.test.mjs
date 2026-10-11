@@ -11,19 +11,17 @@ import { fixtureSessions } from '../scripts/fixture-sessions.mjs';
 import { guardSlot } from '../scripts/fixture-engine-guards.mjs';
 
 /*
- * session-world-seam/v1 (canvas/v6 minor 1): Canvas's G-S/G-U/G-L/G-D authority over the
+ * session-world-seam/v1 (canvas/v7 minor 1): Canvas's G-S/G-U/G-L/G-D authority over the
  * exact candidate's public fixture `fixtures/session-world`. FIXTURE: the Adapter (from the
- * fixture's adapterInventory) and the session/v4 port (from its sessionDirectory) are
+ * fixture's adapterInventory) and the session/v5 port (from its sessionDirectory) are
  * contracts-shaped stand-ins, not the real Adapter or Workshop; nothing here signs a real gate.
  * On Contracts without the seam (0.5.3) these operations do not exist and the file is skipped.
  */
-// canvas/v6 (Contracts 1.x) always carries the session-world seam.
-const SEAM = contracts.contractProtocols.find(row => row.protocol === 'canvas').major === 6;
+// canvas/v7 (Contracts 1.x) always carries the session-world seam.
+const SEAM = contracts.contractProtocols.find(row => row.protocol === 'canvas').major === 7;
 const fixture = SEAM ? createRequire(import.meta.url)('hanaworlds-contracts/fixtures/session-world') : null;
 const evidence = process.env.CANVAS_SEAM_EVIDENCE ?? null;
-const stateProfile = { profileVersion: 'state-profile/v2',
-  nodeFields: ['nodeName', 'param1', 'param2'], metadataMode: 'exact',
-  inventoryMode: 'exact', timerMode: 'exact', derivedLightMode: 'recompute-with-readback' };
+const stateProfile = { profileVersion: 'state-profile/v3', derivedFields: ['light'], preservedFields: ['inventory', 'metadata', 'timer'], clearedFields: [] };
 
 function seamAdapter() {
   const rows = [...fixture.adapterInventory.A.connections, ...fixture.adapterInventory.B.connections]
@@ -31,7 +29,7 @@ function seamAdapter() {
   const adapter = { rows, calls: [], protocolHandshake: g3CellHandshake(),
     async call(operation, request) {
       adapter.calls.push(operation);
-      const respond = result => guardSlot('world-adapter/v7', operation, { contractVersion: 'world-adapter/v7', requestId: request.requestId, result, error: null });
+      const respond = result => guardSlot('world-adapter/v8', operation, { contractVersion: 'world-adapter/v8', requestId: request.requestId, result, error: null });
       if (operation === 'DiscoverConnections')
         return respond({ capabilityRevision: fixture.adapterInventory.A.capabilityRevision,
           connections: structuredClone(rows) });
@@ -42,7 +40,7 @@ function seamAdapter() {
           payloadVersion: row.payloadVersion, payloadDigest: '1'.repeat(64),
           capabilities: { providerRef: 'fixture-adapter', capabilityRevision: row.capabilityRevision,
             worldRef: row.worldRef, engineBounds: { min: [-64, -64, -64], max: [64, 64, 64] },
-            limits: [], recoveryGuarantee: 'RECOVERABLE_VERIFIED', stateProfile,
+            limits: [], worldGeometry: { profileVersion: 'world-geometry/v1', geometryProfiles: ['voxel-grid/v1'], partition: { edge: [16, 16, 16] }, postWriteLighting: 'REQUIRED' }, recoveryGuarantee: 'RECOVERABLE_VERIFIED', stateProfile,
             sessionDeleteSupported: true, imageMediaTypes: [], model: null, engineGuards: null } });
       }
       throw new Error(`unexpected v6 operation ${operation}`);
@@ -61,7 +59,7 @@ async function boot(t, { sessions = seamSessions() } = {}) {
   const canvas = new CanvasV5({ store: await CanvasStore.open(directory), adapter, sessions });
   let n = 0;
   const call = (operation, body) => canvas.call(operation,
-    { contractVersion: 'canvas/v6', requestId: `${operation}-${++n}`, ...body });
+    { contractVersion: 'canvas/v7', requestId: `${operation}-${++n}`, ...body });
   const S1 = 'fixture-session-S1', S2 = 'fixture-session-S2', A = 'fixture-world-A', B = 'fixture-world-B';
   const conn = { [A]: 'fixture-connection-A', [B]: 'fixture-connection-B' };
   const inc = worldRef => adapter.rows.find(r => r.worldRef === worldRef).connectionIncarnationRef;
@@ -103,7 +101,7 @@ test('minimal consistency: Canvas reproduces the candidate public ownerAScenario
     };
     const lastUnbound = new Map();
     for (const step of fixture.ownerAScenario) {
-      if (step.wire !== 'canvas/v6') { log.push({ title: step.title, skipped: 'session/v4 is Workshop' }); continue; }
+      if (step.wire !== 'canvas/v7') { log.push({ title: step.title, skipped: 'session/v5 is Workshop' }); continue; }
       const request = structuredClone(step.request);
       for (const [k, v] of Object.entries(request)) {
         if (typeof v !== 'string' || !CANVAS_TOKEN.test(v) || map.has(v)) {
@@ -328,14 +326,14 @@ test('C2: connection state of a BOUND selection is derived from the Adapter inve
  * Public assembly: Workshop 0.4.12 (4547f3cf) registers one WorkshopV3 instance as
  * hanaworldsWorkshop and hanaworldsWorkshopV3 (public summary, SOURCE); it registers no
  * hanaworldsSessionV3. Canvas's apply() consumes exactly hanaworldsWorkshopV3, per call.
- * FIXTURE: the provider here is the fixture session/v4 port inside a real Cordis plugin
+ * FIXTURE: the provider here is the fixture session/v5 port inside a real Cordis plugin
  * fiber; real Loader/Host mapping is NOT_RUN.
  */
 test('apply() consumes Workshop’s public hanaworldsWorkshopV3; other keys and a disposed provider fail closed',
   { skip: !SEAM && 'Contracts without session-world-seam/v1' }, async t => {
     const { Context } = await import('cordis');
     const canvasModule = await import('../src/index.mjs');
-    const read = async canvas => canvas.call('ReadWorldSelectionContext', { contractVersion: 'canvas/v6',
+    const read = async canvas => canvas.call('ReadWorldSelectionContext', { contractVersion: 'canvas/v7',
       sessionRef: 'fixture-session-S1', requestId: `r-${Math.random()}`, worldRef: 'fixture-world-A' });
     const assemble = async key => {
       const directory = await mkdtemp(join(tmpdir(), 'canvas-seam-assembly-'));

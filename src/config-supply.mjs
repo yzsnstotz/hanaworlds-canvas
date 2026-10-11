@@ -25,7 +25,6 @@ const AUTHORITY = 'hanaworlds-canvas';
 const CONTRACTS_REF = contractHandshake.contracts;
 const definitions = schemaBundle.definitions;
 
-const WORLDEDIT_MOD = 'worldedit';
 const PROFILES = {
   compilationConfig: { type: 'CompilationConfig', digestKind: 'compilation-config',
     revisionPrefix: 'compiler-config' },
@@ -69,21 +68,7 @@ function resolveField(type, field, facts) {
   if (Object.hasOwn(schema, 'const')) return { status: 'SUPPLIED', value: schema.const,
     provenance: { kind: 'CONTRACT_SCHEMA', ref: `${CONTRACTS_REF}#${type}.${field}`,
       sourceRevision: CONTRACTS_REF } };
-  if (type === 'CompilationConfig' && field === 'worldeditRevision') {
-    if (facts.catalogue.status !== 'READ') return { status: 'MISSING', value: null,
-      provenance: null, sourceKind: 'ENGINE_FACT', reason: 'REQUIRED_FACT_UNKNOWN',
-      need: `Catalogue.modRevisions.${WORLDEDIT_MOD} via hanaworldsLuantiNativeFacts.readCatalogue`,
-      cause: facts.catalogue.cause };
-    const value = facts.catalogue.value.modRevisions[WORLDEDIT_MOD];
-    if (typeof value !== 'string' || !value) return { status: 'MISSING', value: null,
-      provenance: null, sourceKind: 'ENGINE_FACT', reason: 'REQUIRED_FACT_UNKNOWN',
-      need: `the bound World's loaded Catalogue has no modRevisions.${WORLDEDIT_MOD}`,
-      cause: 'MOD_NOT_LOADED' };
-    return { status: 'SUPPLIED', value, provenance: { kind: 'ENGINE_FACT',
-      ref: `hanaworldsLuantiNativeFacts.readCatalogue(worldRef).modRevisions.${WORLDEDIT_MOD}`,
-      sourceRevision: facts.catalogue.digest } };
-  }
-  if (type === 'CompilationConfig' && field === 'backendProfileId') {
+  if (type === 'CompilationConfig' && field === 'writeBackend') {
     const engine = facts.configEngine;
     const need = 'hanaworldsLuantiNativeFacts.readConfigEngineFacts(worldRef).writeBackend ' +
       'from the actual loaded payload declaration';

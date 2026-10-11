@@ -8,4 +8,4 @@ const raw: NativeFactsScopedState = await port.readScopedState('local-connection
 const checked: NativeFactsScopedState = validateNativeFactsScopedState(raw, consumer);
 declare const store: CanvasStore;
 new CanvasV5({ store, nativeFacts: port });
-checked.stateProfile.profileVersion satisfies 'state-profile/v2';
+checked.stateProfile.profileVersion satisfies 'state-profile/v3';

@@ -15,7 +15,7 @@ test('published NativeFacts consumer reads a complete raw fixture and preserves 
   const source = JSON.parse(await readFile(new URL(publicPath('fixtures/native-facts-scoped-state.source.json'))));
   const schema = JSON.parse(await readFile(new URL(publicPath('fixtures/native-facts-scoped-state.schema.json'))));
   assert.equal(createHash('sha256').update(bytes).digest('hex'), source.fixtureSHA256);
-  assert.equal(source.canvasPackageVersion, '0.5.3');
+  assert.equal(source.canvasPackageVersion, '0.13.2');
   assert.deepEqual(schema.required, ['worldRef', 'stateProfile', 'cells']);
   for (const [name, definition] of Object.entries(schema.definitions))
     assert.deepEqual(definition, JSON.parse(JSON.stringify(consumer.schemaBundle.definitions[name])));
@@ -24,8 +24,7 @@ test('published NativeFacts consumer reads a complete raw fixture and preserves 
   const port = await example.createFixtureNativeFactsPort(consumer);
   const result = await port.readScopedState('local-connection', [[0, 1, 3]]);
   assert.deepEqual(result, fixture);
-  assert.deepEqual(Object.keys(result.stateProfile).sort(), ['derivedLightMode',
-    'inventoryMode', 'metadataMode', 'nodeFields', 'profileVersion', 'timerMode']);
+  assert.deepEqual(Object.keys(result.stateProfile).sort(), ['clearedFields', 'derivedFields', 'preservedFields', 'profileVersion']);
   const unknown = structuredClone(fixture);
   unknown.cells[0].availability = 'UNKNOWN';
   unknown.cells[0].stateDigest = null;

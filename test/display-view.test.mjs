@@ -1,30 +1,31 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { ObjectsHistoryView } from '../src/display-view.mjs';
-import { displayFixture } from '../src/display-fixture.mjs';
+import { displayFixture } from './fixtures/display-fixture.mjs';
 
-test('sample UI labels its origin and renders the requested data with read-only controls', () => {
-  const html = renderToStaticMarkup(React.createElement(ObjectsHistoryView, { view: displayFixture, sample: true }));
-  for (const text of ['示例数据', '不来自当前世界', '林边小屋', '石头小径', '8 × 6 × 8 格', '批量区域', '逐格', '影响 384 格', '已提交', '已撤回']) assert.ok(html.includes(text), text);
-  assert.equal((html.match(/<button/g) ?? []).length, 2, 'only sample switch and read refresh controls');
+test('view renders the data it is given with read-only controls and no sample switch', () => {
+  const html = renderToStaticMarkup(React.createElement(ObjectsHistoryView, { view: displayFixture }));
+  for (const text of ['林边小屋', '石头小径', '8 × 6 × 8 格', '批量区域', '逐格', '影响 384 格', '已提交', '已撤回']) assert.ok(html.includes(text), text);
+  assert.equal((html.match(/<button/g) ?? []).length, 1, 'only the read refresh control');
+  assert.ok(!html.includes('示例数据'), 'no sample data switch or banner in the view');
   assert.ok(!html.includes('撤回</button>') && !html.includes('提交</button>'));
 });
 
 test('old history discloses missing metadata and unbound worlds explain why they are empty', () => {
   const old = structuredClone(displayFixture); old.history[0].committedAt = null; old.history[0].mode = null; old.history[0].affectedCells = null;
-  const html = renderToStaticMarkup(React.createElement(ObjectsHistoryView, { view: old, sample: false }));
+  const html = renderToStaticMarkup(React.createElement(ObjectsHistoryView, { view: old }));
   for (const text of ['未记录时间','方式未记录','影响格数未记录']) assert.ok(html.includes(text));
-  const empty = renderToStaticMarkup(React.createElement(ObjectsHistoryView, { view: { state: 'NO_WORLD', objects: [], history: [] }, sample: false }));
+  const empty = renderToStaticMarkup(React.createElement(ObjectsHistoryView, { view: { state: 'NO_WORLD', objects: [], history: [] } }));
   assert.ok(empty.includes('当前会话还没有绑定世界'));
 });
 
-test('durable isolated sample explains its source and allows read refresh', () => {
-  const html = renderToStaticMarkup(React.createElement(ObjectsHistoryView, {
-    view: displayFixture, sample: true, allowSampleRefresh: true,
-    sampleDescription: '记录来自隔离示例环境，经 Canvas 提交后保存；不来自真实世界。',
-  }));
-  assert.ok(html.includes('经 Canvas 提交后保存'));
-  assert.ok(!html.includes('disabled=""'), 'durable sample refresh is a read, not a disabled static illustration');
+test('the App panel and its bundle carry no display-fixture sample switch', async () => {
+  for (const file of ['../src/client.jsx', '../src/display-view.mjs', '../lib/client.js']) {
+    const source = await readFile(new URL(file, import.meta.url), 'utf8');
+    for (const banned of ['display-fixture', 'displayFixture', 'SAMPLE_KEY', '查看示例数据', '示例数据', 'example-house'])
+      assert.ok(!source.includes(banned), `${file} must not contain ${banned}`);
+  }
 });

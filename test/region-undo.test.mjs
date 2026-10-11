@@ -17,8 +17,8 @@ import { fixtureSessions } from '../scripts/fixture-sessions.mjs';
 import { fixtureEngineGuards, guardSlot } from '../scripts/fixture-engine-guards.mjs';
 
 /*
- * FIXTURE: the Adapter below (world-adapter/v7 connection reads plus a
- * world-adapter-region/v2 ReadRegion/WriteRegion port and its ProtocolHandshake)
+ * FIXTURE: the Adapter below (world-adapter/v8 connection reads plus a
+ * world-adapter-region/v3 ReadRegion/WriteRegion port and its ProtocolHandshake)
  * is an explicit in-memory peer fixture built from the public Contracts 0.5.0
  * shapes, not the real Luanti Adapter. Its two ProtocolHandshakes advertise what a
  * G3 Adapter publishes (Contracts 0.5.1+): world-adapter-region 1.1 with its six
@@ -29,44 +29,43 @@ import { fixtureEngineGuards, guardSlot } from '../scripts/fixture-engine-guards
  * snapshot files and reopen path are the real component runtime.
  */
 const D = (kind, value) => digestValue(kind, value).sha256;
-const stateProfile = { profileVersion: 'state-profile/v2',
-  nodeFields: ['nodeName', 'param1', 'param2'], metadataMode: 'exact',
-  inventoryMode: 'exact', timerMode: 'exact', derivedLightMode: 'recompute-with-readback' };
+const stateProfile = { profileVersion: 'state-profile/v3', derivedFields: ['light'], preservedFields: [], clearedFields: ['inventory', 'metadata', 'timer'] };
 const WORLD = 'local-world';
 const worldRef = WORLD;
 const connectionOf = worldRef => ({ connectionRef: 'local-connection', connectionIncarnationRef: 'socket-open-1',
   worldRef, payloadVersion: 'local-world/v1', payloadDigest: '1'.repeat(64),
   capabilities: { providerRef: 'adapter', capabilityRevision: 'cap-1', worldRef,
     engineBounds: { min: [-64, -64, -64], max: [64, 64, 64] }, limits: [],
-    recoveryGuarantee: 'RECOVERABLE_VERIFIED', stateProfile,
+    worldGeometry: { profileVersion: 'world-geometry/v1', geometryProfiles: ['voxel-grid/v1'], partition: { edge: [16, 16, 16] }, postWriteLighting: 'REQUIRED' }, recoveryGuarantee: 'RECOVERABLE_VERIFIED', stateProfile,
     sessionDeleteSupported: true, imageMediaTypes: [], model: null,
     engineGuards: fixtureEngineGuards() } });
 const connection = connectionOf(WORLD);
-const ADAPTER_CAPS = ['world-adapter-region/v2:callback-free-write',
-  'world-adapter-region/v2:chunked-read', 'world-adapter-region/v2:chunked-write',
-  'world-adapter-region/v2:lighting-complete', 'world-adapter-region/v2:load-then-know',
-  'world-adapter-region/v2:restore-state'];
-const CELL_CAPS = ['world-adapter/v7:callback-free-write', 'world-adapter/v7:write-path-state-facts'];
-const handshake = (major = 2, minor = 0, capabilities = ADAPTER_CAPS, version = '0.4.9',
+const ADAPTER_CAPS = ['world-adapter-region/v3:callback-free-write',
+  'world-adapter-region/v3:chunked-read', 'world-adapter-region/v3:chunked-write',
+  'world-adapter-region/v3:lighting-complete', 'world-adapter-region/v3:load-then-know',
+  'world-adapter-region/v3:restore-state'];
+const CELL_CAPS = ['world-adapter/v8:callback-free-write', 'world-adapter/v8:write-path-state-facts'];
+const handshake = (major = 3, minor = 0, capabilities = ADAPTER_CAPS, version = '0.4.9',
   protocol = 'world-adapter-region') => ({
   profileVersion: 'protocol-handshake/v1', component: 'fixture-adapter',
   protocols: [{ protocol, major, minor }], capabilities: [...capabilities].sort(),
   provenance: { packageName: 'fixture-adapter', packageVersion: version,
     sourceRevision: null, artifactDigest: null } });
-const cellHandshake = (major = 7, minor = 0, capabilities = CELL_CAPS) =>
+const cellHandshake = (major = 8, minor = 0, capabilities = CELL_CAPS) =>
   handshake(major, minor, capabilities, '0.4.9', 'world-adapter');
 const k = p => p.join(',');
 const REGION_G1 = { guard: 'BODY_CLEARANCE', stage: 'REGION_RESTORE', finding: 'BODY_OCCUPIED' };
 
-function fixtureWorld({ protocolHandshake = handshake(), worldRef = WORLD, inspection = null } = {}) {
+function fixtureWorld({ protocolHandshake = handshake(), worldRef = WORLD, inspection = null, profile = stateProfile } = {}) {
   const connection = connectionOf(worldRef);
-  const nodes = new Map(); // "x,y,z" -> {nodeName, param2, extra?}
+  connection.capabilities.stateProfile = profile;
+  const nodes = new Map(); // "x,y,z" -> {materialRef, orientation, extra?}
   const loaded = new Set(['0,-1,0', '0,0,0']);
-  const world = { nodes, loaded, unloadable: new Set(), calls: [], writes: [],
+  const world = { connection, nodes, loaded, unloadable: new Set(), calls: [], writes: [],
     failApply: null, corruptAfterApply: false, failRestore: false,
     incarnation: connection.connectionIncarnationRef };
-  const ground = p => p[1] < 0 ? { nodeName: 'mcl_core:stone', param2: 0 } :
-    { nodeName: 'air', param2: 0 };
+  const ground = p => p[1] < 0 ? { materialRef: 'mcl_core:stone', orientation: 0 } :
+    { materialRef: 'air', orientation: 0 };
   world.get = p => nodes.get(k(p)) ?? ground(p);
   const cellsOf = box => {
     const out = [];
@@ -78,32 +77,32 @@ function fixtureWorld({ protocolHandshake = handshake(), worldRef = WORLD, inspe
     const cells = cellsOf(box);
     const palette = [], seen = new Map();
     const indices = Int32Array.from(cells, p => {
-      const { nodeName, param2 } = world.get(p); const id = `${nodeName}\0${param2}`;
-      if (!seen.has(id)) { seen.set(id, palette.length); palette.push({ nodeName, param2 }); }
+      const { materialRef, orientation } = world.get(p); const id = `${materialRef}\0${orientation}`;
+      if (!seen.has(id)) { seen.set(id, palette.length); palette.push({ materialRef, orientation }); }
       return seen.get(id);
     });
     const extras = cells.filter(p => world.get(p).extra).sort(comparePosition)
       .map(p => ({ position: p, ...world.get(p).extra }));
-    return { profileVersion: 'region-state/v1', worldRef,
+    return { profileVersion: 'region-state/v2', worldRef,
       block: encodeRegionBlock({ origin: box.min, size: box.max.map((v, a) => v - box.min[a] + 1),
-        palette, indices }), extras, derivedLightMode: 'recompute-with-readback' };
+        palette, indices }), extras, stateProfile: profile };
   };
   const setBlock = block => {
     const { box, indices, palette } = expandRegionBlock(block);
     cellsOf(box).forEach((p, i) => { if (indices[i] !== -1)
-      nodes.set(k(p), { nodeName: palette[indices[i]].nodeName,
-        param2: palette[indices[i]].param2 }); });
+      nodes.set(k(p), { materialRef: palette[indices[i]].materialRef,
+        orientation: palette[indices[i]].orientation }); });
   };
   world.adapter = { protocolHandshake: cellHandshake(), async call(operation, request) {
     world.calls.push(operation);
-    const respond = result => guardSlot('world-adapter/v7', operation, { contractVersion: 'world-adapter/v7', requestId: request.requestId, result, error: null });
+    const respond = result => guardSlot('world-adapter/v8', operation, { contractVersion: 'world-adapter/v8', requestId: request.requestId, result, error: null });
     if (operation === 'DiscoverConnections') return respond({ capabilityRevision: 'cap-1',
       connections: [{ adapterId: 'hanaworlds-world-adapter', connectionRef: connection.connectionRef,
         worldRef, displayName: 'Fixture local world', capabilityRevision: 'cap-1',
         payloadVersion: connection.payloadVersion, readiness: 'READY',
         connectionIncarnationRef: world.incarnation }] });
     if (operation === 'ReadLocalConnection')
-      return respond({ ...connection, connectionIncarnationRef: world.incarnation });
+      return respond(structuredClone({ ...connection, connectionIncarnationRef: world.incarnation }));
     if (operation === 'InspectRegion' && inspection) {
       const targetFacts = { ...inspection.targetFacts, worldRef, worldRevision: request.expectedWorldRevision };
       return respond({ outcome: 'REGION_INSPECTED', inspection: { ...inspection,
@@ -116,14 +115,14 @@ function fixtureWorld({ protocolHandshake = handshake(), worldRef = WORLD, inspe
   } };
   world.region = { protocolHandshake, async call(operation, request) {
     world.calls.push(`${operation}:${request.purpose}`);
-    const respond = result => guardSlot('world-adapter-region/v2', operation, { contractVersion: 'world-adapter-region/v2', requestId: request.requestId, result, error: null });
-    if (operation === 'ReadRegion') return respond({ worldRef, box: request.box,
+    const respond = result => guardSlot('world-adapter-region/v3', operation, { contractVersion: 'world-adapter-region/v3', requestId: request.requestId, result, error: null });
+    if (operation === 'ReadRegion') return respond({ worldRef, box: request.box, partition: request.partition,
       localContext: request.localContext,
-      chunks: regionChunksOfBox(request.box).map(({ chunkPos, box }) => {
+      chunks: regionChunksOfBox(request.box, request.partition).map(({ chunkPos, box }) => {
         const id = k(chunkPos);
         if (world.unloadable.has(id)) return { chunkPos, box, availability: 'UNKNOWN',
           loadMethod: null, unknownReason: 'LOAD_FAILED', state: null, stateDigest: null };
-        const loadMethod = loaded.has(id) ? 'ALREADY_LOADED' : 'LOADED_BY_EMERGE';
+        const loadMethod = loaded.has(id) ? 'ALREADY_LOADED' : 'LOADED_ON_DEMAND';
         loaded.add(id);
         const state = world.state(box);
         return { chunkPos, box, availability: 'KNOWN', loadMethod, unknownReason: null,
@@ -133,13 +132,13 @@ function fixtureWorld({ protocolHandshake = handshake(), worldRef = WORLD, inspe
       world.writes.push({ purpose: request.purpose, chunks: request.writes.length });
       // FIXTURE: an engine guard refuses the APPLY write (world.guardApply), writing nothing.
       if (request.purpose === 'APPLY' && world.guardApply) return { contractVersion:
-        'world-adapter-region/v2', requestId: request.requestId, result: null,
+        'world-adapter-region/v3', requestId: request.requestId, result: null,
         guardRefusal: world.guardApply, error: guardRefusalError(world.guardApply,
           { transactionRef: request.transactionId }) };
       // G1 FIXTURE: an engine guard refuses the stateless region restore in the Contracts engine
       // form (no cause, nothing written); world.guardRestore is the GuardRefusal to use.
       if (request.purpose === 'RESTORE' && world.guardRestore) return { contractVersion:
-        'world-adapter-region/v2', requestId: request.requestId, result: null,
+        'world-adapter-region/v3', requestId: request.requestId, result: null,
         guardRefusal: world.guardRestore, error: guardRefusalError(world.guardRestore,
           { transactionRef: request.transactionId }) };
       const boxes = [];
@@ -156,7 +155,7 @@ function fixtureWorld({ protocolHandshake = handshake(), worldRef = WORLD, inspe
           const first = indices.findIndex(v => v !== -1);
           const [sx, sy] = [0, 1].map(a => box.max[a] - box.min[a] + 1);
           nodes.set(k([box.min[0] + first % sx, box.min[1] + Math.floor(first / sx) % sy,
-            box.min[2] + Math.floor(first / (sx * sy))]), { nodeName: 'mcl_core:glass', param2: 0 });
+            box.min[2] + Math.floor(first / (sx * sy))]), { materialRef: 'mcl_core:glass', orientation: 0 });
           return { chunkPos: w.chunkPos, status: 'UNKNOWN', readbackDigest: null };
         }
         if (request.purpose === 'APPLY' && world.failApply !== null && i > world.failApply)
@@ -169,12 +168,12 @@ function fixtureWorld({ protocolHandshake = handshake(), worldRef = WORLD, inspe
       });
       if (request.purpose === 'APPLY' && world.corruptAfterApply) {
         world.corruptAfterApply = false;
-        nodes.set('9,-1,0', { nodeName: 'mcl_core:gravel', param2: 0 });
+        nodes.set('9,-1,0', { materialRef: 'mcl_core:gravel', orientation: 0 });
       }
       const lightingBox = { min: [0, 1, 2].map(a => Math.min(...boxes.map(b => b.min[a]))),
         max: [0, 1, 2].map(a => Math.max(...boxes.map(b => b.max[a]))) };
       return respond({ transactionId: request.transactionId, worldRef, purpose: request.purpose,
-        chunks, lighting: { status: 'COMPLETE', box: lightingBox,
+        chunks, postWriteLighting: 'REQUIRED', lighting: { status: 'COMPLETE', box: lightingBox,
           method: 'fixture:in-memory-relight' }, localContext: request.localContext });
     }
     throw new Error(`unexpected region operation ${operation}`);
@@ -183,10 +182,10 @@ function fixtureWorld({ protocolHandshake = handshake(), worldRef = WORLD, inspe
 }
 
 /** Test-side Brush: whole-box indices -> mapblock chunks, omitting chunks with nothing specified. */
-function compile(origin, size, palette, indices) {
+function compile(origin, size, palette, indices, partition = { edge: [16, 16, 16] }) {
   const box = { min: origin, max: origin.map((o, a) => o + size[a] - 1) };
   const chunks = [];
-  for (const { chunkPos, box: cb } of regionChunksOfBox(box)) {
+  for (const { chunkPos, box: cb } of regionChunksOfBox(box, partition)) {
     const sub = [];
     for (let z = cb.min[2]; z <= cb.max[2]; z++) for (let y = cb.min[1]; y <= cb.max[1]; y++)
       for (let x = cb.min[0]; x <= cb.max[0]; x++)
@@ -195,17 +194,17 @@ function compile(origin, size, palette, indices) {
     chunks.push({ chunkPos, block: encodeRegionBlock({ origin: cb.min,
       size: cb.max.map((v, a) => v - cb.min[a] + 1), palette, indices: Int32Array.from(sub) }) });
   }
-  const operations = { contractVersion: 'region-operations/v1', buildDigest: 'b'.repeat(64),
+  const operations = { contractVersion: 'region-operations/v2', buildDigest: 'b'.repeat(64),
     compilerRevision: 'fixture-brush-region-1', worldRef, catalogueDigest: 'c'.repeat(64),
-    chunkEdge: 16, chunks };
+    partition, chunks };
   return { operations, operationDigest: D('region-operations', operations) };
 }
 /** 40x3x4 box over mapblocks x0..2, y-1..0: carve air at y=-2, fill dirt, stairs with
- * param2 on one row, x%7==3 unspecified, and the whole middle mapblock x16..31 unspecified. */
+ * orientation on one row, x%7==3 unspecified, and the whole middle mapblock x16..31 unspecified. */
 function terrain() {
   const origin = [8, -2, 0], size = [40, 3, 4];
-  const palette = [{ nodeName: 'air', param2: 0 }, { nodeName: 'mcl_core:dirt_with_grass', param2: 0 },
-    { nodeName: 'mcl_stairs:stair_stone', param2: 3 }];
+  const palette = [{ materialRef: 'air', orientation: 0 }, { materialRef: 'mcl_core:dirt_with_grass', orientation: 0 },
+    { materialRef: 'mcl_stairs:stair_stone', orientation: 3 }];
   const indices = [];
   for (let z = 0; z < size[2]; z++) for (let y = 0; y < size[1]; y++)
     for (let x = 0; x < size[0]; x++) {
@@ -231,10 +230,10 @@ async function boot(directory, world) {
 }
 async function select(canvas, selectedWorld = WORLD) {
   // Normal caller path: read the public UNBOUND fact, bind with its published revision.
-  const context = await canvas.call('ReadWorldSelectionContext', { contractVersion: 'canvas/v6',
+  const context = await canvas.call('ReadWorldSelectionContext', { contractVersion: 'canvas/v7',
     sessionRef: 'session-1', requestId: 'context-1', worldRef: selectedWorld });
   assert.equal(context.result.selection.status, 'UNBOUND');
-  const selected = await canvas.call('SelectWorldConnection', { contractVersion: 'canvas/v6',
+  const selected = await canvas.call('SelectWorldConnection', { contractVersion: 'canvas/v7',
     sessionRef: 'session-1', requestId: 'select-1', worldRef: selectedWorld,
     connectionRef: connection.connectionRef,
     connectionIncarnationRef: connection.connectionIncarnationRef,
@@ -242,22 +241,22 @@ async function select(canvas, selectedWorld = WORLD) {
   assert.equal(selected.error, null);
   return selected.result.localContext;
 }
-const commit = (localContext, compiled, extra = {}) => ({ contractVersion: 'canvas-region/v2',
+const commit = (localContext, compiled, extra = {}) => ({ contractVersion: 'canvas-region/v3',
   sessionRef: 'session-1', requestId: 'region-1', worldRef, transactionId: 'region-tx-1',
   ...compiled, guarantee: 'RECOVERABLE_VERIFIED', localContext, ...extra });
-const undo = (localContext, historyRevision, extra = {}) => ({ contractVersion: 'canvas-region/v2',
+const undo = (localContext, historyRevision, extra = {}) => ({ contractVersion: 'canvas-region/v3',
   sessionRef: 'session-1', requestId: 'undo-1', worldRef, originTransactionId: 'region-tx-1',
   undoTransactionId: 'region-undo-1', expectedHistoryRevision: historyRevision, localContext,
   ...extra });
-const sign = { metadata: { infotext: 'fixture sign' }, inventory: {}, timer: null };
+const sign = { state: { metadata: { infotext: 'fixture sign' }, inventory: {}, timer: null } };
 
 test('cross-mapblock fill and air carve commit once, survive reopen and undo the whole region',
   async () => {
     const directory = await mkdtemp(join(tmpdir(), 'canvas-region-'));
     try {
       const world = fixtureWorld();
-      world.nodes.set('9,-1,1', { nodeName: 'mcl_signs:wall_sign', param2: 2, extra: sign });
-      world.nodes.set('11,-2,0', { nodeName: 'mcl_core:gold_block', param2: 0, extra: sign });
+      world.nodes.set('9,-1,1', { materialRef: 'mcl_signs:wall_sign', orientation: 2, extra: sign });
+      world.nodes.set('11,-2,0', { materialRef: 'mcl_core:gold_block', orientation: 0, extra: sign });
       let { canvas, region } = await boot(directory, world);
       const localContext = await select(canvas);
       const compiled = terrain();
@@ -274,12 +273,12 @@ test('cross-mapblock fill and air carve commit once, survive reopen and undo the
       // one APPLY write for all chunks; mapblock x=2 was loaded by emerge first
       assert.deepEqual(world.writes, [{ purpose: 'APPLY', chunks: 4 }]);
       assert.equal(world.loaded.has('2,-1,0'), true);
-      assert.equal(world.get([8, -2, 0]).nodeName, 'air');
-      assert.equal(world.get([9, -1, 0]).nodeName, 'mcl_stairs:stair_stone');
-      assert.equal(world.get([9, -1, 0]).param2, 3);
+      assert.equal(world.get([8, -2, 0]).materialRef, 'air');
+      assert.equal(world.get([9, -1, 0]).materialRef, 'mcl_stairs:stair_stone');
+      assert.equal(world.get([9, -1, 0]).orientation, 3);
       assert.equal(world.get([9, -1, 1]).extra, undefined); // specified cell loses extras
       assert.deepEqual(world.get([11, -2, 0]).extra, sign); // unspecified keeps everything
-      assert.equal(world.get([20, -2, 0]).nodeName, 'mcl_core:stone'); // omitted middle mapblock
+      assert.equal(world.get([20, -2, 0]).materialRef, 'mcl_core:stone'); // omitted middle mapblock
       assert.deepEqual(await region.call('ApplyRegionCommit', commit(localContext, compiled)),
         committed);
       assert.equal(world.writes.length, 1);
@@ -297,12 +296,12 @@ test('cross-mapblock fill and air carve commit once, survive reopen and undo the
 
       // shared history; per-cell Undo refuses a region transaction
       const objectRef = Object.keys(canvas.store.snapshot.objects[worldRef])[0];
-      const history = await canvas.call('HistoryQuery', { contractVersion: 'canvas/v6',
+      const history = await canvas.call('HistoryQuery', { contractVersion: 'canvas/v7',
         sessionRef: 'session-1', requestId: 'history-1', worldRef, localContext, objectRef,
         expectedHistoryRevision: null });
       assert.equal(history.error, null, JSON.stringify(history.error));
       assert.equal(history.result.historyRevision, result.historyRevision);
-      const cellUndo = await canvas.call('Undo', { contractVersion: 'canvas/v6',
+      const cellUndo = await canvas.call('Undo', { contractVersion: 'canvas/v7',
         sessionRef: 'session-1', requestId: 'cell-undo', worldRef, localContext,
         transactionId: 'cell-undo-tx', historyTransactionId: 'region-tx-1', objectRef,
         expectedHistoryRevision: result.historyRevision,
@@ -349,7 +348,7 @@ test('partial chunk write or readback mismatch rolls the whole region back witho
     const directory = await mkdtemp(join(tmpdir(), 'canvas-region-fail-'));
     try {
       const world = fixtureWorld();
-      world.nodes.set('9,-1,1', { nodeName: 'mcl_signs:wall_sign', param2: 2, extra: sign });
+      world.nodes.set('9,-1,1', { materialRef: 'mcl_signs:wall_sign', orientation: 2, extra: sign });
       const { canvas, region } = await boot(directory, world);
       const localContext = await select(canvas);
       const before = picture(world);
@@ -472,7 +471,7 @@ test('rc.4 relay: a region APPLY the engine guard refuses is forwarded unchanged
       world.guardApply = refusal;
       const body = commit(localContext, terrain());
       const refused = await region.call('ApplyRegionCommit', body);
-      validateResponse('canvas-region/v2', 'ApplyRegionCommit', refused);
+      validateResponse('canvas-region/v3', 'ApplyRegionCommit', refused);
       assert.equal(refused.result, null);
       assert.deepEqual({ ...refused.guardRefusal }, refusal);
       assert.deepEqual({ ...refused.error }, { ...guardRefusalError(refusal,
@@ -587,7 +586,7 @@ test('unknown, wrong world, footprint conflict and external edits never write', 
 
     // an external edit anywhere in the region makes whole Undo refuse to overwrite
     const committedCell = world.nodes.get('40,0,2');
-    world.nodes.set('40,0,2', { nodeName: 'mcl_core:glass', param2: 0 });
+    world.nodes.set('40,0,2', { materialRef: 'mcl_core:glass', orientation: 0 });
     const writes = world.writes.length;
     const edited = await region.call('UndoRegionCommit', undo(localContext,
       first.result.historyRevision));
@@ -625,24 +624,24 @@ test('protocol major + capabilities decide compatibility; patch and provenance d
         { ...world.region, protocolHandshake }).call('ApplyRegionCommit',
         commit(localContext, terrain(), { requestId: `p-${Math.random()}`, ...extra }));
       assert.equal((await run(handshake(1, 1))).error.code, 'UNSUPPORTED_VERSION');
-      assert.equal((await run(handshake(3))).error.code, 'UNSUPPORTED_VERSION');
+      assert.equal((await run(handshake(4))).error.code, 'UNSUPPORTED_VERSION');
       assert.equal((await run(undefined)).error.code, 'UNSUPPORTED_VERSION');
       assert.equal((await run(contractHandshake)).error.code, 'UNSUPPORTED_VERSION');
-      const lacking = await run(handshake(2, 0, ADAPTER_CAPS.filter(c => !c.endsWith('restore-state'))));
+      const lacking = await run(handshake(3, 0, ADAPTER_CAPS.filter(c => !c.endsWith('restore-state'))));
       assert.equal(lacking.error.code, 'CAPABILITY_UNAVAILABLE');
       // G3 write-path scope: region port needs callback-free-write at the declared minor,
       // the per-cell port needs its own two ids; v6 ids are never asked of the region port.
       const regionG3 = ADAPTER_REGION_REQUIREMENT.capabilities.includes(
-        'world-adapter-region/v2:callback-free-write');
+        'world-adapter-region/v3:callback-free-write');
       if (regionG3) {
-        assert.equal((await run(handshake(2, 0, ADAPTER_CAPS.filter(c =>
+        assert.equal((await run(handshake(3, 0, ADAPTER_CAPS.filter(c =>
           !c.endsWith('callback-free-write'))))).error.code, 'CAPABILITY_UNAVAILABLE');
         assert.equal((await run(handshake(1, 0))).error.code, 'UNSUPPORTED_VERSION'); // the 0.x major
       }
       assert.deepEqual(ADAPTER_REGION_REQUIREMENT.capabilities.filter(c =>
-        !c.startsWith('world-adapter-region/v2:')), []);
+        !c.startsWith('world-adapter-region/v3:')), []);
       assert.deepEqual(ADAPTER_CELL_REQUIREMENT.capabilities.filter(c =>
-        !c.startsWith('world-adapter/v7:')), []);
+        !c.startsWith('world-adapter/v8:')), []);
       const cellPort = canvas.adapter;
       const runCell = async protocolHandshake => {
         canvas.adapter = { ...cellPort, protocolHandshake };
@@ -651,30 +650,30 @@ test('protocol major + capabilities decide compatibility; patch and provenance d
       assert.equal((await runCell(undefined)).error.code, 'UNSUPPORTED_VERSION');
       assert.equal((await runCell(cellHandshake(5))).error.code, 'UNSUPPORTED_VERSION');
       if (ADAPTER_CELL_REQUIREMENT.capabilities.length) {
-        assert.equal((await runCell(cellHandshake(7, 0, CELL_CAPS.filter(c =>
+        assert.equal((await runCell(cellHandshake(8, 0, CELL_CAPS.filter(c =>
           !c.endsWith('write-path-state-facts'))))).error.code, 'CAPABILITY_UNAVAILABLE');
         assert.equal((await runCell(cellHandshake(6, 1))).error.code, 'UNSUPPORTED_VERSION');
       }
-      assert.equal((await run(handshake(), { contractVersion: 'canvas-region/v3' })).error.code,
+      assert.equal((await run(handshake(), { contractVersion: 'canvas-region/v2' })).error.code,
         'UNSUPPORTED_VERSION');
       assert.equal(world.writes.length, 0);
-      const ok = await run(handshake(2, 3, ADAPTER_CAPS, '0.9.7-other-patch'));
+      const ok = await run(handshake(3, 3, ADAPTER_CAPS, '0.9.7-other-patch'));
       assert.equal(ok.error, null, JSON.stringify(ok.error));
       assert.equal(ok.result.status, 'VERIFIED');
 
       // Canvas's own handshake for its consumers
-      const requirement = protocolRequirement('canvas-region/v2', ['canvas-region/v2:compressed-before-snapshot',
-        'canvas-region/v2:rollback-on-failure', 'canvas-region/v2:single-logical-transaction',
-        'canvas-region/v2:whole-region-undo']);
+      const requirement = protocolRequirement('canvas-region/v3', ['canvas-region/v3:compressed-before-snapshot',
+        'canvas-region/v3:rollback-on-failure', 'canvas-region/v3:single-logical-transaction',
+        'canvas-region/v3:whole-region-undo']);
       assert.equal(checkProtocolCompatibility(canvasProtocolHandshake, [requirement]).result,
         'PROTOCOL_COMPATIBLE');
       assert.throws(() => checkProtocolCompatibility(canvasProtocolHandshake,
-        [protocolRequirement('canvas-region/v3')]), e => e.code === 'UNSUPPORTED_VERSION');
+        [protocolRequirement('canvas-region/v2')]), e => e.code === 'UNSUPPORTED_VERSION');
       assert.equal(canvas.status().version, '0.13.2');
     } finally { await rm(directory, { recursive: true, force: true }); }
   });
 
-test('host provides the region port, its handshake and tool description beside canvas/v6',
+test('host provides the region port, its handshake and tool description beside canvas/v7',
   async () => {
     const directory = await mkdtemp(join(tmpdir(), 'canvas-region-host-'));
     try {
@@ -698,7 +697,7 @@ test('Contracts public region fixture operations reproduce the contract summarie
     const fixture = createRequire(import.meta.url)('hanaworlds-contracts/fixtures/region');
     const directory = await mkdtemp(join(tmpdir(), 'canvas-region-public-'));
     try {
-      const world = fixtureWorld({ worldRef: 'fixture-world' });
+      const world = fixtureWorld({ worldRef: 'fixture-world', profile: fixture.readResponse.result.chunks[0].state.stateProfile });
       // Seed the in-memory world with the contract's before-image states (extras included).
       for (const chunk of fixture.readResponse.result.chunks) {
         const { box, indices, palette } = expandRegionBlock(chunk.state.block);
@@ -743,9 +742,9 @@ test('confirmed REGION: own source is retained, A-to-B and stale/missing/foreign
   try {
     const world=fixtureWorld({worldRef:selectedWorld,inspection:fx.inspections.regionView});
     const {canvas,region}=await boot(directory,world),localContext=await select(canvas,selectedWorld);
-    const inspected=await canvas.call('InspectPlacementRegion',{contractVersion:'canvas/v6',
+    const inspected=await canvas.call('InspectPlacementRegion',{contractVersion:'canvas/v7',
       sessionRef:'session-1',requestId:'region-source-inspection',worldRef:selectedWorld,
-      anchor:{kind:'CURRENT_VIEW',invocationId:'region-confirmation-fixture'},footprint:{widthCells:20,heightCells:2,depthCells:3},localContext});
+      anchor:{kind:'CURRENT_VIEW',invocationId:'region-confirmation-fixture'},footprint:{geometryProfile:'voxel-grid/v1',widthCells:20,heightCells:2,depthCells:3},localContext});
     assert.equal(inspected.error,null,JSON.stringify(inspected));
     const source=inspected.result.inspection, sourceId=source.inspectionId;
     const placement=createPlacementProposal(source,official.intent.confirmedIntent.placement.target);
@@ -831,7 +830,7 @@ test('rollback reports observed Adapter cause or UNKNOWN and replays the stored 
       world.region.call = async (operation, request) => {
         if (operation === 'WriteRegion' && request.purpose === 'APPLY') {
           world.writes.push({purpose: 'APPLY', chunks: request.writes.length});
-          world.nodes.set('9,-1,0', {nodeName: 'mcl_core:glass', param2: 0});
+          world.nodes.set('9,-1,0', {materialRef: 'mcl_core:glass', orientation: 0});
           if (mode === 'unreported') throw new Error('fixture lost transport without public failure detail');
           if (mode === 'restore-phase') throw Object.assign(new Error('fixture wrong phase'),
             {publicError: {...observed, phase: 'restore'}});
@@ -841,7 +840,7 @@ test('rollback reports observed Adapter cause or UNKNOWN and replays the stored 
             {publicError: {...observed, mutationState: 'VERIFIED'}});
           if (mode === 'invalid-guard') throw Object.assign(new Error('fixture unrelated guard'),
             {publicError: observed, guardRefusal: guard});
-          return {contractVersion: 'world-adapter-region/v2', requestId: request.requestId,
+          return {contractVersion: 'world-adapter-region/v3', requestId: request.requestId,
             result: null, error: observed, guardRefusal: mode === 'guard' ? guard : null};
         }
         return originalCall(operation, request);
@@ -868,7 +867,7 @@ test('rollback reports observed Adapter cause or UNKNOWN and replays the stored 
       ({canvas, region} = await boot(directory, world));
       assert.equal(canonicalJSON(await region.call('ApplyRegionCommit', body)), canonicalJSON(response));
       assert.equal(world.calls.length, calls);assert.equal(world.writes.length, writes);
-      assert.ok(region.protocolHandshake.capabilities.includes('canvas-region/v2:rollback-cause'));
+      assert.ok(region.protocolHandshake.capabilities.includes('canvas-region/v3:rollback-cause'));
     } finally { await rm(directory, {recursive: true, force: true}); }
   }
 });
@@ -901,12 +900,12 @@ test('Canvas incomplete APPLY cause states its validated write progress, not def
           if (mode === 'written-no-change') writes[0].ops = captured.beforeStates[0].block;
           first = (await originalCall(operation, {...request, writes})).result;
         } else world.writes.push({purpose:'APPLY', chunks:request.writes.length});
-        const response = {contractVersion:'world-adapter-region/v2', requestId:request.requestId,
+        const response = {contractVersion:'world-adapter-region/v3', requestId:request.requestId,
           error:null, guardRefusal:null, result:{transactionId:request.transactionId,
             worldRef:request.worldRef, purpose:'APPLY', localContext:request.localContext,
             chunks:request.writes.map((w,i) => i === 0 && first ? first.chunks[0] :
               {chunkPos:w.chunkPos, status:mode === 'unknown' && i === 0 ? 'UNKNOWN' : 'NOT_WRITTEN', readbackDigest:null}),
-            lighting:{status:'NOT_COMPLETE',box:{min:[-18,8,3],max:[21,8,6]}, method:'FIXTURE:captured-interruption-shape'}}};
+            postWriteLighting:'REQUIRED', lighting:{status:'NOT_COMPLETE',box:{min:[-18,8,3],max:[21,8,6]}, method:'FIXTURE:captured-interruption-shape'}}};
         observed = {request, response}; return response;
       };
       let {canvas,region} = await boot(directory,world);
@@ -935,4 +934,103 @@ test('Canvas incomplete APPLY cause states its validated write progress, not def
       assert.deepEqual(canvas.store.snapshot.pending,{});
     } finally {await rm(directory,{recursive:true,force:true});}
   }
+});
+
+
+test('placement requires explicit declared geometry and checks its response before retention', async () => {
+  const fx = JSON.parse(await readFile(new URL(import.meta.resolve('hanaworlds-contracts/fixtures/confirmed-placement'))));
+  const worldRef = fx.canvasRegion.accept[0].commit.worldRef;
+  const directory = await mkdtemp(join(tmpdir(), 'canvas-geometry-placement-'));
+  try {
+    const world = fixtureWorld({ worldRef, inspection: fx.inspections.regionView });
+    const { canvas } = await boot(directory, world), localContext = await select(canvas, worldRef);
+    const base = { contractVersion: 'canvas/v7', sessionRef: 'session-1', worldRef, localContext,
+      anchor: { kind: 'CURRENT_VIEW', invocationId: 'geometry-test' } };
+    const footprint = { widthCells: 20, heightCells: 2, depthCells: 3 };
+    for (const [id, profile, code] of [
+      ['missing', undefined, 'CAPABILITY_UNAVAILABLE'], ['unsupported', 'mesh/v1', 'CAPABILITY_GAP'],
+    ]) {
+      const response = await canvas.call('InspectPlacementRegion', { ...base, requestId: id,
+        footprint: profile ? { ...footprint, geometryProfile: profile } : footprint });
+      assert.equal(response.error.code, code);
+      assert.equal(response.error.mutationState, 'NONE');
+      assert.equal(world.calls.includes('InspectRegion'), false);
+    }
+    world.connection.capabilities.worldGeometry = null;
+    const gap = await canvas.call('InspectPlacementRegion', { ...base, requestId: 'undeclared',
+      footprint: { ...footprint, geometryProfile: 'voxel-grid/v1' } });
+    assert.equal(gap.error.code, 'CAPABILITY_GAP');
+    assert.equal(world.calls.includes('InspectRegion'), false);
+    world.connection.capabilities.worldGeometry = structuredClone(connection.capabilities.worldGeometry);
+    const successfulRequest = { ...base, requestId: 'geometry-replay',
+      footprint: { ...footprint, geometryProfile: 'voxel-grid/v1' } };
+    const first = await canvas.call('InspectPlacementRegion', successfulRequest);
+    assert.equal(first.error, null, JSON.stringify(first));
+    const count = world.calls.length;
+    assert.deepEqual(await canvas.call('InspectPlacementRegion', successfulRequest), first);
+    assert.equal(world.calls.length, count);
+    const retained = structuredClone(canvas.store.snapshot.placementInspections);
+    const adapterCall = world.adapter.call.bind(world.adapter);
+    world.adapter.call = async (operation, request) => {
+      if (operation === 'InspectRegion') {
+        assert.deepEqual(Object.keys(request.footprint).sort(), ['depthCells', 'heightCells', 'widthCells'],
+          'the minor-0 adapter receives its published dimensions only');
+        const response = await adapterCall(operation, request);
+        response.result.inspection.targetFacts.geometryProfile = 'mesh/v1';
+        return response;
+      }
+      return adapterCall(operation, request);
+    };
+    const invalid = await canvas.call('InspectPlacementRegion', { ...base, requestId: 'bad-response',
+      footprint: { ...footprint, geometryProfile: 'voxel-grid/v1' } });
+    assert.ok(invalid.error);
+    assert.equal(canonicalJSON(canvas.store.snapshot.placementInspections), canonicalJSON(retained));
+    assert.deepEqual(canvas.store.snapshot.pending, {});
+    assert.equal(world.writes.length, 0);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test('region uses current world partition after selection instead of cached or default facts', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'canvas-current-partition-'));
+  try {
+    const world = fixtureWorld();
+    const { canvas, region } = await boot(directory, world), localContext = await select(canvas);
+    const partition = { edge: [8, 4, 8] };
+    world.connection.capabilities.worldGeometry.partition = partition;
+    const compiled = compile([0,0,0], [9,1,1], [{ materialRef: 'fixture:solid', orientation: 2 }],
+      Int32Array.from({ length: 9 }, () => 0), partition);
+    const response = await region.call('ApplyRegionCommit', commit(localContext, compiled));
+    assert.equal(response.error, null, JSON.stringify(response));
+    assert.equal(response.result.status, 'VERIFIED', JSON.stringify(response));
+    assert.equal(canonicalJSON(response.result.actualSummary.partition), canonicalJSON(partition));
+    assert.deepEqual(world.writes, [{ purpose: 'APPLY', chunks: 2 }]);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test('region Undo rollback preserves declared lighting NONE with no invented lighting result', async () => {
+ const directory=await mkdtemp(join(tmpdir(),'canvas-region-none-'));
+ try {
+  const world=fixtureWorld();world.connection.capabilities.worldGeometry.postWriteLighting='NONE';
+  const original=world.region.call.bind(world.region);let failUndo=false;
+  world.region.call=async(operation,request)=>{
+   if(operation==='WriteRegion'&&request.purpose==='RESTORE'&&failUndo){
+    failUndo=false;world.nodes.set('9,-1,0',{materialRef:'fixture:unexpected',orientation:0});
+    throw Error('fixture lost Undo after partial write');
+   }
+   const response=await original(operation,request);
+   if(operation==='WriteRegion'&&response.result)
+    return {...response,result:{...response.result,postWriteLighting:'NONE',lighting:null}};
+   return response;
+  };
+  const {canvas,region}=await boot(directory,world),localContext=await select(canvas);
+  const applied=await region.call('ApplyRegionCommit',commit(localContext,terrain()));
+  assert.equal(applied.result?.status,'VERIFIED',JSON.stringify(applied));
+  failUndo=true;
+  const response=await region.call('UndoRegionCommit',undo(localContext,applied.result.historyRevision));
+  assert.equal(response.error,null,JSON.stringify(response));
+  assert.equal(response.result.status,'ROLLED_BACK');
+  assert.equal(response.result.postWriteLighting,'NONE');assert.equal(response.result.lighting,null);
+  assert.deepEqual(canvas.store.snapshot.pending,{});
+  assert.deepEqual(response.result.actualSummary,response.result.preUndoSummary);
+ } finally {await rm(directory,{recursive:true,force:true});}
 });

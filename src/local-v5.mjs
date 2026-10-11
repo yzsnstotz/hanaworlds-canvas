@@ -8,30 +8,32 @@ import { admitRequest, validateRequest, validateResponse, validateBoundResponse,
   validateCurrentRequest, validateWorldSelection, validateCommitReadback,
   projectScopedPreparedTransaction, checkContractHandshake, contractHandshake,
   digestValue, requestDigest, publicError, validateExactEffects,
-  validateRegionInspection, checkConfirmedPlacementApply } from 'hanaworlds-contracts';
+  validateRegionInspection, checkConfirmedPlacementApply,
+  validatePlacementRegionRequest, validatePlacementRegionResponse } from 'hanaworlds-contracts';
 import { checkProtocolCompatibility, contractProtocols, protocolRequirement,
-  validateType } from 'hanaworlds-contracts';
+  validateType, requireGeometryProfile } from 'hanaworlds-contracts';
 import * as contractsSdk from 'hanaworlds-contracts';
 import { CanvasRegionV1, ADAPTER_CELL_REQUIREMENT, ENGINE_GUARD_REQUIREMENTS, requireGuards,
   unmetGuards, failureDetail, restoreFailure } from './region-v1.mjs';
 import { CanvasConfigSupply } from './config-supply.mjs';
+import { expectedWrittenRecord, withDerivedReadback } from './state-profile.mjs';
 import { resolveHistoryOutcome } from './history-recovery.mjs';
 
 export { CanvasStore, CanvasRegionV1, CanvasConfigSupply };
-const WIRE = 'canvas/v6';
-const ADAPTER = 'world-adapter/v7';
-const SESSION = 'session/v4';
-// canvas/v6 (Contracts 1.x) carries the session-world seam operations at minor 0; there is no
+const WIRE = 'canvas/v7';
+const ADAPTER = 'world-adapter/v8';
+const SESSION = 'session/v5';
+// canvas/v7 (Contracts 1.x) carries the session-world seam operations at minor 0; there is no
 // pre-seam canvas behaviour left to switch to.
 const canvasProtocol = contractProtocols.find(row => row.protocol === 'canvas');
-if (!canvasProtocol || canvasProtocol.major !== 6) throw new Error('CANVAS_PROTOCOL_UNDECLARED');
+if (!canvasProtocol || canvasProtocol.major !== 7) throw new Error('CANVAS_PROTOCOL_UNDECLARED');
 const PACKAGE_VERSION = '0.13.2';
 // The public wire defines canvas major 6, minor 0. Contracts publishes no
 // per-cell Canvas capability token; regional tokens describe the region port.
 const cellRequirement = protocolRequirement(WIRE, []);
 const cellProtocolHandshake = validateType('ProtocolHandshake', {
   profileVersion: 'protocol-handshake/v1', component: 'hanaworlds-canvas',
-  // The advertised minor is the one the installed Contracts declare for canvas/v6: Canvas
+  // The advertised minor is the one the installed Contracts declare for canvas/v7: Canvas
   // implements every operation of that minor (including the session-world seam).
   protocols: [{ protocol: cellRequirement.protocol, major: cellRequirement.major,
     minor: canvasProtocol.minor }], capabilities: [...cellRequirement.capabilities],
@@ -57,7 +59,7 @@ function boxCells(box) {
 function answer(body, result, error = null) {
   return { contractVersion: WIRE, requestId: body.requestId, result, error };
 }
-// canvas/v6 envelopes that carry guardRefusal beside error (Contracts 1.0.0-rc.4 relay): null
+// canvas/v7 envelopes that carry guardRefusal beside error (Contracts 1.0.0-rc.4 relay): null
 // unless the error is a guard refusal (Canvas's pre-flight GUARD_UNAVAILABLE or an engine
 // refusal Canvas forwards unchanged).
 const GUARDED_OPERATIONS = new Set(contractsSdk.operationContracts[WIRE]
@@ -80,7 +82,7 @@ export class CanvasV5 {
     checkContractHandshake(contractHandshake);
     this.store = store;
     this.adapter = adapter;
-    // Host-bound session/v4 port (Workshop). Its ReadSessionIdentity is the only evidence
+    // Host-bound session/v5 port (Workshop). Its ReadSessionIdentity is the only evidence
     // that a Session exists; Canvas never infers that from a Ref.
     this.sessions = sessions;
     this.nativeFacts = nativeFacts;
@@ -139,7 +141,7 @@ export class CanvasV5 {
   }
   /**
    * G3 write-before guard for the per-cell port: its ProtocolHandshake must name
-   * world-adapter major 6 at the Contracts-declared minor with every world-adapter/v7
+   * world-adapter major 6 at the Contracts-declared minor with every world-adapter/v8
    * Adapter capability (callback-free-write, write-path-state-facts). Runs before any
    * reservation or Adapter call of a BUILD, Undo, Redo or region write.
    */
@@ -188,7 +190,7 @@ export class CanvasV5 {
       const registered = state.footprints[worldRef]?.[objectRef];
       const object = state.objects[worldRef]?.[objectRef];
       if (!registered || !object) throw fail('OBJECT_NOT_FOUND', 'SCOPE_DENIED');
-      return { objectRef, worldRef, footprintRevision: registered.footprintRevision,
+      return { objectRef, worldRef, geometryProfile: 'voxel-grid/v1', footprintRevision: registered.footprintRevision,
         provenance: 'CANVAS_REGISTERED', positions: registered.positions };
     });
     return structuredClone({ current: true, durable: true, worldRef,
@@ -289,7 +291,7 @@ export class CanvasV5 {
         const blocked = pending ? 'TRANSACTION_PENDING' : null;
         let undo, redo;
         if (region) {
-          // canvas-region/v2 publishes ApplyRegionCommit and UndoRegionCommit only. A move is
+          // canvas-region/v3 publishes ApplyRegionCommit and UndoRegionCommit only. A move is
           // offered only when the same entry can be moved back, so region Undo is named, not offered.
           undo = { available: false, reason: undone ? 'NOTHING_TO_UNDO' : 'REGION_UNDO_HAS_NO_REDO' };
           redo = { available: false, reason: undone ? 'REGION_REDO_NOT_IN_PROTOCOL' : 'NOTHING_TO_REDO' };
@@ -400,8 +402,9 @@ export class CanvasV5 {
       .map(([objectRef]) => objectRef).sort();
   }
   async #analyze(body) {
-    const { replayKey, prior, admission } = await this.#bound('AnalyzeAffectedObjects', body);
+    const { replayKey, prior, admission, connection } = await this.#bound('AnalyzeAffectedObjects', body);
     if (prior) return prior.response;
+    for (const effect of body.operations.effects) requireGeometryProfile(connection.capabilities.worldGeometry, effect.geometryProfile);
     const session = this.current(body.sessionRef);
     if (body.expectedSelectionRevision !== session.selectionRevision ||
         body.expectedRegistryRevision !==
@@ -441,6 +444,7 @@ export class CanvasV5 {
     const { replayKey, prior, admission, connection } = await this.#bound('ApplyRecoverableCommit', body);
     if (prior) return prior.response;
     this.adapterCompatible();
+    for (const effect of body.operations.effects) requireGeometryProfile(connection.capabilities.worldGeometry, effect.geometryProfile);
     requireGuards(connection.capabilities.engineGuards, 'ApplyRecoverableCommit');
     const analysis = this.store.snapshot.analyses[body.transactionId];
     if (!analysis || analysis.affectedObjectRefs.length ||
@@ -548,8 +552,7 @@ export class CanvasV5 {
       const expected = { worldRef: body.worldRef, coveredPositions: positions,
         records: before.records.map((record, index) => {
           const effect = effects.get(key(record.position));
-          return effect ? { ...record, nodeName: effect.nodeName,
-            param2: effect.param2, param1: actual.records[index].param1 } : record;
+          return effect ? expectedWrittenRecord(record, effect, actual.records[index], stateProfile) : record;
         }), stateProfile };
       const receipt = { ...adapterReceipt, contractVersion: WIRE,
         operationDigest: body.operationDigest,
@@ -623,7 +626,7 @@ export class CanvasV5 {
         error: cause?.guardRefusal ? cause.publicError : restored.error ?? null,
         guardRefusal: cause?.guardRefusal ?? null, applyFailure: null,
         readbackDigest: hash('readback', actual), localContext: body.localContext };
-      validateCommitReadback(receipt, before, actual, null);
+      validateCommitReadback(receipt, withDerivedReadback(before, actual), actual, null);
       const response = respond(operation, answer(body, receipt));
       await this.store.commit(state => {
         state.transactions[body.transactionId] = { receipt, before, after: actual,
@@ -665,7 +668,7 @@ export class CanvasV5 {
       }
       const causeCode = applyFailure.error.code;
       // An engine RESTORE_FAILED (phase restore, e.g. a guard at RESTORE) is answered with the
-      // canvas/v6 RESTORE_FAILED receipt pending manual recovery: error.causeCode names the
+      // canvas/v7 RESTORE_FAILED receipt pending manual recovery: error.causeCode names the
       // failure that made the restore necessary, guardRefusal the restore's own reason and
       // applyFailure that causing failure in full. A receipt the Contracts reject is not repaired
       // and falls through to RECOVERY_PENDING below, with the rejection recorded.
@@ -717,7 +720,7 @@ export class CanvasV5 {
     const historyRows = state.history[body.objectRef] ?? [];
     const head = historyRows.at(-1);
     // A region transaction is undone as a whole region through hanaworldsCanvasRegionV1;
-    // canvas-region/v2 defines no region Redo.
+    // canvas-region/v3 defines no region Redo.
     if (origin?.kind === 'REGION') throw fail(redo ? 'REDO_UNAVAILABLE' : 'UNDO_CONFLICT',
       redo ? 'POLICY_UNAVAILABLE' : 'REVISION_CHANGED');
     if (!origin?.history || origin.objectRef !== body.objectRef ||
@@ -740,10 +743,12 @@ export class CanvasV5 {
     const stateProfile = origin.after.stateProfile;
     const expectedCurrent = redo ? origin.before : origin.after;
     const target = redo ? origin.after : origin.before;
+    for (const record of [...expectedCurrent.records, ...target.records])
+      requireGeometryProfile(connection.capabilities.worldGeometry, record.geometryProfile);
     const current = await this.#read({ ...body,
       transactionId: body.historyTransactionId }, positions, stateProfile,
     redo ? 'before-redo' : 'before-undo');
-    if (!same(current, expectedCurrent)) throw redo ?
+    if (!same(current, withDerivedReadback(expectedCurrent, current))) throw redo ?
       fail('REDO_CONFLICT', 'EXTERNAL_EDIT_CONFLICT', 'readback') :
       fail('READBACK_MISMATCH', 'PAYLOAD_CHANGED', 'readback');
     const direction = redo ? 'REDO' : 'UNDO';
@@ -815,7 +820,7 @@ export class CanvasV5 {
         expectedAfterReadbackDigest: receipt.readbackDigest,
         receiptDigest: hash('receipt', receipt), historyRevision: rev('history'),
         status: 'VERIFIED' };
-      validateCommitReadback(receipt, target, actual, history);
+      validateCommitReadback(receipt, withDerivedReadback(target, actual), actual, history);
       const response = respond(operation, answer(body, receipt));
       await this.store.commit(next => {
         next.transactions[body.transactionId] = { receipt, history, direction,
@@ -901,7 +906,7 @@ export class CanvasV5 {
     return this.#remember(replayKey, admission.requestDigest, response);
   }
   async #inspectPlacementRegion(body) {
-    const { replayKey, prior, admission } = await this.#bound('InspectPlacementRegion', body);
+    const { replayKey, prior, admission, connection } = await this.#bound('InspectPlacementRegion', body);
     const state = this.store.snapshot;
     if (state.sessions[body.sessionRef]?.activeWorldRef !== body.worldRef ||
         !same(state.sessions[body.sessionRef]?.localContext, body.localContext))
@@ -921,13 +926,15 @@ export class CanvasV5 {
       if (revision !== state.worldRevisions[body.worldRef]) throw fail('STALE_REVISION');
       return prior.response;
     }
+    validatePlacementRegionRequest(body, connection);
     const worldRevision = state.worldRevisions[body.worldRef];
     const inspectionId = rev('inspection');
     const result = await this.#adapter('InspectRegion', {
       contractVersion: ADAPTER, sessionRef: body.sessionRef,
       requestId: `${body.requestId}:region`, worldRef: body.worldRef,
       expectedWorldRevision: worldRevision, inspectionId,
-      anchor: body.anchor, footprint: body.footprint,
+      anchor: body.anchor, footprint: { widthCells: body.footprint.widthCells,
+        depthCells: body.footprint.depthCells, heightCells: body.footprint.heightCells },
       placementSettings: settings, localContext: body.localContext });
     if (result.outcome === 'REGION_INSPECTED') {
       const inspection = validateRegionInspection(result.inspection);
@@ -945,8 +952,8 @@ export class CanvasV5 {
           !same(result.choice.placementSettings, settings))
         throw fail('INSPECTION_FAILED', 'REQUIRED_FACT_UNKNOWN');
     } else throw fail('INSPECTION_FAILED', 'REQUIRED_FACT_UNKNOWN');
-    const response = respond('InspectPlacementRegion',
-      { ...answer(body, result), unavailableSettings: null });
+    const response = validatePlacementRegionResponse(body, respond('InspectPlacementRegion',
+      { ...answer(body, result), unavailableSettings: null }), connection);
     await this.store.commit(next => {
       if (!same(next.sessions[body.sessionRef]?.localContext, body.localContext) ||
           next.worldRevisions[body.worldRef] !== worldRevision ||
@@ -1099,7 +1106,7 @@ export class CanvasV5 {
     return response;
   }
   /**
-   * canvas/v6 SwitchWorldConnection: the bound Session moves from its current world to
+   * canvas/v7 SwitchWorldConnection: the bound Session moves from its current world to
    * `toWorldRef` over `toConnectionRef`. Canvas alone decides it: CAS on the published
    * selectionRevision (the same convention as SelectWorldConnection) and on the current
    * localContext (`expectedContext`), the target connection's actual readback and
@@ -1182,7 +1189,7 @@ export class CanvasV5 {
       state.replay[replayKey] = { digest: admission.requestDigest, response };
     });
   }
-  /** G-S: the Session's identity from Workshop's Host-bound session/v4 port. */
+  /** G-S: the Session's identity from Workshop's Host-bound session/v5 port. */
   async #identity(body) {
     if (typeof this.sessions?.call !== 'function')
       throw fail('CAPABILITY_UNAVAILABLE', 'REQUIRED_FACT_UNKNOWN');
@@ -1375,7 +1382,7 @@ export class CanvasV5 {
 
 export const name = 'hanaworlds-canvas';
 export const inject = [];
-export const STORE_ROOT = 'hanaworlds-canvas-v1';
+export const STORE_ROOT = 'hanaworlds-canvas-v2';
 async function nativeDirectory(ctx) {
   const homePath = ctx.get?.('dshHomePath');
   if (typeof homePath !== 'function') throw new Error('CANVAS_STORAGE_UNAVAILABLE');
@@ -1408,7 +1415,7 @@ export function apply(ctx) {
     adapter: {
       get protocolHandshake() { return ctx.get?.('hanaworldsWorldAdapterV6')?.protocolHandshake; },
       call: (...args) => ctx.get?.('hanaworldsWorldAdapterV6')?.call(...args) },
-    // Workshop's published session/v4 provider (public service key hanaworldsWorkshopV3,
+    // Workshop's published session/v5 provider (public service key hanaworldsWorkshopV3,
     // one WorkshopV3 instance; Workshop 0.4.12 4547f3cf). Read on every call, so a disposed
     // provider is absent → fail closed. No other key is tried.
     sessions: { call: (...args) => {
@@ -1437,7 +1444,7 @@ export function apply(ctx) {
         (...args) => current.readConfigEngineFacts(...args) : undefined;
     } } });
   ctx.provide?.('hanaworldsCanvasV5', service);
-  // Host service names are Canvas's choice; the wire shapes are Contracts canvas-/world-adapter-region/v2.
+  // Host service names are Canvas's choice; the wire shapes are Contracts canvas-/world-adapter-region/v3.
   ctx.provide?.('hanaworldsCanvasRegionV1', new CanvasRegionV1(service, {
     get protocolHandshake() {
       return ctx.get?.('hanaworldsWorldAdapterRegionV1')?.protocolHandshake; },
