@@ -366,8 +366,8 @@ test('partial chunk write or readback mismatch rolls the whole region back witho
       assert.deepEqual(failed.result.actualSummary, failed.result.beforeSummary);
       assert.equal(picture(world), before);
       assert.equal(canonicalJSON(world.get([9, -1, 1]).extra), canonicalJSON(sign));
-      // restore rewrote only the three chunks that differ from the snapshot
-      assert.deepEqual(world.writes, [{ purpose: 'APPLY', chunks: 4 }, { purpose: 'RESTORE', chunks: 3 }]);
+      // REQUIRED restores all saved chunks so the source lighting covers the full layout.
+      assert.deepEqual(world.writes, [{ purpose: 'APPLY', chunks: 4 }, { purpose: 'RESTORE', chunks: 4 }]);
       const state = canvas.store.snapshot;
       assert.deepEqual(state.pending, {});
       assert.deepEqual(state.objects[worldRef] ?? {}, {});
@@ -1236,5 +1236,36 @@ test('required source lighting failure stays pending until a source restore comp
     assert.deepEqual(await reopened.region.recoverPending(), [{ transactionId: 'region-tx-1', status: 'ROLLED_BACK' }]);
     assert.deepEqual(reopened.canvas.store.snapshot.pending, {});
     assert.equal(reopened.canvas.store.snapshot.transactions['region-tx-1'].recovered, true);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test('required restore lighting covers unchanged and changed partitions after incomplete APPLY', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'canvas-region-mixed-lighting-'));
+  try {
+    const world = fixtureWorld();
+    const partition = { edge: [8, 4, 8] };
+    world.connection.capabilities.worldGeometry.partition = partition;
+    const sourceCall = world.region.call.bind(world.region);
+    const restoreRequests = [];
+    world.region.call = async (operation, request) => {
+      const response = await sourceCall(operation, request);
+      if (operation === 'WriteRegion' && request.purpose === 'APPLY')
+        response.result.lighting.status = 'NOT_COMPLETE';
+      if (operation === 'WriteRegion' && request.purpose === 'RESTORE')
+        restoreRequests.push(structuredClone(request));
+      return response;
+    };
+    const { canvas, region } = await boot(directory, world), localContext = await select(canvas);
+    // First partition writes the same air image; the second changes one cell.
+    const compiled = compile([0, 0, 0], [9, 1, 1],
+      [{ materialRef: 'air', orientation: 0 }, { materialRef: 'fixture:solid', orientation: 0 }],
+      [...Array(8).fill(0), 1], partition);
+    const response = await region.call('ApplyRegionCommit', commit(localContext, compiled));
+    assert.equal(response.result?.status, 'ROLLED_BACK', JSON.stringify(response));
+    assert.equal(restoreRequests.length, 1);
+    assert.deepEqual(restoreRequests[0].writes.map(w => w.chunkPos), [[0, 0, 0], [1, 0, 0]]);
+    assert.equal(response.result.lighting.status, 'COMPLETE');
+    assert.equal(canonicalJSON(response.result.lighting.box), canonicalJSON({ min: [0, 0, 0], max: [8, 0, 0] }));
+    assert.deepEqual(canvas.store.snapshot.pending, {});
   } finally { await rm(directory, { recursive: true, force: true }); }
 });

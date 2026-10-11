@@ -518,7 +518,8 @@ export class CanvasRegionV1 {
   }
   /**
    * Whole-region restore to `content` (a durable image): read current,
-   * RESTORE every chunk that differs, read back, require the target summary.
+   * RESTORE the target image, read back, require the target summary. A required
+   * light pass covers the entire saved layout; NONE only rewrites changed chunks.
    */
   async #restore(body, transactionId, content, targetSummary, box, suffix) {
     const geometry = await this.#geometry(body);
@@ -530,9 +531,10 @@ export class CanvasRegionV1 {
       expectedCurrentDigest: current.chunks[i].stateDigest, ops: null, state: c.state }));
     const changed = targets.filter((w, i) => w.expectedCurrentDigest !== content.chunks[i].stateDigest);
     // Equal state digests do not establish that a required light pass completed.
-    // With no changed chunks, restore the saved image through the source's normal
-    // write path to obtain its lighting fact. NONE needs neither a write nor a fact.
-    const writes = changed.length || geometry.postWriteLighting === 'NONE' ? changed : targets;
+    // Restore the entire saved layout through the source's normal write path
+    // for REQUIRED: even unchanged chunks may need light recalculation after an
+    // interrupted write. NONE needs only changed chunks and no lighting fact.
+    const writes = geometry.postWriteLighting === 'NONE' ? changed : targets;
     let lighting = null;
     if (writes.length) {
       const written = await this.#write(body, transactionId, 'RESTORE', writes, suffix);
