@@ -7,9 +7,9 @@ import { contractHandshake, version, operationContracts, schemaBundle,
 import { CanvasV5, canvasProtocolHandshake, ADAPTER_CELL_REQUIREMENT,
   ADAPTER_REGION_REQUIREMENT } from '../src/index.mjs';
 
-// contracts-world-error-01: remote annotated tag v2.7.0 (peeled commit), checked at admission.
-const release = { tag: 'v2.7.0', version: '2.7.0',
-  revision: 'b00dd055181c26fdea56e9ba6617ee4a5c3b92c3' };
+// contracts-history-receipt-01: remote annotated tag v2.8.0 (peeled commit), checked at admission.
+const release = { tag: 'v2.8.0', version: '2.8.0',
+  revision: '5af62be25dcab110fcbb8502183922010f078f04' };
 const repository = 'git+https://github.com/yzsnstotz/hanaworlds-contracts.git';
 const root = new URL('../', import.meta.url);
 const json = async url => JSON.parse(await readFile(url, 'utf8'));

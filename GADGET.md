@@ -1,11 +1,11 @@
-# HanaWorlds Canvas 0.14.0
+# HanaWorlds Canvas 0.15.0
 
 Canvas owns local world selection, registered object footprints and transaction history.
 The single Cordis entry is `src/index.mjs`; the DSH panel is `lib/client.js`.
 
 Contracts is pinned to the formal release
-`git+https://github.com/yzsnstotz/hanaworlds-contracts.git#v2.7.0`,
-commit `b00dd055181c26fdea56e9ba6617ee4a5c3b92c3`.
+`git+https://github.com/yzsnstotz/hanaworlds-contracts.git#v2.8.0`,
+commit `5af62be25dcab110fcbb8502183922010f078f04`.
 Run `npm ci`, `npm run build`, `npm run verify:contracts`, `npm run typecheck`, and `npm test`.
 The test command runs every retained test file, including Gateway/Remote, host storage,
 selection, per-cell apply/history and region rollback/recovery.
@@ -36,6 +36,21 @@ partition, compressed before snapshots, whole-transaction readback/rollback and 
 Engine guards are checked before writes; refusals preserve the public error and cause.
 Uncertain outcomes stay pending for same-transaction query/recovery.
 
+Events (`emitEvent` → Cordis `ctx.parallel(event.event, event)`, each validated by
+`validateCanvasEvent`, published only after the fsynced commit, never on replay, refusal,
+rollback or pending): `TransactionVerified` (operation `Readback`, the verified
+ApplyRecoverableCommit receipt) after full matched readback and its durable history row;
+`HistoryPositionChanged` (operation `Undo`/`Redo`) after a VERIFIED history move, including
+one finalized by recovery. A rejected event shape or a consumer failure is logged and never
+fails the committed call. Region commits have no `canvas-region/v3` event in Contracts.
+
+History recovery after stop/reconnect (Contracts 2.8.0): once the Session re-selected the
+same world over a new incarnation, `resolvePendingHistory` queries with the current context
+and reads the answer through `readHistoricalReceipt`. The receipt must keep this
+transaction's original written context; another world, a receipt re-bound to the current
+context, or a pre-2.8.0 answer without `currentLocalContext`/`receiptDigest` stays pending
+with the cause named. A stored Abort request from the earlier context is not re-issued.
+
 The fresh store is `<DSH home>/data/hanaworlds-canvas-v2/canvas-v7.json`, schema 7.
 Older stores are not read or migrated. Compiler configuration is forwarded unchanged from
 the world source's `ReadWriteProfile.compilationConfig` (opaque `writeBackend
@@ -44,7 +59,11 @@ the world source's `ReadWriteProfile.compilationConfig` (opaque `writeBackend
 facts refuse by name without defaults. No engine, mod or package name is read.
 
 The App panel reads the selected session's objects/history and performs the published
-latest-entry Undo. It has no display-fixture sample toggle. Test peer implementations
+latest-entry Undo. It follows `hanaworldsCanvasDisplay/changes`, a Typert stream that yields
+a data-free notice after every durable commit changing that Session's objects, history,
+footprints, pending rows or bound world (cell, region, Undo/Redo, recovery), and re-reads; a
+build made from Workshop or skills appears without a manual refresh. A broken stream is shown
+with its cause and the manual refresh remains. It has no display-fixture sample toggle. Test peer implementations
 and the public NativeFacts fixture are explicitly SOURCE/FIXTURE. Independent legacy
 pages, examples, probes and old evidence are archived in the canvas-01 run directory.
 These checks do not establish a real-world GUI result or owner ACCEPTED.

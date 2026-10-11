@@ -51,7 +51,17 @@ export const undoDescriptor = {
     status: z.string(), transactionId: z.string(), originTransactionId: z.string(),
     objectRef: z.string(), view: displaySchema() }) },
 };
-const descriptors = [displayDescriptor, actionsDescriptor, undoDescriptor];
+// Logical stream of change notices for one Session's panel; cancelled with the panel.
+export const changesDescriptor = {
+  id: 'hanaworlds-canvas#hanaworldsCanvasDisplay/changes',
+  service: 'hanaworldsCanvasDisplay', namespace: 'hanaworldsCanvasDisplay', method: 'changes',
+  mode: 'stream', invocation: { kind: 'direct' },
+  parameters: [ref('sessionRef', 'hanaworlds-canvas#DisplaySessionRef')],
+  cancellation: { parameter: 'signal' },
+  result: { mode: 'strict', typeSymbol: 'hanaworlds-canvas#ObjectsHistoryChange', create: () => z.object({
+    worldRef: z.string().nullable(), registryRevision: z.string().nullable() }) },
+};
+const descriptors = [displayDescriptor, actionsDescriptor, undoDescriptor, changesDescriptor];
 export const displayHostContribution = { package: 'hanaworlds-canvas-display', face: 'host',
   schemas: [], invocations: descriptors, model: {} };
 export const displayClientContribution = { package: 'hanaworlds-canvas-display', descriptors };

@@ -130,7 +130,12 @@ export class CanvasV5 {
       if (settings && same(settings, previous)) delete state.replay[id];
     }
   }
-  /** Plugin-owned same-transaction query/recovery, scoped to its active Session and context. */
+  /**
+   * Plugin-owned same-transaction query/recovery, scoped to its active Session and world. The
+   * Session may have re-selected that world over a new connection incarnation (stop/reconnect):
+   * the query then speaks for the current context and the durable receipt is accepted only as
+   * this transaction's original receipt (Contracts 2.8.0). Another world is refused.
+   */
   async resolvePendingHistory(request) {
     await this.ready;
     const row = this.store?.snapshot.pending[request.transactionId] ??
@@ -138,7 +143,8 @@ export class CanvasV5 {
     const current = this.current(request.sessionRef);
     if (!row?.body || row.body.sessionRef !== request.sessionRef ||
         this.store.snapshot.retiredSessions?.[request.sessionRef] || !current ||
-        current.activeWorldRef !== row.body.worldRef || !same(current.localContext, row.body.localContext))
+        current.activeWorldRef !== row.body.worldRef ||
+        current.localContext?.worldRef !== row.body.worldRef)
       throw fail('CURRENT_WORLD_MISMATCH', 'SCOPE_DENIED');
     await this.#identity({ ...row.body, requestId: `history-recovery-${randomUUID()}` });
     // An in-flight Apply owns its transaction until its outcome is processed.
@@ -281,6 +287,50 @@ export class CanvasV5 {
     // Old entries retain their durable order after timestamped rows; no invented time.
     return structuredClone({ state: registered.length ? 'READY' : 'EMPTY',
       worldRef, objects, history });
+  }
+  /**
+   * The objects/history panel's change feed for one Session. Yields `{ worldRef,
+   * registryRevision }` after each durable commit that changes what readObjectsHistory or
+   * readHistoryActions show for that Session — any write path (cell, region, Undo/Redo,
+   * recovery, naming) and a change of the Session's bound world. It carries no data: the
+   * panel re-reads through the same public reads. Ends when `signal` aborts.
+   */
+  async *watchObjectsHistory(sessionRef, signal) {
+    await this.#durable();
+    const shown = snapshot => {
+      const session = snapshot.sessions[sessionRef] ?? null;
+      const worldRef = session?.activeWorldRef ?? null;
+      const objects = snapshot.objects[worldRef] ?? {};
+      return { worldRef, registryRevision: snapshot.registryRevisions[worldRef] ?? null,
+        key: stableHash({ worldRef, localContext: session?.localContext ?? null,
+          registry: snapshot.registryRevisions[worldRef] ?? null,
+          worldRevision: snapshot.worldRevisions[worldRef] ?? null, objects,
+          footprints: snapshot.footprints[worldRef] ?? null,
+          heads: Object.keys(objects).sort().map(ref => snapshot.history[ref]?.at(-1) ?? null),
+          pending: Object.entries(snapshot.pending)
+            .filter(([, row]) => (row.body?.worldRef ?? row.worldRef) === worldRef)
+            .map(([transactionId, row]) => [transactionId, row.phase]) }) };
+    };
+    let last = shown(this.store.snapshot).key, wake = null;
+    const queue = [];
+    const stop = this.store.observe(snapshot => {
+      const next = shown(snapshot);
+      if (next.key === last) return;
+      last = next.key;
+      queue.push({ worldRef: next.worldRef, registryRevision: next.registryRevision });
+      wake?.();
+    });
+    const aborted = new Promise(resolve => signal?.addEventListener('abort', resolve, { once: true }));
+    try {
+      while (!signal?.aborted) {
+        if (!queue.length) {
+          await Promise.race([new Promise(resolve => { wake = resolve; }), aborted]);
+          wake = null;
+          continue;
+        }
+        yield queue.shift();
+      }
+    } finally { stop(); }
   }
   /**
    * Plugin-owned read of what each object's history can do next. Canvas states the
@@ -631,6 +681,8 @@ export class CanvasV5 {
         state.replay[replayKey] = { digest: admission.requestDigest, response };
         delete state.pending[body.transactionId];
       });
+      // Full matched readback and the linked history row are durable: the verified receipt.
+      await this.publishEvent('TransactionVerified', 'Readback', answer(body, receipt));
       return response;
     } catch (error) {
       if (!prepared) {
@@ -879,6 +931,8 @@ export class CanvasV5 {
         next.replay[replayKey] = { digest: admission.requestDigest, response };
         delete next.pending[body.transactionId];
       });
+      // The whole linked Undo/Redo is VERIFIED and every head moved durably.
+      await this.publishEvent('HistoryPositionChanged', operation, response);
       return response;
     } catch (error) {
       if (!prepared) {
@@ -1148,7 +1202,7 @@ export class CanvasV5 {
     if (!oldConnection || oldConnection.worldRef !== connection.worldRef ||
         oldConnection.connectionRef !== connection.connectionRef ||
         oldConnection.connectionIncarnationRef !== connection.connectionIncarnationRef)
-      await this.#publishSelectionEvent('WorldConnectionSelectionChanged', 'SelectWorldConnection', response);
+      await this.publishEvent('WorldConnectionSelectionChanged', 'SelectWorldConnection', response);
     return response;
   }
   /**
@@ -1192,19 +1246,27 @@ export class CanvasV5 {
     await this.#commitSelection(body, previous, current, connection, inventory,
       replayKey, admission, response);
     if (!sameWorld)
-      await this.#publishSelectionEvent('ActiveWorldChanged', 'SwitchWorldConnection', response);
+      await this.publishEvent('ActiveWorldChanged', 'SwitchWorldConnection', response);
     return response;
   }
-  /** Observers receive a validated immutable receipt only after the fsynced commit. */
-  async #publishSelectionEvent(event, operation, receipt) {
-    const payload = contractsSdk.validateCanvasEvent(event,
-      { contractVersion: WIRE, event, operation, receipt });
-    try { await this.emitEvent?.(payload); }
-    catch (error) {
-      // A consumer failure cannot turn a successful durable selection into a failed call.
-      // Surface it separately; never retry the event or the already committed operation.
-      console.error('Canvas selection event delivery failed', event, error);
+  /**
+   * Observers receive a validated immutable canvas/v7 event only after the fsynced commit.
+   * Called only by Canvas's own commit paths (history recovery included).
+   */
+  async publishEvent(event, operation, receipt) {
+    // Neither a rejected event shape nor a consumer failure can turn a successful durable
+    // commit into a failed (or rolled back) call. Each is surfaced separately with its cause;
+    // the event and the already committed operation are never retried.
+    let payload;
+    try {
+      payload = contractsSdk.validateCanvasEvent(event,
+        { contractVersion: WIRE, event, operation, receipt });
+    } catch (error) {
+      console.error('Canvas event rejected by Contracts', event, operation, error);
+      return;
     }
+    try { await this.emitEvent?.(payload); }
+    catch (error) { console.error('Canvas event delivery failed', event, error); }
   }
   #context(connection, selectionRevision) {
     return { connectionRef: connection.connectionRef,

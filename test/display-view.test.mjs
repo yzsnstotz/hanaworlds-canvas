@@ -29,3 +29,11 @@ test('the App panel and its bundle carry no display-fixture sample switch', asyn
       assert.ok(!source.includes(banned), `${file} must not contain ${banned}`);
   }
 });
+
+test('a broken change feed is shown with its cause and keeps the manual refresh', () => {
+  const html = renderToStaticMarkup(React.createElement(ObjectsHistoryView, { view: displayFixture, liveError: 'CARRIER_LOST' }));
+  assert.ok(html.includes('自动更新已中断（CARRIER_LOST）'));
+  assert.ok(html.includes('刷新'));
+  const live = renderToStaticMarkup(React.createElement(ObjectsHistoryView, { view: displayFixture }));
+  assert.ok(!live.includes('自动更新已中断'));
+});

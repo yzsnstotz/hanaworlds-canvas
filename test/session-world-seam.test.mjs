@@ -107,7 +107,7 @@ test('apply() publishes validated selection events through the declared Cordis b
   assert.equal(selected.error, null, JSON.stringify(selected.error));
   assert.equal(events.length, 1);
   assert.equal(logged.mock.callCount(), 1);
-  assert.equal(logged.mock.calls[0].arguments[0], 'Canvas selection event delivery failed');
+  assert.equal(logged.mock.calls[0].arguments[0], 'Canvas event delivery failed');
   const switched = await call('SwitchWorldConnection', { worldRef: 'fixture-world-A',
     fromWorldRef: 'fixture-world-A', toWorldRef: 'fixture-world-B', toConnectionRef: 'fixture-connection-B',
     expectedRevision: selected.result.selectionRevision, expectedContext: selected.result.localContext });

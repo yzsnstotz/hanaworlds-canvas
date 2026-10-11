@@ -19,12 +19,16 @@ export interface CanvasHostContext {
 export interface CanvasSelectionEvents {
   WorldConnectionSelectionChanged: import('hanaworlds-contracts').WorldConnectionSelectionChanged;
   ActiveWorldChanged: import('hanaworlds-contracts').ActiveWorldChanged;
+  TransactionVerified: import('hanaworlds-contracts').TransactionVerified;
+  HistoryPositionChanged: import('hanaworlds-contracts').HistoryPositionChanged;
 }
 export type CanvasSelectionEvent = CanvasSelectionEvents[keyof CanvasSelectionEvents];
 declare module '@deepseek-ai/cordis' {
   interface Events {
     WorldConnectionSelectionChanged: (event: CanvasSelectionEvents['WorldConnectionSelectionChanged']) => void | Promise<void>;
     ActiveWorldChanged: (event: CanvasSelectionEvents['ActiveWorldChanged']) => void | Promise<void>;
+    TransactionVerified: (event: CanvasSelectionEvents['TransactionVerified']) => void | Promise<void>;
+    HistoryPositionChanged: (event: CanvasSelectionEvents['HistoryPositionChanged']) => void | Promise<void>;
   }
 }
 /** Canvas-owned placement policy; managed by the host plugin Config form. */
@@ -47,7 +51,8 @@ export class CanvasStore {
 export class CanvasV5 implements CanvasV5ProtocolSource {
   constructor(options: { store: CanvasStore | null; adapter?: any;
     nativeFacts?: NativeFactsPort; worldFacts?: WorldFactsPort; sessions?: any; adapterId?: string; config?: CanvasConfig;
-    /** Receives immutable contracts v2 events after durable selection; failures are reported separately. */
+    /** Receives immutable contracts v2 events after the durable commit (selection, verified
+     * transaction, Undo/Redo); failures are reported separately. */
     emitEvent?: (event: CanvasSelectionEvent) => void | Promise<void> });
   store: CanvasStore | null;
   ready: Promise<void>;
@@ -69,6 +74,12 @@ export class CanvasV5 implements CanvasV5ProtocolSource {
   call<N extends keyof OperationMap['canvas/v7']>(operation: N,
     request: unknown): Promise<OperationMap['canvas/v7'][N]['response']>;
   readObjectsHistory(sessionRef: string | null): Promise<ObjectsHistoryDisplay>;
+  /** Data-free notice after each durable commit that changes this Session's panel; ends on abort. */
+  watchObjectsHistory(sessionRef: string, signal?: AbortSignal):
+    AsyncGenerator<{ worldRef: string | null; registryRevision: string | null }, void, undefined>;
+  /** Validates and publishes one canvas/v7 event; never throws into the committed call. */
+  publishEvent<K extends keyof CanvasSelectionEvents>(event: K, operation: CanvasSelectionEvents[K]['operation'],
+    receipt: CanvasSelectionEvents[K]['receipt']): Promise<void>;
   readFootprints(worldRef: string, objectRefs: string[], request: unknown): Promise<any>;
   readHistoryFacts(request: unknown): Promise<any>;
   readWorldRevision(worldRef: string): Promise<string>;

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import canonicalize from 'canonicalize';
 import { digestValue, requestDigest, validateBoundResponse, validateResponse,
- validateCommitReadback, requireGeometryProfile } from 'hanaworlds-contracts';
+ validateCommitReadback, requireGeometryProfile, readHistoricalReceipt } from 'hanaworlds-contracts';
 import { withDerivedReadback } from './state-profile.mjs';
 const same = (a, b) => canonicalize(a) === canonicalize(b);
 const D = (kind, value) => digestValue(kind, value).sha256;
@@ -11,8 +11,12 @@ function pendingError(transactionId, causeCode) {
   mutationState:'UNKNOWN',transactionRef:transactionId,causeCode,reason:'TRANSPORT_OUTCOME_UNKNOWN' } });
 }
 /** Resolve a History outcome by exact public query and readback.
- * Query and Abort keep the original transaction/payload/context. No Restore or new write.
- * A changed/missing query, context or readback leaves the reservation intact. */
+ * Query and Abort keep the original transaction/payload. No Restore or new write.
+ * Every Adapter exchange speaks for the Session's current context (Contracts 2.8.0): after a
+ * stop/reconnect re-selected the same world, the durable receipt is read as written — its
+ * written context must be this transaction's original one — and checked by readHistoricalReceipt.
+ * Another world, a re-bound or changed receipt, a changed readback or a moved Session leave the
+ * reservation intact. */
 export async function resolveHistoryOutcome(canvas, { sessionRef, transactionId }) {
  await canvas.ready;
  const state=canvas.store.snapshot;
@@ -20,29 +24,33 @@ export async function resolveHistoryOutcome(canvas, { sessionRef, transactionId 
  const body=row?.body??completedRow?.body, prepared=row?.prepared;
  const current=canvas.current(sessionRef);
  if(!body || body.sessionRef!==sessionRef || state.retiredSessions?.[sessionRef] ||
-    !current || current.activeWorldRef!==body.worldRef || !same(current.localContext,body.localContext))
+    !current || current.activeWorldRef!==body.worldRef || current.localContext?.worldRef!==body.worldRef)
   throw pendingError(transactionId,'CURRENT_WORLD_MISMATCH');
+ const live=current.localContext;
  if(!completedRow?.recoveryResolution && (!row?.direction || !prepared))
   throw pendingError(transactionId,'STALE_TRANSACTION');
  canvas.adapterCompatible();
  const call=async (op, extras) => {
   const q={contractVersion:'world-adapter/v8',sessionRef,requestId:`${body.requestId}:resolve:${op}:${randomUUID()}`,
-   worldRef:body.worldRef,localContext:body.localContext,...extras};
-  const reply=validateBoundResponse('world-adapter/v8',op,q,await canvas.adapter.call(op,q));
+   worldRef:body.worldRef,localContext:live,...extras};
+  const raw=await canvas.adapter.call(op,q);
+  if(op==='QueryTransaction' && raw?.error===null) return readHistoricalReceipt(q,raw);
+  const reply=validateBoundResponse('world-adapter/v8',op,q,raw);
   if(reply.error) throw Object.assign(new Error(reply.error.code),{publicError:reply.error,guardRefusal:reply.guardRefusal??null});
   return reply.result;
  };
  const connectionRequest={contractVersion:'world-adapter/v8',sessionRef,
-  requestId:`${body.requestId}:resolve-connection:${randomUUID()}`,connectionRef:body.localContext.connectionRef};
+  requestId:`${body.requestId}:resolve-connection:${randomUUID()}`,connectionRef:live.connectionRef};
  const connection=validateBoundResponse('world-adapter/v8','ReadLocalConnection',connectionRequest,
   await canvas.adapter.call('ReadLocalConnection',connectionRequest));
  if(connection.error || connection.result.worldRef!==body.worldRef ||
-    connection.result.connectionIncarnationRef!==body.localContext.connectionIncarnationRef)
+    connection.result.connectionIncarnationRef!==live.connectionIncarnationRef)
   throw pendingError(transactionId,'CURRENT_WORLD_MISMATCH');
  if(completedRow?.recoveryResolution) return structuredClone(completedRow.recoveryResolution);
  for(const record of [...row.before.records,...row.expected.records])
   requireGeometryProfile(connection.result.capabilities.worldGeometry,record.geometryProfile);
- const receipt=await call('QueryTransaction',{transactionId,transactionPayloadDigest:prepared.transactionPayloadDigest});
+ // The receipt keeps the context it was written with; it must be this transaction's own.
+ const {receipt}=await call('QueryTransaction',{transactionId,transactionPayloadDigest:prepared.transactionPayloadDigest});
  if(receipt.transactionId!==transactionId || receipt.transactionPayloadDigest!==prepared.transactionPayloadDigest ||
     receipt.operationDigest!==prepared.historyOperationDigest || !same(receipt.localContext,body.localContext))
   throw pendingError(transactionId,'REPLAY_MISMATCH');
@@ -76,7 +84,7 @@ export async function resolveHistoryOutcome(canvas, { sessionRef, transactionId 
   const response=validateResponse('canvas/v7',operation,{contractVersion:'canvas/v7',requestId:body.requestId,result:receipt,error:null,guardRefusal:null});
   const resolution={transactionId,status:receipt.status,mutationState:verified?'VERIFIED':'ROLLED_BACK',readbackDigest:actual.readbackDigest,receipt,response};
   await canvas.store.commit(next=>{
-   if(!same(next.pending[transactionId]?.prepared,prepared) || !same(next.sessions[sessionRef]?.localContext,body.localContext))
+   if(!same(next.pending[transactionId]?.prepared,prepared) || !same(next.sessions[sessionRef]?.localContext,live))
     throw pendingError(transactionId,'CURRENT_WORLD_MISMATCH');
    if(verified) {
     if(next.history[body.objectRef]?.at(-1)?.historyRevision!==body.expectedHistoryRevision ||
@@ -95,6 +103,8 @@ export async function resolveHistoryOutcome(canvas, { sessionRef, transactionId 
    next.replay[`${sessionRef}\0${operation}\0${body.requestId}`]={digest:requestDigest('canvas/v7',operation,body),response};
    delete next.pending[transactionId];
   });
+  // Only a VERIFIED Undo/Redo moved the heads; a rollback leaves the history position unchanged.
+  if(verified) await canvas.publishEvent('HistoryPositionChanged',operation,response);
   return resolution;
  }
  if(receipt.status!=='REJECTED' || receipt.error!==null)
@@ -105,13 +115,17 @@ export async function resolveHistoryOutcome(canvas, { sessionRef, transactionId 
    direction:row.direction,historyOperationDigest:prepared.historyOperationDigest});
   if(!same(queried,prepared)) throw pendingError(transactionId,'REPLAY_MISMATCH');
   const abortRequest=row.abortRequest??{contractVersion:'world-adapter/v8',sessionRef,
-   requestId:`${body.requestId}:resolve-abort:${randomUUID()}`,worldRef:body.worldRef,localContext:body.localContext,
+   requestId:`${body.requestId}:resolve-abort:${randomUUID()}`,worldRef:body.worldRef,localContext:live,
    transactionId,originTransactionId:row.originTransactionId,historyOperationDigest:prepared.historyOperationDigest};
   if(!row.abortRequest) await canvas.store.commit(next=>{
    if(!same(next.pending[transactionId]?.prepared,prepared)) throw pendingError(transactionId,'STALE_TRANSACTION');
    next.pending[transactionId].abortRequest=abortRequest;
   });
   // An uncertain Abort reply is replayed with this exact durable request, never a new one.
+  // A request recorded under an earlier connection context cannot be replayed after a
+  // reconnect (the Adapter binds every non-query exchange to the current context): it stays
+  // pending and names the mismatch instead of being re-issued as a new Abort.
+  if(!same(abortRequest.localContext,live)) throw pendingError(transactionId,'CURRENT_WORLD_MISMATCH');
   const reply=validateBoundResponse('world-adapter/v8','AbortPreparedHistoryTransaction',abortRequest,
    await canvas.adapter.call('AbortPreparedHistoryTransaction',abortRequest));
   if(reply.error) throw Object.assign(new Error(reply.error.code),{publicError:reply.error});
@@ -136,8 +150,8 @@ export async function resolveHistoryOutcome(canvas, { sessionRef, transactionId 
  const resolution={transactionId,status:'ABORTED_PREPARED',mutationState:'NONE',
   readbackDigest:read.readbackDigest,receipt,response};
  await canvas.store.commit(next=>{
-  const live=next.pending[transactionId];
-  if(!same(live?.prepared,prepared) || !same(next.sessions[sessionRef]?.localContext,body.localContext))
+  const pendingRow=next.pending[transactionId];
+  if(!same(pendingRow?.prepared,prepared) || !same(next.sessions[sessionRef]?.localContext,live))
    throw pendingError(transactionId,'CURRENT_WORLD_MISMATCH');
   next.transactions[transactionId]={receipt,body,worldRef:body.worldRef,recoveryResolution:resolution};
   next.replay[`${sessionRef}\0${operation}\0${body.requestId}`]={digest:requestDigest('canvas/v7',operation,body),response};

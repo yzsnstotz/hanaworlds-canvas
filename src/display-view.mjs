@@ -31,7 +31,7 @@ function timeLabel(value) {
   if (value === null) return '未记录时间';
   return new Date(value).toLocaleString('zh-CN', { hour12: false });
 }
-export function ObjectsHistoryView({ view, refresh, pending = false, error = null, emptyReason, footer = '这里仅供查看。建造或撤回请使用对应面板。', actions = null, undo = null }) {
+export function ObjectsHistoryView({ view, refresh, pending = false, error = null, liveError = null, emptyReason, footer = '这里仅供查看。建造或撤回请使用对应面板。', actions = null, undo = null }) {
   const objects = view?.objects ?? [];
   const history = view?.history ?? [];
   // Undo controls appear only when the caller supplies Canvas's published actions (App panel, live data).
@@ -56,6 +56,8 @@ export function ObjectsHistoryView({ view, refresh, pending = false, error = nul
     steps && undo?.message && h('p', { role: 'status', className: 'hw-canvas-done' }, undo.message),
     steps && undo?.error && h('p', { role: 'alert', className: 'hw-canvas-error' }, '撤回失败：', undo.error),
     error && h('p', { role: 'alert', className: 'hw-canvas-error' }, '读取失败：', error),
+    liveError && h('p', { role: 'alert', className: 'hw-canvas-error' },
+      `自动更新已中断（${liveError}）：新的建造或撤回不会自动出现，请点「刷新」读取最新记录。`),
     pending && !view && h('p', { role: 'status' }, '正在读取 Canvas 的对象与历史…'),
     view && view.state !== 'READY' && h('div', { className: 'hw-canvas-empty', role: 'status' },
       h('strong', null, '这里还没有记录'), h('p', null, emptyReason ?? emptyReasons[view.state])),

@@ -18,6 +18,12 @@ export class CanvasStore {
     this.snapshot = snapshot;
     this.busy = Promise.resolve();
     this.unavailable = false;
+    this.observers = new Set();
+  }
+  /** Called with each new durable snapshot after its fsynced rename. Returns the unsubscribe. */
+  observe(observer) {
+    this.observers.add(observer);
+    return () => this.observers.delete(observer);
   }
   static async open(directory) {
     if (typeof directory !== 'string' || !directory) throw new Error('CANVAS_STORAGE_UNAVAILABLE');
@@ -48,6 +54,11 @@ export class CanvasStore {
         if (renamed) this.unavailable = true;
         await rm(temporary, { force: true });
         throw error;
+      }
+      // An observer failure never undoes or fails the commit that already happened.
+      for (const observer of this.observers) {
+        try { observer(next); }
+        catch (error) { console.error('Canvas store observer failed', error); }
       }
       return result;
     });
