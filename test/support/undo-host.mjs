@@ -1,21 +1,21 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { CanvasV5, CanvasStore } from '../src/index.mjs';
+import { CanvasV5, CanvasStore } from '../../src/index.mjs';
 import { openUndoFixtureWorld, undoSessionRef, undoWorldRef } from './undo-fixture-world.mjs';
-import { fixtureSessions } from './fixture-sessions.mjs';
+import { fixtureSessions } from '../../scripts/fixture-sessions.mjs';
 
 const digest = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 export const undoWorldFile = directory => join(directory, 'fixture-world.json');
 
 /**
  * Isolated /undo host. Canvas owns every decision and durable record; this host
- * only turns the page's click into the public canvas/v6 Undo or Redo Canvas itself
+ * only turns the page's click into the public canvas/v7 Undo or Redo Canvas itself
  * published in readHistoryActions, then reads the result back.
  */
 export async function openUndoHost(directory, { world: preparedWorld } = {}) {
   // A missing example is a startup error; reads never create one.
-  await readFile(join(directory, 'canvas-v6.json'));
+  await readFile(join(directory, 'canvas-v7.json'));
   const world = preparedWorld ?? await openUndoFixtureWorld(undoWorldFile(directory));
   const canvas = new CanvasV5({ store: await CanvasStore.open(directory), adapter: world.adapter, nativeFacts: world.nativeFacts,
     sessions: fixtureSessions() });
@@ -34,7 +34,7 @@ export async function openUndoHost(directory, { world: preparedWorld } = {}) {
         undo: object.undo.available ? { available: true } : object.undo,
         redo: object.redo.available ? { available: true } : object.redo,
         // Actual cells, read from the isolated fixture world after Canvas's own readback.
-        cells: world.readCells(object.cells).map(cell => ({ position: cell.position, nodeName: cell.nodeName })),
+        cells: world.readCells(object.cells).map(cell => ({ position: cell.position, geometryProfile: 'voxel-grid/v1', materialRef: cell.materialRef })),
         moves: rows.map(row => ({ transactionId: row.transactionId, sequence: row.sequence,
           committedAt: row.committedAt, status: row.status })) };
     });
@@ -50,7 +50,7 @@ export async function openUndoHost(directory, { world: preparedWorld } = {}) {
       const step = object[action];
       if (!step.available) return { error: { code: step.reason } };
       const id = `undo-web-${action}-${randomUUID()}`;
-      const request = { contractVersion: 'canvas/v6', sessionRef: undoSessionRef, requestId: id,
+      const request = { contractVersion: 'canvas/v7', sessionRef: undoSessionRef, requestId: id,
         worldRef: actions.worldRef, objectRef, transactionId: id, historyTransactionId: step.historyTransactionId,
         expectedHistoryRevision: step.expectedHistoryRevision, expectedWorldRevision: step.expectedWorldRevision,
         expectedObjectRevisions: step.expectedObjectRevisions,

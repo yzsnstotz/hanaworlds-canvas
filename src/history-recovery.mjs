@@ -25,15 +25,15 @@ export async function resolveHistoryOutcome(canvas, { sessionRef, transactionId 
   throw pendingError(transactionId,'STALE_TRANSACTION');
  canvas.adapterCompatible();
  const call=async (op, extras) => {
-  const q={contractVersion:'world-adapter/v7',sessionRef,requestId:`${body.requestId}:resolve:${op}:${randomUUID()}`,
+  const q={contractVersion:'world-adapter/v8',sessionRef,requestId:`${body.requestId}:resolve:${op}:${randomUUID()}`,
    worldRef:body.worldRef,localContext:body.localContext,...extras};
-  const reply=validateBoundResponse('world-adapter/v7',op,q,await canvas.adapter.call(op,q));
+  const reply=validateBoundResponse('world-adapter/v8',op,q,await canvas.adapter.call(op,q));
   if(reply.error) throw Object.assign(new Error(reply.error.code),{publicError:reply.error,guardRefusal:reply.guardRefusal??null});
   return reply.result;
  };
- const connectionRequest={contractVersion:'world-adapter/v7',sessionRef,
+ const connectionRequest={contractVersion:'world-adapter/v8',sessionRef,
   requestId:`${body.requestId}:resolve-connection:${randomUUID()}`,connectionRef:body.localContext.connectionRef};
- const connection=validateBoundResponse('world-adapter/v7','ReadLocalConnection',connectionRequest,
+ const connection=validateBoundResponse('world-adapter/v8','ReadLocalConnection',connectionRequest,
   await canvas.adapter.call('ReadLocalConnection',connectionRequest));
  if(connection.error || connection.result.worldRef!==body.worldRef ||
     connection.result.connectionIncarnationRef!==body.localContext.connectionIncarnationRef)
@@ -46,8 +46,8 @@ export async function resolveHistoryOutcome(canvas, { sessionRef, transactionId 
  if(receipt.previousWorldRevision!==body.expectedWorldRevision)
   throw pendingError(transactionId,'STALE_REVISION');
  if(receipt.status==='RESTORE_FAILED') {
-  const response=validateResponse('canvas/v6',row.direction==='REDO'?'Redo':'Undo',
-   {contractVersion:'canvas/v6',requestId:body.requestId,result:receipt,error:null,guardRefusal:null});
+  const response=validateResponse('canvas/v7',row.direction==='REDO'?'Redo':'Undo',
+   {contractVersion:'canvas/v7',requestId:body.requestId,result:receipt,error:null,guardRefusal:null});
   await canvas.store.commit(next=>{
    const pending=next.pending[transactionId];
    if(!same(pending?.prepared,prepared)) throw pendingError(transactionId,'STALE_TRANSACTION');
@@ -55,7 +55,7 @@ export async function resolveHistoryOutcome(canvas, { sessionRef, transactionId 
     applyFailure:receipt.applyFailure,restoreCode:receipt.error.code,
     causeCode:receipt.applyFailure.error.code,receiptStatus:'RESTORE_FAILED',phase:'RESTORE_PENDING'});
    const operation=row.direction==='REDO'?'Redo':'Undo';
-   next.replay[`${sessionRef}\0${operation}\0${body.requestId}`]={digest:requestDigest('canvas/v6',operation,body),response};
+   next.replay[`${sessionRef}\0${operation}\0${body.requestId}`]={digest:requestDigest('canvas/v7',operation,body),response};
   });
   return {transactionId,status:'RESTORE_FAILED',recoveryPending:true,receipt,response};
  }
@@ -70,7 +70,7 @@ export async function resolveHistoryOutcome(canvas, { sessionRef, transactionId 
    throw pendingError(transactionId,'READBACK_MISMATCH');
   validateCommitReadback(receipt,expected,actual.projection,history);
   const operation=row.direction==='REDO'?'Redo':'Undo';
-  const response=validateResponse('canvas/v6',operation,{contractVersion:'canvas/v6',requestId:body.requestId,result:receipt,error:null,guardRefusal:null});
+  const response=validateResponse('canvas/v7',operation,{contractVersion:'canvas/v7',requestId:body.requestId,result:receipt,error:null,guardRefusal:null});
   const resolution={transactionId,status:receipt.status,mutationState:verified?'VERIFIED':'ROLLED_BACK',readbackDigest:actual.readbackDigest,receipt,response};
   await canvas.store.commit(next=>{
    if(!same(next.pending[transactionId]?.prepared,prepared) || !same(next.sessions[sessionRef]?.localContext,body.localContext))
@@ -89,7 +89,7 @@ export async function resolveHistoryOutcome(canvas, { sessionRef, transactionId 
     objectRef:body.objectRef,worldRef:body.worldRef,before:row.before,after:actual.projection,
     originTransactionId:row.originTransactionId,displayMetadata:{committedAt:new Date().toISOString(),mode:'CELL',affectedCells:expected.coveredPositions.length},recoveryResolution:resolution};
    next.worldRevisions[body.worldRef]=receipt.observedWorldRevision;
-   next.replay[`${sessionRef}\0${operation}\0${body.requestId}`]={digest:requestDigest('canvas/v6',operation,body),response};
+   next.replay[`${sessionRef}\0${operation}\0${body.requestId}`]={digest:requestDigest('canvas/v7',operation,body),response};
    delete next.pending[transactionId];
   });
   return resolution;
@@ -101,7 +101,7 @@ export async function resolveHistoryOutcome(canvas, { sessionRef, transactionId 
   const queried=await call('QueryPreparedHistoryTransaction',{transactionId,originTransactionId:row.originTransactionId,
    direction:row.direction,historyOperationDigest:prepared.historyOperationDigest});
   if(!same(queried,prepared)) throw pendingError(transactionId,'REPLAY_MISMATCH');
-  const abortRequest=row.abortRequest??{contractVersion:'world-adapter/v7',sessionRef,
+  const abortRequest=row.abortRequest??{contractVersion:'world-adapter/v8',sessionRef,
    requestId:`${body.requestId}:resolve-abort:${randomUUID()}`,worldRef:body.worldRef,localContext:body.localContext,
    transactionId,originTransactionId:row.originTransactionId,historyOperationDigest:prepared.historyOperationDigest};
   if(!row.abortRequest) await canvas.store.commit(next=>{
@@ -109,7 +109,7 @@ export async function resolveHistoryOutcome(canvas, { sessionRef, transactionId 
    next.pending[transactionId].abortRequest=abortRequest;
   });
   // An uncertain Abort reply is replayed with this exact durable request, never a new one.
-  const reply=validateBoundResponse('world-adapter/v7','AbortPreparedHistoryTransaction',abortRequest,
+  const reply=validateBoundResponse('world-adapter/v8','AbortPreparedHistoryTransaction',abortRequest,
    await canvas.adapter.call('AbortPreparedHistoryTransaction',abortRequest));
   if(reply.error) throw Object.assign(new Error(reply.error.code),{publicError:reply.error});
   confirmation=reply.result;
@@ -128,7 +128,7 @@ export async function resolveHistoryOutcome(canvas, { sessionRef, transactionId 
  const error=original ? {...original,mutationState:'NONE'} : {
   code:row.causeCode??'TARGET_FACTS_INCOMPLETE',phase:'validate',retryability:'AFTER_NEW_FACTS',
   mutationState:'NONE',transactionRef:transactionId,causeCode:null,reason:'REQUIRED_FACT_UNKNOWN'};
- const response=validateResponse('canvas/v6',operation,{contractVersion:'canvas/v6',requestId:body.requestId,
+ const response=validateResponse('canvas/v7',operation,{contractVersion:'canvas/v7',requestId:body.requestId,
   result:null,error,guardRefusal:row.failure?.guardRefusal??null});
  const resolution={transactionId,status:'ABORTED_PREPARED',mutationState:'NONE',
   readbackDigest:read.readbackDigest,receipt,response};
@@ -137,7 +137,7 @@ export async function resolveHistoryOutcome(canvas, { sessionRef, transactionId 
   if(!same(live?.prepared,prepared) || !same(next.sessions[sessionRef]?.localContext,body.localContext))
    throw pendingError(transactionId,'CURRENT_WORLD_MISMATCH');
   next.transactions[transactionId]={receipt,body,worldRef:body.worldRef,recoveryResolution:resolution};
-  next.replay[`${sessionRef}\0${operation}\0${body.requestId}`]={digest:requestDigest('canvas/v6',operation,body),response};
+  next.replay[`${sessionRef}\0${operation}\0${body.requestId}`]={digest:requestDigest('canvas/v7',operation,body),response};
   delete next.pending[transactionId];
  });
  return resolution;

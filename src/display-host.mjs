@@ -36,7 +36,7 @@ export class CanvasDisplayService extends TypertRemoteService {
           { available: false, reason: object.undo.reason, historyTransactionId: null } })) };
   }
   /**
-   * One click = one canvas/v6 Undo of the entry the person clicked. The request is built only
+   * One click = one canvas/v7 Undo of the entry the person clicked. The request is built only
    * from what Canvas itself published for this Session; Canvas re-validates history head,
    * revisions and the actual world cells, and commits or rolls back the whole transaction.
    */
@@ -55,7 +55,7 @@ export class CanvasDisplayService extends TypertRemoteService {
       const transactionId = `canvas-panel-undo-${randomUUID()}`;
       const intent = { surface: 'app/canvas-objects-history', action: 'undo', sessionRef, objectRef,
         historyTransactionId };
-      const request = { contractVersion: 'canvas/v6', sessionRef, requestId: transactionId,
+      const request = { contractVersion: 'canvas/v7', sessionRef, requestId: transactionId,
         worldRef: published.worldRef, objectRef, transactionId, historyTransactionId,
         expectedHistoryRevision: step.expectedHistoryRevision,
         expectedWorldRevision: step.expectedWorldRevision,

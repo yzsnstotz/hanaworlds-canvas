@@ -82,15 +82,18 @@
   },
   "dependencies": {
     "canonicalize": "5.1.0",
-    "hanaworlds-contracts": "git+https://github.com/yzsnstotz/hanaworlds-contracts.git#semver:^1.2.0",
+    "hanaworlds-contracts": "git+https://github.com/yzsnstotz/hanaworlds-contracts.git#v2.0.0",
     "icu": "2.3.1"
   },
   "devDependencies": {
+    "@deepseek-ai/cordis": "4.0.4",
+    "@deepseek-ai/dsh-typert-protocol": "0.2.0-rc.2",
     "cordis": "4.0.0-rc.10",
     "esbuild": "0.25.10",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "typescript": "5.8.3"
+    "typescript": "5.8.3",
+    "zod": "4.6.5"
   },
   "types": "./types/index.d.ts",
   "peerDependencies": {

@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { createUndoExample } from '../scripts/undo-example.mjs';
-import { openUndoHost, undoWorldFile } from '../scripts/undo-host.mjs';
+import { createUndoExample } from './support/undo-example.mjs';
+import { openUndoHost, undoWorldFile } from './support/undo-host.mjs';
 import { CanvasRegionV1 } from '../src/index.mjs';
 import { digestValue, encodeRegionBlock, regionChunksOfBox } from 'hanaworlds-contracts';
 
-const nodes = entry => entry.cells.map(cell => cell.nodeName);
+const nodes = entry => entry.cells.map(cell => cell.materialRef);
 const writes = host => host.world.calls.filter(call =>
   ['ApplyHistoryTransaction', 'ApplyCompiledTransaction', 'WriteRegion'].includes(call.operation)).length;
 
@@ -104,7 +104,7 @@ test('every offered Undo has a same-entry Redo; region and stale entries are nam
     // An external edit in the fixture world: Redo must refuse without writing.
     const file = undoWorldFile(directory);
     const world = JSON.parse(await readFile(file, 'utf8'));
-    world.nodes['9,2,8'] = { position: [9, 2, 8], nodeName: 'fixture:external', param1: 0, param2: 0, metadata: {}, inventory: {}, timer: null };
+    world.nodes['9,2,8'] = { position: [9, 2, 8], geometryProfile: 'voxel-grid/v1', materialRef: 'fixture:external',  orientation: 0, state: { inventory: {}, metadata: {}, timer: null } };
     await writeFile(file, JSON.stringify(world), { mode: 0o600 });
     host = await openUndoHost(directory);
     let before = writes(host);
@@ -121,17 +121,17 @@ test('every offered Undo has a same-entry Redo; region and stale entries are nam
     host = await openUndoHost(directory);
     assert.equal((await host.perform(cellRef, 'redo')).status, 'VERIFIED');
 
-    // A region entry in the same isolated world (made here, never in the example): canvas-region/v2
+    // A region entry in the same isolated world (made here, never in the example): canvas-region/v3
     // has no Redo, so Canvas names its Undo instead of offering a move it could not reverse.
     const region = new CanvasRegionV1(host.canvas, host.world.regionAdapter);
     const localContext = host.canvas.store.snapshot.sessions['undo-fixture-session'].localContext;
     const origin = [20, 2, 20], size = [2, 1, 2];
-    const block = encodeRegionBlock({ origin, size, palette: [{ nodeName: 'fixture:stone', param2: 0 }],
+    const block = encodeRegionBlock({ origin, size, palette: [{ materialRef: 'fixture:stone', orientation: 0 }],
       indices: new Int32Array(size.reduce((a, b) => a * b, 1)) });
-    const chunks = regionChunksOfBox({ min: origin, max: origin.map((o, a) => o + size[a] - 1) });
-    const operations = { contractVersion: 'region-operations/v1', buildDigest: 'b'.repeat(64), compilerRevision: 'test-region-1',
-      worldRef: 'undo-fixture-world', catalogueDigest: 'c'.repeat(64), chunkEdge: 16, chunks: [{ chunkPos: chunks[0].chunkPos, block }] };
-    const committed = await region.call('ApplyRegionCommit', { contractVersion: 'canvas-region/v2', sessionRef: 'undo-fixture-session',
+    const chunks = regionChunksOfBox({ min: origin, max: origin.map((o, a) => o + size[a] - 1) }, { edge: [16, 16, 16] });
+    const operations = { contractVersion: 'region-operations/v2', buildDigest: 'b'.repeat(64), compilerRevision: 'test-region-1',
+      worldRef: 'undo-fixture-world', catalogueDigest: 'c'.repeat(64), partition: { edge: [16, 16, 16] }, chunks: [{ chunkPos: chunks[0].chunkPos, block }] };
+    const committed = await region.call('ApplyRegionCommit', { contractVersion: 'canvas-region/v3', sessionRef: 'undo-fixture-session',
       worldRef: 'undo-fixture-world', localContext, guarantee: 'RECOVERABLE_VERIFIED', requestId: 'test-region',
       transactionId: 'test-region', operations, operationDigest: digestValue('region-operations', operations).sha256 });
     assert.equal(committed.error, null);

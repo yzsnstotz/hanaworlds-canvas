@@ -9,26 +9,26 @@ import { canonicalJSON, checkProtocolCompatibility, comparePosition, contractPro
   summarizeRegionStates, unmetEngineGuards,
   validateBoundResponse, validateDigestBinding, validateRegionCommit, validateRegionRead,
   validateRegionSnapshotContent, validateRegionUndo, validateRegionWrite, validateRequest,
-  validateResponse, validateType, validateRegionCommitRequest, checkConfirmedRegionPlacementCommit } from 'hanaworlds-contracts';
+  validateResponse, validateType, validateRegionCommitRequest, checkConfirmedRegionPlacementCommit, requireGeometryProfile } from 'hanaworlds-contracts';
 
 /*
- * canvas-region/v2 over the public Contracts 1.x region v2 shapes.
+ * canvas-region/v3 over the public Contracts 1.x region v2 shapes.
  * Canvas is the only transaction decider. The Adapter region port only reads
- * and writes mapblock chunks (world-adapter-region/v2) and advertises its own
+ * and writes mapblock chunks (world-adapter-region/v3) and advertises its own
  * ProtocolHandshake; compatibility is protocol major + minor + required capabilities.
  */
-export const REGION_WIRE = 'canvas-region/v2';
-export const REGION_ADAPTER = 'world-adapter-region/v2';
-const ADAPTER = 'world-adapter/v7';
+export const REGION_WIRE = 'canvas-region/v3';
+export const REGION_ADAPTER = 'world-adapter-region/v3';
+const ADAPTER = 'world-adapter/v8';
 const PACKAGE_VERSION = '0.13.2';
 export const CANVAS_REGION_CAPABILITIES = Object.freeze(regionCapabilities
   .filter(c => c.owner === 'hanaworlds-canvas').map(c => c.id).sort());
 // A capability id is scoped by its wire ("<wire>:<name>"). Each Adapter requirement takes
 // only its own wire's ids, at the minor the Contracts declare for that protocol, and is
-// checked against the handshake of that port (G3: world-adapter/v7:* on the per-cell port,
-// world-adapter-region/v2:* on the region port).
+// checked against the handshake of that port (G3: world-adapter/v8:* on the per-cell port,
+// world-adapter-region/v3:* on the region port).
 const ADAPTER_CAPABILITIES = regionCapabilities
-  .filter(c => c.owner === 'hanaworlds-adapter-luanti').map(c => c.id);
+  .filter(c => c.owner === 'world-source').map(c => c.id);
 const adapterRequirement = wire => {
   const declared = contractProtocols.find(p => `${p.protocol}/v${p.major}` === wire);
   if (!declared) throw new Error(`CANVAS_ADAPTER_PROTOCOL_UNDECLARED:${wire}`);
@@ -101,7 +101,7 @@ const inFlight = (state, worldRef) => Object.values(state.pending)
 
 export const canvasProtocolHandshake = Object.freeze(validateType('ProtocolHandshake', {
   profileVersion: 'protocol-handshake/v1', component: 'hanaworlds-canvas',
-  protocols: [{ protocol: 'canvas-region', major: 2, minor: 0 }],
+  protocols: [{ protocol: 'canvas-region', major: 3, minor: 0 }],
   capabilities: [...CANVAS_REGION_CAPABILITIES],
   provenance: { packageName: 'hanaworlds-canvas', packageVersion: PACKAGE_VERSION,
     sourceRevision: null, artifactDigest: null } }));
@@ -116,7 +116,7 @@ export const regionToolDescription = Object.freeze({
     'mapblocks. Cell-by-cell BUILD with per-cell Undo stays the tool for fine ' +
     'adjustment; which one to use is the skill\'s choice.',
   prerequisites: ['a current world connection selected in Canvas',
-    'region operations compiled by Brush (region-operations/v1) with their digest',
+    'region operations compiled by Brush (region-operations/v2) with their digest',
     'no registered object footprint inside the specified cells',
     'every touched mapblock KNOWN after Adapter load',
     'Adapter advertising world-adapter-region major 1 and world-adapter major 6 at the ' +
@@ -284,6 +284,9 @@ export class CanvasRegionV1 {
   /** The current connection, then the engine guards `operation` needs from its declaration. */
   async #guarded(body, operation) {
     const connection = await this.#current(body);
+    const geometry = requireGeometryProfile(connection.capabilities.worldGeometry, 'voxel-grid/v1');
+    if (body.operations && !same(body.operations.partition, geometry.partition))
+      throw fail('CAPABILITY_GAP', 'GEOMETRY_PROFILE_UNSUPPORTED');
     requireGuards(connection.capabilities.engineGuards, operation);
     return connection;
   }
@@ -310,7 +313,7 @@ export class CanvasRegionV1 {
    */
   async #read(body, box, purpose, suffix, layout) {
     const request = { contractVersion: REGION_ADAPTER, sessionRef: body.sessionRef,
-      requestId: `${body.requestId}:${suffix}`, worldRef: body.worldRef, box, purpose,
+      requestId: `${body.requestId}:${suffix}`, worldRef: body.worldRef, box, purpose, partition: this.#geometry(body).partition,
       localContext: body.localContext };
     const response = validateRegionRead(request, await this.regionAdapter.call('ReadRegion', request));
     if (response.error) throw Object.assign(new Error(response.error.code),
@@ -323,20 +326,25 @@ export class CanvasRegionV1 {
         throw fail('TARGET_FACTS_INCOMPLETE', 'REQUIRED_FACT_UNKNOWN', 'readback');
       return chunk;
     });
-    return { worldRef: read.worldRef, chunks };
+    return { worldRef: read.worldRef, partition: read.partition, chunks };
   }
   async #write(body, transactionId, purpose, writes, suffix) {
     const request = { contractVersion: REGION_ADAPTER, sessionRef: body.sessionRef,
       requestId: `${body.requestId}:${suffix}`, worldRef: body.worldRef, transactionId,
-      purpose, writes, localContext: body.localContext };
+      purpose, writes, partition: this.#geometry(body).partition, localContext: body.localContext };
     const written = validateRegionWrite(request, await this.regionAdapter.call('WriteRegion', request));
     // A refused write keeps the Adapter's public Error and its GuardRefusal (if any) as the cause.
     if (written.response.error) throw Object.assign(new Error(written.response.error.code),
       { publicError: written.response.error, guardRefusal: written.response.guardRefusal ?? null });
+    if (written.response.result.postWriteLighting !== this.#geometry(body).postWriteLighting)
+      throw fail('CAPABILITY_GAP', 'GEOMETRY_PROFILE_UNSUPPORTED');
     return written;
   }
+  #geometry(body) {
+    return requireGeometryProfile(this.store.snapshot.connections[body.sessionRef]?.capabilities.worldGeometry ?? null, 'voxel-grid/v1');
+  }
   #summary(worldRef, read) {
-    return summarizeRegionStates(worldRef, read.chunks.map(c => ({ chunkPos: c.chunkPos,
+    return summarizeRegionStates(worldRef, read.partition, read.chunks.map(c => ({ chunkPos: c.chunkPos,
       state: c.state })));
   }
   #footprintConflicts(worldRef, positions, exceptObjectRef = null) {
@@ -387,7 +395,7 @@ export class CanvasRegionV1 {
     const box = unionBox(layout.map(([, b]) => b));
     const before = await this.#read(body, box, 'BEFORE_IMAGE', 'before', layout);
     const content = validateType('RegionSnapshotContent', {
-      profileVersion: 'region-snapshot-content/v1', worldRef: body.worldRef,
+      profileVersion: 'region-snapshot-content/v2', worldRef: body.worldRef, partition: this.#geometry(body).partition,
       chunks: before.chunks.map(c => ({ chunkPos: c.chunkPos, state: c.state,
         stateDigest: c.stateDigest })) });
     const beforeSummary = this.#summary(body.worldRef, before);
@@ -449,7 +457,7 @@ export class CanvasRegionV1 {
     const worldRevision = rev('world');
     const result = { transactionId: body.transactionId, worldRef: body.worldRef,
       status: 'VERIFIED', operationDigest: body.operationDigest, beforeSummary,
-      expectedAfterSummary, actualSummary, snapshot, historyRevision, lighting,
+      expectedAfterSummary, actualSummary, snapshot, historyRevision, postWriteLighting: this.#geometry(body).postWriteLighting, lighting,
       affectedObjectRefs: [], localContext: body.localContext };
     const response = this.#answer(body, 'ApplyRegionCommit', result);
     validateRegionCommit(body, response);
@@ -529,12 +537,12 @@ export class CanvasRegionV1 {
       pending.publicError.causeCode = restoreCode;
       throw pending;
     }
-    const lighting = restored.lighting ?? facts.lighting ??
-      { status: 'NOT_COMPLETE', box, method: 'canvas:no-write-observed' };
+    const lighting = this.#geometry(body).postWriteLighting === 'NONE' ? null :
+      restored.lighting ?? facts.lighting ?? { status: 'NOT_COMPLETE', box, method: 'canvas:no-write-observed' };
     const result = { transactionId: body.transactionId, worldRef: body.worldRef,
       status: 'ROLLED_BACK', operationDigest: body.operationDigest, beforeSummary,
       expectedAfterSummary, actualSummary: restored.actual, snapshot,
-      historyRevision: rev('history-none'), lighting, affectedObjectRefs: [],
+      historyRevision: rev('history-none'), postWriteLighting: this.#geometry(body).postWriteLighting, lighting, affectedObjectRefs: [],
       localContext: body.localContext };
     const rollbackCause = observedRollbackCause(cause, body.transactionId);
     if (rollbackCause) result.rollbackCause = rollbackCause;
@@ -580,7 +588,7 @@ export class CanvasRegionV1 {
       origin.result.snapshot, origin.result.beforeSummary);
     // The pre-Undo image is snapshotted too, so a failed Undo can restore it after reopen.
     const preUndoContent = validateType('RegionSnapshotContent', {
-      profileVersion: 'region-snapshot-content/v1', worldRef: body.worldRef,
+      profileVersion: 'region-snapshot-content/v2', worldRef: body.worldRef, partition: this.#geometry(body).partition,
       chunks: current.chunks.map(c => ({ chunkPos: c.chunkPos, state: c.state,
         stateDigest: c.stateDigest })) });
     const preUndoSnapshot = await encodeSnapshot(preUndoContent, preUndoSummary);
@@ -690,7 +698,7 @@ export class CanvasRegionV1 {
       undoTransactionId: body.undoTransactionId, worldRef: body.worldRef, status,
       originBeforeSummaryDigest: D('region-summary', origin.result.beforeSummary),
       originAfterSummaryDigest: D('region-summary', origin.result.actualSummary),
-      preUndoSummary, actualSummary, historyRevision, lighting,
+      preUndoSummary, actualSummary, historyRevision, postWriteLighting: this.#geometry(body).postWriteLighting, lighting,
       localContext: body.localContext };
   }
 
