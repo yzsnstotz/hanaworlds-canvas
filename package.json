@@ -1,6 +1,6 @@
 {
   "name": "hanaworlds-canvas",
-  "version": "0.15.0",
+  "version": "0.15.1",
   "private": true,
   "type": "module",
   "license": "MIT",
@@ -66,29 +66,29 @@
     "typecheck": "tsc --noEmit --strict --target ES2022 --module NodeNext --moduleResolution NodeNext --skipLibCheck test/protocol-types.mts test/native-facts-types.mts"
   },
   "dependencies": {
-    "@deepseek-ai/schemastery": "3.18.4",
+    "@deepseek-ai/schemastery": "3.18.5-alpha.1",
     "canonicalize": "5.1.0",
     "hanaworlds-contracts": "git+https://github.com/yzsnstotz/hanaworlds-contracts.git#v2.8.0",
     "icu": "2.3.1"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "4.0.4",
-    "@deepseek-ai/dsh-api-gateway": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-typert-protocol": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-typert-registry": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-util-crypto": "0.2.0-rc.2",
+    "@deepseek-ai/cordis": "4.0.5-alpha.1",
+    "@deepseek-ai/dsh-api-gateway": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-typert-protocol": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-typert-registry": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-util-crypto": "0.2.1-alpha.2",
     "cordis": "4.0.0-rc.10",
     "esbuild": "0.25.10",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "typescript": "5.8.3",
-    "zod": "4.6.5"
+    "zod": "4.4.3"
   },
   "types": "./types/index.d.ts",
   "peerDependencies": {
-    "@deepseek-ai/cordis": "~4.0.4",
-    "@deepseek-ai/dsh-typert-protocol": "0.2.0-rc.2",
-    "zod": "4.6.5"
+    "@deepseek-ai/cordis": "4.0.5-alpha.1",
+    "@deepseek-ai/dsh-typert-protocol": "0.2.1-alpha.2",
+    "zod": "4.4.3"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/cordis": {

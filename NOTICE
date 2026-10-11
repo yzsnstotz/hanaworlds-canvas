@@ -1,4 +1,4 @@
-HanaWorlds Canvas 0.15.0 component candidate.
+HanaWorlds Canvas 0.15.1 component candidate.
 
 Owner-authored source is MIT; see LICENSE and LICENSE_AUDIT.md. The 0.1.0
 AGPL-3.0-only source remains available at public revision
@@ -14,9 +14,9 @@ hanaworlds-contracts (MIT, HanaWorlds-owned) is a separately installed
 dependency from https://github.com/yzsnstotz/hanaworlds-contracts
 (exact public git tag v2.8.0); no Contracts bytes are copied into this repository.
 
-Canvas display bundle includes Zod 4.6.5 (MIT) from the official DSH runtime,
+Canvas display bundle includes Zod 4.4.3 (MIT) from the official DSH runtime,
 https://github.com/colinhacks/zod, for the public Remote schemas. Host peers:
-@deepseek-ai/cordis 4.0.4 and @deepseek-ai/dsh-typert-protocol 0.2.0-rc.2 (MIT),
+@deepseek-ai/cordis 4.0.5-alpha.1 and @deepseek-ai/dsh-typert-protocol 0.2.1-alpha.2 (MIT),
 from the official deepseek-ai/deepseek-harness runtime. React 18.3.1 (MIT),
 https://github.com/facebook/react, is a development/render dependency; the
 browser uses DSH's shared React seed. esbuild 0.25.10 (MIT),
@@ -24,8 +24,8 @@ https://github.com/evanw/esbuild, builds the client bundle and is not a runtime.
 
 ReactDOM 18.3.1 (MIT) renders isolated tests only; the independent fixture pages
 are archived outside the shipped package. DSH registry/gateway/util-crypto
-0.2.0-rc.2 (MIT) are development dependencies for the official remote test path.
+0.2.1-alpha.2 (MIT) are development dependencies for the official remote test path.
 
-@deepseek-ai/schemastery 3.18.4 (MIT), from
+@deepseek-ai/schemastery 3.18.5-alpha.1 (MIT), from
 https://github.com/deepseek-ai/deepseek-harness (vendor/schemastery), is a
 separately installed runtime dependency for the plugin management Config schema.
