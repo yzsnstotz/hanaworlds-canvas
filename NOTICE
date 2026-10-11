@@ -1,4 +1,4 @@
-HanaWorlds Canvas 0.15.1 component candidate.
+HanaWorlds Canvas 0.16.0 component artifact.
 
 Owner-authored source is MIT; see LICENSE and LICENSE_AUDIT.md. The 0.1.0
 AGPL-3.0-only source remains available at public revision
@@ -10,9 +10,13 @@ icu 2.3.1 is Unicode-3.0. Their notices and license texts remain with the
 separately installed npm packages. WorldEdit (AGPL-3.0) and the Luanti Adapter
 are separate origins and are not bundled or relicensed by Canvas.
 
-hanaworlds-contracts (MIT, HanaWorlds-owned) is a separately installed
-dependency from https://github.com/yzsnstotz/hanaworlds-contracts
-(exact public git tag v2.8.0); no Contracts bytes are copied into this repository.
+hanaworlds-contracts 2.12.0 (MIT, HanaWorlds-owned), from
+https://github.com/yzsnstotz/hanaworlds-contracts public tag v2.12.0,
+peeled SHA 33c34372fd5092a83b6f3cc81c086470fa76d794, is development supply only.
+The reproducible esbuild build embeds the SDK functions and schema needed by Canvas
+Host/display/native-facts consumer. No resolvable Contracts package or upstream
+fixture suite is distributed. Its license/NOTICE are in LICENSES/; input and
+artifact SHA256 records are in lib/build-source.json.
 
 Canvas display bundle includes Zod 4.4.3 (MIT) from the official DSH runtime,
 https://github.com/colinhacks/zod, for the public Remote schemas. Host peers:
@@ -20,7 +24,7 @@ https://github.com/colinhacks/zod, for the public Remote schemas. Host peers:
 from the official deepseek-ai/deepseek-harness runtime. React 18.3.1 (MIT),
 https://github.com/facebook/react, is a development/render dependency; the
 browser uses DSH's shared React seed. esbuild 0.25.10 (MIT),
-https://github.com/evanw/esbuild, builds the client bundle and is not a runtime.
+https://github.com/evanw/esbuild, builds Host and client artifacts and is not a runtime.
 
 ReactDOM 18.3.1 (MIT) renders isolated tests only; the independent fixture pages
 are archived outside the shipped package. DSH registry/gateway/util-crypto
@@ -29,3 +33,7 @@ are archived outside the shipped package. DSH registry/gateway/util-crypto
 @deepseek-ai/schemastery 3.18.5-alpha.1 (MIT), from
 https://github.com/deepseek-ai/deepseek-harness (vendor/schemastery), is a
 separately installed runtime dependency for the plugin management Config schema.
+
+acorn 8.15.0 (MIT), https://github.com/acornjs/acorn, parses production artifacts
+in development boundary tests. pnpm 11.28.5 (MIT), https://github.com/pnpm/pnpm,
+performs strict isolated production-install verification; neither is shipped runtime.

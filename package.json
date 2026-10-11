@@ -15,31 +15,30 @@
   "exports": {
     ".": {
       "types": "./types/index.d.ts",
-      "import": "./src/index.mjs",
-      "default": "./src/index.mjs"
+      "import": "./lib/src/index.mjs",
+      "default": "./lib/src/index.mjs"
     },
     "./examples/native-facts-consumer.mjs": {
       "types": "./types/native-facts-consumer.d.ts",
-      "import": "./examples/native-facts-consumer.mjs"
+      "import": "./lib/examples/native-facts-consumer.mjs"
     },
     "./fixtures/native-facts-scoped-state.json": "./fixtures/native-facts-scoped-state.json",
     "./fixtures/native-facts-scoped-state.schema.json": "./fixtures/native-facts-scoped-state.schema.json",
     "./fixtures/native-facts-scoped-state.source.json": "./fixtures/native-facts-scoped-state.source.json",
     "./fixtures/world-error.json": "./fixtures/world-error.json",
-    "./display": "./src/display-host.mjs",
+    "./display": "./lib/src/display-host.mjs",
     "./client": "./lib/client.js",
     "./fixtures/affected-object-notification.json": "./fixtures/affected-object-notification.json"
   },
   "files": [
-    "src/*.mjs",
-    "lib/client.js",
+    "lib/",
     "types/",
-    "examples/native-facts-consumer.mjs",
     "fixtures/",
     "cordis.patch.yml",
     "GADGET.md",
     "NOTICE",
-    "LICENSES/"
+    "LICENSES/",
+    "LICENSE"
   ],
   "dsh": {
     "bundle": {
@@ -56,19 +55,21 @@
     }
   },
   "scripts": {
-    "build": "node --check src/index.mjs && node --check src/voxel-grid.mjs && node --check src/local-v5.mjs && node --check src/store-v5.mjs && node --check src/region-v1.mjs && node --check src/config-supply.mjs && node --check src/display-host.mjs && node --check src/display-remote.mjs && node --check src/world-error.mjs && node scripts/build-display.mjs",
-    "test": "node --test test/*.test.mjs",
+    "build": "node --check src/index.mjs && node --check src/voxel-grid.mjs && node --check src/local-v5.mjs && node --check src/store-v5.mjs && node --check src/region-v1.mjs && node --check src/config-supply.mjs && node --check src/display-host.mjs && node --check src/display-remote.mjs && node --check src/world-error.mjs && node scripts/build-display.mjs && node scripts/build.mjs && npm run verify:contracts && npm run test:package-boundary",
+    "test": "node --test test/*.test.mjs && npm run test:package-boundary",
     "test:undo": "node --test test/undo-redo.test.mjs test/state-profile.test.mjs test/history-prepared-failure.test.mjs test/history-receipt-reconnect.test.mjs test/region-undo.test.mjs test/display-client-remote.test.mjs",
     "test:objects": "node --test test/objects-history-events.test.mjs test/history-receipt-reconnect.test.mjs test/display-view.test.mjs test/display-remote.test.mjs test/display-client-remote.test.mjs",
     "test:display:gateway": "node --test test/display-remote.test.mjs test/display-client-remote.test.mjs",
     "dev:supply": "node scripts/config-supply-web-server.mjs",
     "verify:contracts": "node scripts/verify-contracts.mjs",
-    "typecheck": "tsc --noEmit --strict --target ES2022 --module NodeNext --moduleResolution NodeNext --skipLibCheck test/protocol-types.mts test/native-facts-types.mts"
+    "typecheck": "tsc --noEmit --strict --target ES2022 --module NodeNext --moduleResolution NodeNext --skipLibCheck test/protocol-types.mts test/native-facts-types.mts",
+    "build:artifacts": "node scripts/build.mjs",
+    "test:package-boundary": "node scripts/test-package-boundary.mjs",
+    "prepack": "node scripts/prepack.mjs"
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "3.18.5-alpha.1",
     "canonicalize": "5.1.0",
-    "hanaworlds-contracts": "git+https://github.com/yzsnstotz/hanaworlds-contracts.git#v2.12.0",
     "icu": "2.3.1"
   },
   "devDependencies": {
@@ -82,13 +83,17 @@
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "typescript": "5.8.3",
-    "zod": "4.4.3"
+    "zod": "4.4.3",
+    "hanaworlds-contracts": "git+https://github.com/yzsnstotz/hanaworlds-contracts.git#v2.12.0",
+    "acorn": "8.15.0",
+    "pnpm": "11.28.5"
   },
   "types": "./types/index.d.ts",
   "peerDependencies": {
     "@deepseek-ai/cordis": "4.0.5-alpha.1",
     "@deepseek-ai/dsh-typert-protocol": "0.2.1-alpha.2",
-    "zod": "4.4.3"
+    "zod": "4.4.3",
+    "react": "18.3.1"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/cordis": {
@@ -98,6 +103,9 @@
       "optional": true
     },
     "zod": {
+      "optional": true
+    },
+    "react": {
       "optional": true
     }
   }

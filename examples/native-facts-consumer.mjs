@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
-import * as contracts from 'hanaworlds-contracts';
+import { validateType, canonicalJSON } from 'hanaworlds-contracts';
+const contracts = Object.freeze({ validateType, canonicalJSON });
 
 /** Validate the existing Canvas-owned injection return, not a new wire/type in
  * Contracts. Extra wrapper fields are not consumed; the three fields are required.

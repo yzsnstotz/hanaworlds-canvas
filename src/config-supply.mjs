@@ -40,8 +40,8 @@ const same = (a, b) => canonicalize(a) === canonicalize(b);
 const observationDigest = value => createHash('sha256')
   .update(`HanaWorlds|canvas|${SUPPLY_PROFILE}\n`).update(canonicalize(value)).digest('hex');
 
-// A ContractError, so a consumer that maps through Contracts publicError() (Workshop does)
-// keeps the exact code/reason instead of a generic decode error. missingSources stays on the
+// Publish the validated Error envelope; consumers validate publicError through their own
+// protocol supply and do not depend on this private exception constructor identity. missingSources stays on the
 // thrown object and in Canvas's own readback; the public Error shape has no field for it.
 export function supplyError(code, reason, extra = {}) {
   return Object.assign(new ContractError(code, 'validate', reason), extra);
@@ -156,7 +156,9 @@ export class CanvasConfigSupply {
   }
   #unavailable(error) {
     // Preserve only the typed code, never a provider exception or rejected raw facts.
-    const cause = error.cause ?? (error instanceof ContractError ? error.code : 'WORLD_FACT_UNREADABLE');
+    let typedCode;
+    try { typedCode = validateType('Error', error?.publicError).code; } catch {}
+    const cause = error.cause ?? typedCode ?? 'WORLD_FACT_UNREADABLE';
     return { status: 'UNAVAILABLE', cause,
       stale: cause === 'CURRENT_WORLD_MISMATCH' || cause === 'CATALOGUE_MISMATCH' };
   }
