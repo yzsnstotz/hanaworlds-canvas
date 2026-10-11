@@ -144,3 +144,15 @@ test('native root inconsistent with configured DSH_HOME fails without a write', 
     else process.env.DSH_HOME = original;
   }
 });
+
+
+test('startup failure retains its cause in status and logs the original error', async t => {
+  const logged = [];
+  t.mock.method(console, 'error', (...args) => logged.push(args));
+  const service = await load(undefined);
+  assert.equal(service.storageState, 'UNAVAILABLE');
+  assert.deepEqual(service.status().storageFailure,
+    { code: 'CANVAS_STORAGE_UNAVAILABLE', message: 'CANVAS_STORAGE_UNAVAILABLE' });
+  assert.equal(logged.length, 1);
+  assert.equal(logged[0][1].message, 'CANVAS_STORAGE_UNAVAILABLE');
+});

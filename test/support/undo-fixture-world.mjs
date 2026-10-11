@@ -43,7 +43,10 @@ export async function openUndoFixtureWorld(file, { create = false } = {}) {
   let chain = Promise.resolve();
   const save = () => (chain = chain.then(() => durableWrite(file, world)));
   const prepared = new Set();
-  const record = p => world.nodes[key(p)] ?? { position:p, geometryProfile:'voxel-grid/v1', materialRef:'air',  orientation:0, state:{ inventory:{}, metadata:{}, timer:null } };
+  const record = p => {
+    const raw = world.nodes[key(p)] ?? { position:p, geometryProfile:'voxel-grid/v1', materialRef:'air', orientation:0, state:{ inventory:{}, metadata:{}, timer:null } };
+    return env.deriveState ? { ...raw, state: env.deriveState(structuredClone(raw.state)) } : raw;
+  };
   const put = r => { if (r.materialRef === 'air') delete world.nodes[key(r.position)]; else world.nodes[key(r.position)] = r; };
   const projection = positions => ({ worldRef:undoWorldRef, coveredPositions:positions, records:positions.map(record), stateProfile:undoStateProfile });
   const nextRevision = () => `undo-fixture-world-${++world.revisionCounter}`;
@@ -140,7 +143,17 @@ export async function openUndoFixtureWorld(file, { create = false } = {}) {
       const target = request.direction === 'UNDO' ? origin.before : origin.after;
       const p = projection(origin.positions);
       // The fixture world checks Canvas's digests against its own cells before preparing.
-      if (D('readback', p) !== request.expectedCurrentStateDigest ||
+      const expected = request.direction === 'UNDO' ? origin.after : origin.before;
+      const comparable = expected.map((saved, index) => {
+        const state = { ...saved.state };
+        for (const field of undoStateProfile.derivedFields) {
+          delete state[field];
+          if (Object.hasOwn(p.records[index].state, field)) state[field] = p.records[index].state[field];
+        }
+        return { ...saved, state };
+      });
+      if (canonicalize(comparable) !== canonicalize(p.records) ||
+          D('readback', { ...p, records:expected }) !== request.expectedCurrentStateDigest ||
           D('readback', { ...p, records:target }) !== request.targetStateDigest)
         return refuse(request.direction === 'REDO' ? 'REDO_CONFLICT' : 'UNDO_CONFLICT', 'EXTERNAL_EDIT_CONFLICT');
       prepared.add(request.transactionId);

@@ -59,10 +59,11 @@ export class CanvasV5 implements CanvasV5ProtocolSource {
   store: CanvasStore | null;
   ready: Promise<void>;
   storageState: string;
+  storageFailure: { code: string; message: string } | null;
   readonly contractHandshake: ContractHandshake;
   readonly protocolHandshake: ProtocolHandshake;
   status(): { component: string; version: string; canvasContract: string;
-    adapterContract: string; storage: string; productReadiness: 'UNPROVEN' };
+    adapterContract: string; storage: string; storageFailure: { code: string; message: string } | null; productReadiness: 'UNPROVEN' };
   current(sessionRef: string): any;
   /** Apply saved placement policy to bound worlds before host startup completes. */
   syncPlacementSettings(): Promise<void>;

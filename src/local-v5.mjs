@@ -91,6 +91,7 @@ export class CanvasV5 {
     this.placementConfig = structuredClone(Config(config).placement);
     this.ready = Promise.resolve();
     this.storageState = store ? 'READY' : 'UNAVAILABLE';
+    this.storageFailure = null;
     this.activeHistoryTransactions = new Set();
     this.historyRecoveryRuns = new Map();
   }
@@ -99,6 +100,7 @@ export class CanvasV5 {
   get protocolHandshake() { return structuredClone(cellProtocolHandshake); }
   status() { return { component: 'hanaworlds-canvas', version: PACKAGE_VERSION,
     canvasContract: WIRE, adapterContract: ADAPTER, storage: this.storageState,
+    storageFailure: this.storageFailure && { ...this.storageFailure },
     productReadiness: 'UNPROVEN' }; }
   current(sessionRef) { return this.store?.snapshot.sessions[sessionRef] ?? null; }
   // Called during host startup, before any request can observe an old search policy.
@@ -849,7 +851,9 @@ export class CanvasV5 {
       originBeforeImageDigest: origin.history.beforeImageDigest,
       originBeforeStateReadbackDigest: hash('readback', origin.before),
       originAfterReadbackDigest: origin.history.expectedAfterReadbackDigest,
-      expectedCurrentStateDigest: hash('readback', current),
+      // This is the expected historical image, not the freshly recomputed engine state.
+      // Current was checked above by StateProfile; its exact bytes remain in pending.before.
+      expectedCurrentStateDigest: hash('readback', expectedCurrent),
       targetStateDigest: hash('readback', target),
       expectedHistoryRevision: body.expectedHistoryRevision,
       expectedWorldRevision: body.expectedWorldRevision,
@@ -1594,7 +1598,12 @@ export function apply(ctx, config) {
     try { service.store = await CanvasStore.open(await nativeDirectory(ctx));
       await service.syncPlacementSettings();
       service.storageState = 'READY'; }
-    catch { service.storageState = 'UNAVAILABLE'; }
+    catch (error) {
+      service.storageState = 'UNAVAILABLE';
+      service.storageFailure = { code: error.code ?? error.message ?? 'CANVAS_STORAGE_UNAVAILABLE',
+        message: error.message ?? String(error) };
+      console.error('Canvas storage initialization failed', error);
+    }
   })();
   return service;
 }

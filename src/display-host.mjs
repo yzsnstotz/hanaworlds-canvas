@@ -3,7 +3,7 @@ import { TypertRemoteService, Remote, RemoteError } from '@deepseek-ai/dsh-typer
 import { displayHostContribution } from './display-remote.mjs';
 
 const digest = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
-const rejected = (reason, message) => new RemoteError('canvas/undo-rejected', message, { reason });
+const rejected = (action, reason, message) => new RemoteError(`canvas/${action}-rejected`, message, { reason });
 function canvasFor(ctx, method) {
   const canvas = ctx.get('hanaworldsCanvasV5');
   if (typeof canvas?.[method] !== 'function')
@@ -11,20 +11,29 @@ function canvasFor(ctx, method) {
   return canvas;
 }
 
+async function readyCanvasFor(ctx, method) {
+  const canvas = canvasFor(ctx, method);
+  await canvas.ready;
+  if (canvas.storageState === 'UNAVAILABLE')
+    throw new RemoteError('canvas/storage-unavailable', 'Canvas storage initialization failed.',
+      { storageFailure: canvas.storageFailure ?? null });
+  return canvas;
+}
+
 export class CanvasDisplayService extends TypertRemoteService {
   constructor(ctx) {
     super(ctx, 'hanaworldsCanvasDisplay');
     // Apply the public standard decorator in native JS, using its initializer API.
-    for (const name of ['read', 'actions', 'undo'])
+    for (const name of ['read', 'actions', 'undo', 'redo'])
       Remote(this[name], { kind: 'method', name, private: false, static: false,
         addInitializer: initializer => initializer.call(this) });
     Remote({ mode: 'stream' })(this.changes, { kind: 'method', name: 'changes', private: false,
       static: false, addInitializer: initializer => initializer.call(this) });
     // Methods are invoked through Cordis's traced service proxy, so state is a plain property.
-    this.undoQueue = Promise.resolve();
+    this.historyQueue = Promise.resolve();
   }
   async read(sessionRef) {
-    return canvasFor(this.ctx, 'readObjectsHistory').readObjectsHistory(sessionRef);
+    return (await readyCanvasFor(this.ctx, 'readObjectsHistory')).readObjectsHistory(sessionRef);
   }
   /**
    * Logical stream: one item after each durable Canvas commit that changes what this Session's
@@ -34,36 +43,43 @@ export class CanvasDisplayService extends TypertRemoteService {
   changes(sessionRef, signal) {
     return canvasFor(this.ctx, 'watchObjectsHistory').watchObjectsHistory(sessionRef, signal);
   }
-  /** What the panel may offer: Canvas's own readHistoryActions, reduced to Undo. Never executes. */
+  /** Canvas's own Undo/Redo availability. Never executes. */
   async actions(sessionRef) {
     if (sessionRef === null) return { state: 'NO_SESSION', worldRef: null, objects: [] };
-    const published = await canvasFor(this.ctx, 'readHistoryActions').readHistoryActions(sessionRef);
+    const published = await (await readyCanvasFor(this.ctx, 'readHistoryActions')).readHistoryActions(sessionRef);
     return { state: published.state, worldRef: published.worldRef,
       objects: (published.objects ?? []).map(object => ({ objectRef: object.objectRef,
         mode: object.mode, applied: object.applied,
-        undo: object.undo.available ?
-          { available: true, reason: null, historyTransactionId: object.undo.historyTransactionId } :
-          { available: false, reason: object.undo.reason, historyTransactionId: null } })) };
+        ...Object.fromEntries(['undo', 'redo'].map(action => [action, object[action].available ?
+          { available: true, reason: null, historyTransactionId: object[action].historyTransactionId } :
+          { available: false, reason: object[action].reason, historyTransactionId: null }])) })) };
   }
   /**
-   * One click = one canvas/v7 Undo of the entry the person clicked. The request is built only
+   * One click = one canvas/v7 Undo or Redo of the entry the person clicked. The request is built only
    * from what Canvas itself published for this Session; Canvas re-validates history head,
    * revisions and the actual world cells, and commits or rolls back the whole transaction.
    */
-  async undo(sessionRef, objectRef, historyTransactionId) {
-    const canvas = canvasFor(this.ctx, 'readHistoryActions');
-    const run = this.undoQueue.then(async () => {
+  undo(sessionRef, objectRef, historyTransactionId) {
+    return this.performHistory('undo', sessionRef, objectRef, historyTransactionId);
+  }
+  redo(sessionRef, objectRef, historyTransactionId) {
+    return this.performHistory('redo', sessionRef, objectRef, historyTransactionId);
+  }
+  async performHistory(action, sessionRef, objectRef, historyTransactionId) {
+    const canvas = await readyCanvasFor(this.ctx, 'readHistoryActions');
+    const operation = action === 'redo' ? 'Redo' : 'Undo';
+    const run = this.historyQueue.then(async () => {
       const published = await canvas.readHistoryActions(sessionRef);
-      if (published.state === 'NO_WORLD') throw rejected('NO_WORLD', 'This Session has no Canvas world binding.');
+      if (published.state === 'NO_WORLD') throw rejected(action, 'NO_WORLD', 'This Session has no Canvas world binding.');
       const object = published.objects.find(row => row.objectRef === objectRef);
-      if (!object) throw rejected('OBJECT_NOT_FOUND', 'Canvas has no such object in this Session world.');
-      const step = object.undo;
-      if (!step.available) throw rejected(step.reason, `Canvas does not offer Undo: ${step.reason}.`);
-      // The clicked row must still be the entry Canvas would undo; never undo a different one.
+      if (!object) throw rejected(action, 'OBJECT_NOT_FOUND', 'Canvas has no such object in this Session world.');
+      const step = object[action];
+      if (!step.available) throw rejected(action, step.reason, `Canvas does not offer ${operation}: ${step.reason}.`);
+      // The clicked row must still be the entry Canvas would move; never act on a different one.
       if (step.historyTransactionId !== historyTransactionId)
-        throw rejected('HISTORY_MOVED', 'The clicked entry is no longer the latest change of this object.');
-      const transactionId = `canvas-panel-undo-${randomUUID()}`;
-      const intent = { surface: 'app/canvas-objects-history', action: 'undo', sessionRef, objectRef,
+        throw rejected(action, 'HISTORY_MOVED', 'The clicked entry is no longer the latest change of this object.');
+      const transactionId = `canvas-panel-${action}-${randomUUID()}`;
+      const intent = { surface: 'app/canvas-objects-history', action, sessionRef, objectRef,
         historyTransactionId };
       const request = { contractVersion: 'canvas/v7', sessionRef, requestId: transactionId,
         worldRef: published.worldRef, objectRef, transactionId, historyTransactionId,
@@ -72,9 +88,9 @@ export class CanvasDisplayService extends TypertRemoteService {
         expectedObjectRevisions: step.expectedObjectRevisions,
         intentDigest: digest(intent), surfaceActionDigest: digest({ ...intent, transactionId }),
         localContext: published.localContext };
-      const response = await canvas.call('Undo', request);
+      const response = await canvas.call(operation, request);
       if (response.error || response.result?.status !== 'VERIFIED')
-        throw new RemoteError('canvas/undo-failed', `Canvas Undo did not verify: ${response.error?.code ?? response.result?.status}.`,
+        throw new RemoteError(`canvas/${action}-failed`, `Canvas ${operation} did not verify: ${response.error?.code ?? response.result?.status}.`,
           { reason: response.error?.code ?? response.result?.status ?? 'UNKNOWN', transactionId,
             mutationState: response.error?.mutationState ?? null,
             // Contracts 2.7.0: the world Canvas needed, as Canvas's own public error named it.
@@ -83,7 +99,7 @@ export class CanvasDisplayService extends TypertRemoteService {
       return { status: response.result.status, transactionId, originTransactionId: historyTransactionId,
         objectRef, view: await canvas.readObjectsHistory(sessionRef) };
     });
-    this.undoQueue = run.catch(() => {});
+    this.historyQueue = run.catch(() => {});
     return run;
   }
 }
