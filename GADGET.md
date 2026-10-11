@@ -1,16 +1,16 @@
-# HanaWorlds Canvas 0.15.1
+# HanaWorlds Canvas 0.16.0
 
 Canvas owns local world selection, registered object footprints and transaction history.
 The single Cordis entry is `src/index.mjs`; the DSH panel is `lib/client.js`.
 
 Contracts is pinned to the formal release
-`git+https://github.com/yzsnstotz/hanaworlds-contracts.git#v2.8.0`,
-commit `5af62be25dcab110fcbb8502183922010f078f04`.
+`git+https://github.com/yzsnstotz/hanaworlds-contracts.git#v2.12.0`,
+commit `33c34372fd5092a83b6f3cc81c086470fa76d794`.
 Run `npm ci`, `npm run build`, `npm run verify:contracts`, `npm run typecheck`, and `npm test`.
 The test command runs every retained test file, including Gateway/Remote, host storage,
 selection, per-cell apply/history and region rollback/recovery.
 
-Canvas provides `canvas/v7` minor 1 and `canvas-region/v3` minor 1.
+Canvas provides `canvas/v7` minor 1 and `canvas-region/v3` minor 2.
 It consumes `world-adapter/v8` and `world-adapter-region/v3` at minimum minor 0
 with their published write-path capability tokens. Service keys remain
 `hanaworldsCanvasV5`, `hanaworldsCanvasRegionV1`, `hanaworldsWorldAdapterV6`,
@@ -81,3 +81,23 @@ origin/revisions/context and refuses a stale clicked row before writing.
 `npm run test:undo` runs cell, region, history recovery, StateProfile and shipped
 client/Gateway regressions with explicit isolated contract peers. They are not
 real-world GUI acceptance evidence.
+
+D-21=A adds `UndoScopedRegionCommit` on canvas-region/v3 minor 2, requiring
+`canvas-region/v3:confirmed-scope-undo`. It derives confirmed cells exclusively from
+original successful operations and actual durable before/verified-after snapshots.
+The retained origin request, transaction/world/context and both content digests bind
+that scope across reopen. Missing/forged evidence, stale identity and in-scope changes
+refuse before writing. The target combines confirmed before with actual outside current.
+Full readback summaries remain truthful; source StateProfile, partition, lighting,
+guards and expected-current CAS remain authoritative. The old UndoRegionCommit and
+its full-block validator remain available unchanged.
+
+The formal objects/history panel offers scoped region Undo independently of Redo;
+region Redo is explicitly unavailable. Existing history without trusted scope evidence
+is refused by name, never migrated or guessed. Uncertain post-dispatch transport,
+binding and lighting answers stay UNKNOWN until scoped rollback/readback proves the
+same attempt's state. Exact initial and rollback source failures remain separately
+available in pending recovery; a rollback NONE never proves whole-transaction NONE.
+Reopened recovery preserves outside current and refuses unproved in-scope values.
+SOURCE/FIXTURE tests, including residual-eight, are distinct from
+REAL_ENGINE_WORLD_WRITE, REAL_HOST_WORLD_UI and I-K3-REGION-01. None imply owner ACCEPTED.

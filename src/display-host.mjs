@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { TypertRemoteService, Remote, RemoteError } from '@deepseek-ai/dsh-typert-protocol';
+import { checkProtocolCompatibility, protocolRequirement } from 'hanaworlds-contracts';
 import { displayHostContribution } from './display-remote.mjs';
 
 const digest = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -88,15 +89,25 @@ export class CanvasDisplayService extends TypertRemoteService {
         expectedObjectRevisions: step.expectedObjectRevisions,
         intentDigest: digest(intent), surfaceActionDigest: digest({ ...intent, transactionId }),
         localContext: published.localContext };
-      const response = await canvas.call(operation, request);
-      if (response.error || response.result?.status !== 'VERIFIED')
-        throw new RemoteError(`canvas/${action}-failed`, `Canvas ${operation} did not verify: ${response.error?.code ?? response.result?.status}.`,
-          { reason: response.error?.code ?? response.result?.status ?? 'UNKNOWN', transactionId,
+      let response;
+      if (step.operation === 'UndoScopedRegionCommit') {
+        const region=this.ctx.get('hanaworldsCanvasRegionV1');
+        if(typeof region?.call !== 'function') throw rejected(action,'REGION_SCOPE_EVIDENCE_UNAVAILABLE','Canvas scoped region undo is unavailable.');
+        checkProtocolCompatibility(region.protocolHandshake,[protocolRequirement('canvas-region/v3',['canvas-region/v3:confirmed-scope-undo'],2)]);
+        response=await region.call('UndoScopedRegionCommit',{contractVersion:'canvas-region/v3',sessionRef,
+          requestId:transactionId,worldRef:published.worldRef,originTransactionId:historyTransactionId,
+          undoTransactionId:transactionId,expectedHistoryRevision:step.expectedHistoryRevision,
+          expectedScopeDigest:step.expectedScopeDigest,localContext:published.localContext});
+      } else response = await canvas.call(operation, request);
+      const outcome=response.result?.outcome ?? response.result;
+      if (response.error || outcome?.status !== 'VERIFIED')
+        throw new RemoteError(`canvas/${action}-failed`, `Canvas ${operation} did not verify: ${response.error?.code ?? outcome?.status}.`,
+          { reason: response.error?.code ?? outcome?.status ?? 'UNKNOWN', transactionId,
             mutationState: response.error?.mutationState ?? null,
             // Contracts 2.7.0: the world Canvas needed, as Canvas's own public error named it.
             worldRef: response.error?.worldRef ?? null });
       // Written state is shown only from Canvas's own public read after the commit.
-      return { status: response.result.status, transactionId, originTransactionId: historyTransactionId,
+      return { status: outcome.status, transactionId, originTransactionId: historyTransactionId,
         objectRef, view: await canvas.readObjectsHistory(sessionRef) };
     });
     this.historyQueue = run.catch(() => {});

@@ -21,7 +21,7 @@ test('/supply page: no Safety supply, and every write operation names its uncove
     assert.equal(data.engine.bound, true);
     assert.equal(data.engine.declaration, null);
     assert.deepEqual(data.engine.operations.map(row => row.operation), ['ApplyRecoverableCommit',
-      'Undo', 'Redo', 'ApplyRegionCommit', 'UndoRegionCommit', 'RecoverRegion']);
+      'Undo', 'Redo', 'ApplyRegionCommit', 'UndoRegionCommit', 'UndoScopedRegionCommit', 'RecoverRegion']);
     for (const row of data.engine.operations) {
       assert.equal(row.status, 'CAPABILITY_UNAVAILABLE', row.operation);
       assert.deepEqual(row.unmet.map(u => `${u.guard}@${u.stage}`),

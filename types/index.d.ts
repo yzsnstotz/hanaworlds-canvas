@@ -102,13 +102,15 @@ export interface RecoveryRow {
   /** NONE is proved by this transaction's public Abort receipt; an uncertain reply stays UNKNOWN. */
   mutationState: import('hanaworlds-contracts').MutationState;
   abortConfirmation: { transactionId: string; status: 'ABORTED_PREPARED'; mutationState: 'NONE' } | null;
+  restoreFailure?: { error: import('hanaworlds-contracts').Error; guardRefusal: import('hanaworlds-contracts').GuardRefusal | null } | null;
+  sourceValidationFailure?: { error: import('hanaworlds-contracts').Error; guardRefusal: import('hanaworlds-contracts').GuardRefusal | null } | null;
   originalFailure: { error: import('hanaworlds-contracts').Error;
     guardRefusal: import('hanaworlds-contracts').GuardRefusal | null } | null;
   /** Failure of the later exact query, Abort or readback, distinct from originalFailure. */
   queryFailure: string | null;
 }
 export type EngineGuardOperation = 'ApplyRecoverableCommit' | 'Undo' | 'Redo' |
-  'ApplyRegionCommit' | 'UndoRegionCommit' | 'RecoverRegion';
+  'ApplyRegionCommit' | 'UndoRegionCommit' | 'UndoScopedRegionCommit' | 'RecoverRegion';
 type GuardRequirement = { guard: import('hanaworlds-contracts').EngineGuard;
   stage: import('hanaworlds-contracts').EngineGuardStage };
 /** Contracts engine-guards/v1 guard x stage requirements of each Canvas write operation. */
@@ -134,7 +136,7 @@ export class CanvasRegionV1 {
     request: unknown): Promise<OperationMap['canvas-region/v3'][N]['response']>;
   recoverPending(): Promise<any>;
 }
-/** Region-only canvas-region major 3/minor 1; not the per-cell declaration. */
+/** Region-only canvas-region major 3/minor 2; not the per-cell declaration. */
 export const canvasProtocolHandshake: ProtocolHandshake;
 export const REGION_WIRE: 'canvas-region/v3';
 export const REGION_ADAPTER: 'world-adapter-region/v3';

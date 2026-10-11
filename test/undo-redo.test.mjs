@@ -78,7 +78,7 @@ test('page actions undo and redo a cell entry through public Canvas transactions
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
-test('every offered Undo has a same-entry Redo; region and stale entries are named and refused without writing', async () => {
+test('cell Undo supports Redo; region offers scoped Undo with explicit unsupported Redo and stale cells refuse', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'canvas-undo-region-'));
   try {
     await createUndoExample(directory);
@@ -122,7 +122,7 @@ test('every offered Undo has a same-entry Redo; region and stale entries are nam
     assert.equal((await host.perform(cellRef, 'redo')).status, 'VERIFIED');
 
     // A region entry in the same isolated world (made here, never in the example): canvas-region/v3
-    // has no Redo, so Canvas names its Undo instead of offering a move it could not reverse.
+    // has no Redo; scoped Undo is offered independently.
     const region = new CanvasRegionV1(host.canvas, host.world.regionAdapter);
     const localContext = host.canvas.store.snapshot.sessions['undo-fixture-session'].localContext;
     const origin = [20, 2, 20], size = [2, 1, 2];
@@ -138,10 +138,10 @@ test('every offered Undo has a same-entry Redo; region and stale entries are nam
     view = await host.readView();
     const regionEntry = view.entries.find(entry => entry.mode === 'REGION');
     assert.deepEqual([regionEntry.undo, regionEntry.redo],
-      [{ available: false, reason: 'REGION_UNDO_HAS_NO_REDO' }, { available: false, reason: 'NOTHING_TO_REDO' }]);
+      [{ available: true }, { available: false, reason: 'REGION_REDO_NOT_IN_PROTOCOL' }]);
     before = writes(host);
-    assert.deepEqual(await host.perform(regionEntry.objectRef, 'undo'), { error: { code: 'REGION_UNDO_HAS_NO_REDO' } });
-    assert.equal(writes(host), before);
+    assert.equal((await host.perform(regionEntry.objectRef, 'undo')).status, 'VERIFIED');
+    assert.ok(writes(host) > before);
     // The cell entry is no longer the latest world change; Canvas says so for both moves.
     assert.deepEqual(view.entries.find(entry => entry.objectRef === cellRef).undo, { available: false, reason: 'WORLD_CHANGED_SINCE' });
     assert.deepEqual(await host.perform('missing-object', 'undo'), { error: { code: 'OBJECT_NOT_FOUND' } });

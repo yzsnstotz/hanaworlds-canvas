@@ -13,7 +13,8 @@ import { canonicalJSON, checkProtocolCompatibility, contractProtocols, digestVal
   summarizeRegionStates, unmetEngineGuards,
   validateBoundResponse, validateDigestBinding, validateRegionCommit, validateRegionRead,
   validateRegionSnapshotContent, validateRegionUndo, validateRegionWrite, validateRequest,
-  validateResponse, validateType, validateRegionCommitRequest, checkConfirmedRegionPlacementCommit } from 'hanaworlds-contracts';
+  validateResponse, validateType, deriveConfirmedRegionUndoScope, validateScopedRegionUndoRequest,
+  composeScopedRegionUndoTarget, composeScopedRegionUndoRecoveryTarget, validateScopedRegionUndo, validateRegionCommitRequest, checkConfirmedRegionPlacementCommit } from 'hanaworlds-contracts';
 
 /*
  * canvas-region/v3 over the public Contracts 1.x region v2 shapes.
@@ -75,6 +76,7 @@ export const ENGINE_GUARD_REQUIREMENTS = Object.freeze(Object.fromEntries(Object
   Redo: [...needs(['APPLY_HISTORY'], ALL), ...needs(['RESTORE'], ROLLBACK)],
   ApplyRegionCommit: [...needs(['REGION_APPLY'], ALL), ...needs(['REGION_RESTORE'], ROLLBACK)],
   UndoRegionCommit: needs(['REGION_RESTORE'], ALL),
+  UndoScopedRegionCommit: needs(['REGION_RESTORE'], ALL),
   RecoverRegion: needs(['REGION_RESTORE'], ROLLBACK),
 }).map(([operation, rows]) => [operation, Object.freeze(rows.map(row => Object.freeze(row)))])));
 /** Uncovered guard x stage requirements of `operation` as Contracts GUARD_UNAVAILABLE refusals. */
@@ -109,7 +111,7 @@ const inFlight = (state, worldRef) => Object.values(state.pending)
 
 export const canvasProtocolHandshake = Object.freeze(validateType('ProtocolHandshake', {
   profileVersion: 'protocol-handshake/v1', component: 'hanaworlds-canvas',
-  protocols: [{ protocol: 'canvas-region', major: 3, minor: 1 }],
+  protocols: [{ protocol: 'canvas-region', major: 3, minor: 2 }],
   capabilities: [...CANVAS_REGION_CAPABILITIES],
   provenance: { packageName: 'hanaworlds-canvas', packageVersion: PACKAGE_VERSION,
     sourceRevision: null, artifactDigest: null } }));
@@ -119,9 +121,9 @@ export function regionToolDescription(capabilities = null) {
   const geometry = capabilities && requireVoxelGrid(VOXEL_GRID, capabilities.worldGeometry);
   return {
   tool: 'canvas.region',
-  operations: ['ApplyRegionCommit', 'UndoRegionCommit'],
+  operations: ['ApplyRegionCommit', 'UndoRegionCommit', 'UndoScopedRegionCommit'],
   purpose: 'Commit one compiled region (fill and explicit empty-material carve) across world-source partitions ' +
-    'as one logical transaction, and undo that whole region in one step.',
+    'as one logical transaction; scoped undo restores only committed confirmed cells and preserves current outside state. Region Redo is unavailable.',
   typicalScale: 'Terrain shaping and large fills or carves spanning world-source partitions' +
     (geometry ? ` (${geometry.partition.edge.join('x')} cells per partition). ` :
       '; select a world to read its partition size. ') +
@@ -358,21 +360,49 @@ export class CanvasRegionV1 {
     });
     return { worldRef: read.worldRef, partition: read.partition, chunks };
   }
-  async #write(body, transactionId, purpose, writes, suffix) {
+  async #write(body, transactionId, purpose, writes, suffix, scoped = false) {
     const request = { contractVersion: REGION_ADAPTER, sessionRef: body.sessionRef,
       requestId: `${body.requestId}:${suffix}`, worldRef: body.worldRef, transactionId,
       purpose, writes, partition: (await this.#geometry(body)).partition, localContext: body.localContext };
-    const written = validateRegionWrite(request, await this.regionAdapter.call('WriteRegion', request));
-    // A refused write keeps the Adapter's public Error and its GuardRefusal (if any) as the cause.
+    let written;
+    // Once dispatched, transport/decoding/binding failures cannot prove NONE. The exact
+    // bound source error branch below is the only authority for a source zero-write refusal.
+    const uncertain = cause => {
+      if (!scoped) return cause;
+      const error=fail('RECOVERY_PENDING','TRANSPORT_OUTCOME_UNKNOWN','restore');
+      error.publicError.mutationState='UNKNOWN';error.publicError.transactionRef=transactionId;
+      error.publicError.causeCode=cause.publicError?.code??null;
+      error.sourceValidationFailure=cause.sourceFailure??(cause.publicError?failureDetail(cause):null);
+      error.scopedWriteAccepted=true;return error;
+    };
+    try {
+      written = validateRegionWrite(request, await this.regionAdapter.call('WriteRegion', request));
+      const sourceError = written.response.error;
+      if (scoped && sourceError &&
+          ((sourceError.transactionRef !== null && sourceError.transactionRef !== transactionId) ||
+           (sourceError.worldRef !== undefined && sourceError.worldRef !== body.worldRef))) {
+        const cause = fail('TRANSACTION_CONFLICT','PAYLOAD_CHANGED','restore');
+        cause.sourceFailure = failureDetail({publicError:sourceError,
+          guardRefusal:written.response.guardRefusal??null});
+        throw cause;
+      }
+    }
+    catch (cause) { throw uncertain(cause); }
     if (written.response.error) throw Object.assign(new Error(written.response.error.code),
       { publicError: written.response.error, guardRefusal: written.response.guardRefusal ?? null });
-    if (written.response.result.postWriteLighting !== (await this.#geometry(body)).postWriteLighting)
-      throw fail('CAPABILITY_GAP', 'GEOMETRY_PROFILE_UNSUPPORTED');
+    try {
+      if (written.response.result.postWriteLighting !== (await this.#geometry(body)).postWriteLighting)
+        throw fail('CAPABILITY_GAP','GEOMETRY_PROFILE_UNSUPPORTED');
+    } catch (cause) { throw uncertain(cause); }
     return written;
   }
   async #geometry(body) {
     const connection = await this.#current(body);
     return requireVoxelGrid(VOXEL_GRID, connection.capabilities.worldGeometry);
+  }
+  #content(worldRef, read) {
+    return validateType('RegionSnapshotContent', {profileVersion: 'region-snapshot-content/v2',
+      worldRef, partition: read.partition, chunks: read.chunks.map(c => ({chunkPos:c.chunkPos, state:c.state, stateDigest:c.stateDigest}))});
   }
   #summary(worldRef, read) {
     return summarizeRegionStates(worldRef, read.partition, read.chunks.map(c => ({ chunkPos: c.chunkPos,
@@ -453,7 +483,7 @@ export class CanvasRegionV1 {
         throw applyProgressFailure(body, written, before,
           'READBACK_MISMATCH', 'READBACK_ERROR', 'readback');
       return await this.#record(body, { beforeSummary, expectedAfterSummary, actualSummary,
-        snapshot: snapshot.ref, lighting, positions, box, layout, replayKey, requestHash });
+        snapshot: snapshot.ref, lighting, positions, box, layout, replayKey, requestHash, beforeContent: content, after });
     } catch (cause) {
       // An engine guard that refused the APPLY write without writing anything (mutationState
       // NONE) is forwarded unchanged with its error once the region reads back unchanged; the
@@ -494,8 +524,14 @@ export class CanvasRegionV1 {
       beforeImageDigest: D('region-summary', beforeSummary),
       expectedAfterReadbackDigest: D('region-summary', actualSummary),
       receiptDigest: sha(canonicalJSON(result)), historyRevision, status: 'VERIFIED' });
+    const afterContent = this.#content(body.worldRef, facts.after);
+    const afterSnapshot = await encodeSnapshot(afterContent, actualSummary);
+    await this.#snapshots().write(afterSnapshot);
+    const confirmedUndoScope = deriveConfirmedRegionUndoScope({request: body, result, before: facts.beforeContent, after: afterContent});
     await this.store.commit(state => {
       state.transactions[body.transactionId] = { kind: 'REGION', result, history, box, layout,
+        originRequest: body, verifiedAfterSnapshot: afterSnapshot.ref, confirmedUndoScope,
+        confirmedUndoScopeDigest: D('confirmed-region-undo-scope', confirmedUndoScope),
         displayMetadata: { committedAt: new Date().toISOString(), mode: 'REGION',
           affectedCells: positions.length },
         objectRef, worldRef: body.worldRef, operations: body.operations, worldRevision,
@@ -591,6 +627,168 @@ export class CanvasRegionV1 {
       delete state.pending[body.transactionId];
     });
     return response;
+  }
+
+  async #originEvidence(origin) {
+    if (!origin.originRequest || !origin.verifiedAfterSnapshot || !origin.confirmedUndoScope)
+      throw fail('CAPABILITY_UNAVAILABLE', 'REQUIRED_FACT_UNKNOWN');
+    const before = await decodeSnapshot(await this.#snapshots().read(origin.result.snapshot),
+      origin.result.snapshot, origin.result.beforeSummary);
+    const after = await decodeSnapshot(await this.#snapshots().read(origin.verifiedAfterSnapshot),
+      origin.verifiedAfterSnapshot, origin.result.actualSummary);
+    const evidence = {request: origin.originRequest, result: origin.result, before, after};
+    const scope = deriveConfirmedRegionUndoScope(evidence);
+    if (!same(origin.operations,evidence.request.operations) || origin.worldRef !== evidence.request.worldRef)
+      throw fail('UNDO_CONFLICT','PAYLOAD_CHANGED');
+    if (!same(scope, origin.confirmedUndoScope) || D('confirmed-region-undo-scope',scope) !== origin.confirmedUndoScopeDigest)
+      throw fail('UNDO_CONFLICT','PAYLOAD_CHANGED');
+    return evidence;
+  }
+  async #scopedRestore(body, target, baseline, origin, suffix, guardOperation = 'UndoScopedRegionCommit') {
+    const connection = await this.#guarded(body,guardOperation);
+    const geometry = requireVoxelGrid(VOXEL_GRID,connection.capabilities.worldGeometry);
+    if(target.chunks.some(c=>!same(c.state.stateProfile,connection.capabilities.stateProfile)) ||
+      baseline.chunks.some(c=>!same(c.state.stateProfile,connection.capabilities.stateProfile)))
+      throw fail('CAPABILITY_GAP','GEOMETRY_PROFILE_UNSUPPORTED');
+    if (!same(target.partition,geometry.partition)) throw fail('CAPABILITY_GAP','GEOMETRY_PROFILE_UNSUPPORTED');
+    const writes = target.chunks.map((c,i)=>({chunkPos:c.chunkPos,
+      expectedCurrentDigest:baseline.chunks[i].stateDigest,ops:null,state:c.state}));
+    const selected = geometry.postWriteLighting === 'NONE' ? writes.filter((w,i)=>
+      w.expectedCurrentDigest !== target.chunks[i].stateDigest) : writes;
+    let lighting = null, accepted = false;
+    try {
+      if (selected.length) {
+        const written = await this.#write(body,body.undoTransactionId,'RESTORE',selected,suffix,true);
+        accepted = written.response.result.chunks.some(c=>c.status !== 'NOT_WRITTEN');
+        lighting = written.response.result.lighting;
+        if (!written.allWritten) {
+          const selectedBaseline = {chunks:baseline.chunks.filter(c=>selected.some(w=>same(w.chunkPos,c.chunkPos)))};
+          throw applyProgressFailure({...body,transactionId:body.undoTransactionId},written,selectedBaseline,'RESTORE_FAILED','RESTORE_ERROR','restore');
+        }
+      }
+      const after = await this.#read(body,origin.box,'READBACK',`${suffix}-readback`,origin.layout);
+      const actualContent = this.#content(body.worldRef,after);
+      if (!same(actualContent,target)) {
+        const e = fail('READBACK_MISMATCH','READBACK_ERROR','readback');
+        e.publicError.mutationState = accepted ? 'UNKNOWN' : 'NONE';
+        e.publicError.transactionRef = body.undoTransactionId;
+        throw e;
+      }
+      return {actualContent,lighting};
+    } catch (e) { if (accepted) e.scopedWriteAccepted = true; throw e; }
+  }
+  async #scopedResponse(body,origin,evidence,scope,preUndoContent,preRestoreContent,actualContent,status,lighting,undoFailure=null) {
+    const outcome = await this.#undoResult(body,origin,status,
+      summarizeRegionStates(body.worldRef,preUndoContent.partition,preUndoContent.chunks),
+      summarizeRegionStates(body.worldRef,actualContent.partition,actualContent.chunks),
+      rev(status === 'VERIFIED' ? 'history' : 'history-none'),lighting);
+    const response = {contractVersion:REGION_WIRE,requestId:body.requestId,
+      result:{outcome,scope,preUndoContent,preRestoreContent,actualContent},error:null,
+      guardRefusal:null,applyFailure:null,undoFailure};
+    return validateScopedRegionUndo(body,response,evidence);
+  }
+  async #finishScoped(body,origin,response,replayKey,requestHash) {
+    const {outcome,scope} = response.result;
+    const verified = outcome.status === 'VERIFIED';
+    const history = verified ? validateType('HistoryEntry',{transactionId:body.undoTransactionId,
+      originTransactionId:body.originTransactionId,affectedObjectRefs:[origin.objectRef],
+      operationDigest:body.expectedScopeDigest,beforeImageDigest:D('region-summary',outcome.preUndoSummary),
+      expectedAfterReadbackDigest:D('region-summary',outcome.actualSummary),receiptDigest:sha(canonicalJSON(response.result)),
+      historyRevision:outcome.historyRevision,status:'VERIFIED'}) : null;
+    await this.store.commit(next=>{
+      if (verified && next.history[origin.objectRef]?.at(-1)?.transactionId !== body.originTransactionId)
+        throw fail('TRANSACTION_CONFLICT');
+      next.transactions[body.undoTransactionId] = {kind:'REGION_UNDO',direction:'UNDO',result:outcome,
+        scopedResult:response.result,confirmedUndoScope:scope,originTransactionId:body.originTransactionId,
+        objectRef:origin.objectRef,worldRef:body.worldRef,undoFailure:response.undoFailure,
+        sourceValidationFailure:next.pending[body.undoTransactionId]?.sourceValidationFailure??null,
+        receipt:{status:outcome.status,localContext:body.localContext},...(verified?{history,
+          displayMetadata:{committedAt:new Date().toISOString(),mode:'REGION',affectedCells:scope.positions.length}}:{})};
+      if (verified) {
+        next.history[origin.objectRef].push(history);
+        next.objects[body.worldRef][origin.objectRef].objectRevision=rev('object');
+        next.footprints[body.worldRef][origin.objectRef].positions=[];
+        next.footprints[body.worldRef][origin.objectRef].footprintRevision=rev('footprint');
+        next.worldRevisions[body.worldRef]=rev('world');next.registryRevisions[body.worldRef]=rev('registry');
+      }
+      next.replay[replayKey]={digest:requestHash,response};delete next.pending[body.undoTransactionId];
+    });
+    return response;
+  }
+  async #scopedRollback(body,origin,evidence,scope,preUndoContent,undoFailure,replayKey,requestHash) {
+    const current=await this.#read(body,origin.box,'INSPECT','scoped-rollback-current',origin.layout);
+    const preRestoreContent=this.#content(body.worldRef,current);
+    const target=composeScopedRegionUndoRecoveryTarget(evidence,preUndoContent,preRestoreContent);
+    const restored=await this.#scopedRestore(body,target,current,origin,'scoped-rollback','RecoverRegion');
+    const response=await this.#scopedResponse(body,origin,evidence,scope,preUndoContent,preRestoreContent,
+      restored.actualContent,'ROLLED_BACK',restored.lighting,undoFailure);
+    return this.#finishScoped(body,origin,response,replayKey,requestHash);
+  }
+  async #scopedUndo(body) {
+    const {replayKey,requestHash,prior}=this.#replay(body,'UndoScopedRegionCommit');
+    this.#adapterCompatible();
+    await this.#guarded(body,'UndoScopedRegionCommit');
+    const state=this.store.snapshot,origin=state.transactions[body.originTransactionId];
+    if (origin?.kind !== 'REGION' || origin.result.status !== 'VERIFIED') throw fail('UNDO_CONFLICT','PAYLOAD_CHANGED');
+    const evidence=await this.#originEvidence(origin),scope=deriveConfirmedRegionUndoScope(evidence);
+    validateScopedRegionUndoRequest(body,evidence);
+    if (prior) return prior.response;
+    await this.#guarded({...body,operations:origin.operations},'UndoScopedRegionCommit');
+    if (state.history[origin.objectRef]?.at(-1)?.transactionId !== body.originTransactionId)
+      throw fail('UNDO_CONFLICT');
+    if (this.#footprintConflicts(body.worldRef,scope.positions,origin.objectRef).length)
+      throw fail('OTHER_OBJECTS_AFFECTED','SCOPE_DENIED');
+    if (state.pending[body.undoTransactionId] || state.transactions[body.undoTransactionId] || inFlight(state,body.worldRef))
+      throw fail('TRANSACTION_CONFLICT');
+    const current=await this.#read(body,origin.box,'INSPECT','before-scoped-undo',origin.layout);
+    const preUndoContent=this.#content(body.worldRef,current);
+    const target=composeScopedRegionUndoTarget(evidence,preUndoContent);
+    const declared=await this.#current(body);
+    if(current.chunks.some(c=>!same(c.state.stateProfile,declared.capabilities.stateProfile)))
+      throw fail('CAPABILITY_GAP','GEOMETRY_PROFILE_UNSUPPORTED');
+    const preUndoSummary=this.#summary(body.worldRef,current);
+    const snapshot=await encodeSnapshot(preUndoContent,preUndoSummary);await this.#snapshots().write(snapshot);
+    const worldRevision=state.worldRevisions[body.worldRef];
+    await this.store.commit(next=>{
+      if (next.pending[body.undoTransactionId] || next.transactions[body.undoTransactionId] ||
+        inFlight(next,body.worldRef) || next.worldRevisions[body.worldRef] !== worldRevision ||
+        next.history[origin.objectRef]?.at(-1)?.transactionId !== body.originTransactionId) throw fail('TRANSACTION_CONFLICT');
+      next.pending[body.undoTransactionId]={kind:'REGION',direction:'SCOPED_UNDO',body,
+        originTransactionId:body.originTransactionId,snapshot:snapshot.ref,beforeSummary:preUndoSummary,
+        confirmedUndoScope:scope,confirmedUndoScopeDigest:body.expectedScopeDigest,
+        box:origin.box,layout:origin.layout,phase:'RESERVED'};
+    });
+    let restored;
+    try {
+      await this.#pendingPhase(body.undoTransactionId,'WRITING');
+      restored=await this.#scopedRestore(body,target,current,origin,'scoped-undo');
+    } catch (cause) {
+      const undoFailure=failureDetail(cause);
+      // A bound source CAS/guard refusal with NONE is authoritative: no rollback writes.
+      if (cause.publicError?.mutationState === 'NONE' && !cause.scopedWriteAccepted) {
+        const response=validateResponse(REGION_WIRE,'UndoScopedRegionCommit',{contractVersion:REGION_WIRE,
+          requestId:body.requestId,result:null,error:cause.publicError,guardRefusal:cause.guardRefusal??null,
+          applyFailure:null,undoFailure});
+        await this.store.commit(next=>{next.replay[replayKey]={digest:requestHash,response};delete next.pending[body.undoTransactionId];});
+        return response;
+      }
+      await this.#pendingPhase(body.undoTransactionId,'RESTORE_PENDING',{undoFailure,
+        causeCode:undoFailure.error.code,sourceValidationFailure:cause.sourceValidationFailure??null,receiptStatus:'RECOVERY_PENDING'});
+      try { return await this.#scopedRollback(body,origin,evidence,scope,preUndoContent,undoFailure,replayKey,requestHash); }
+      catch (restoreError) {
+        await this.#pendingPhase(body.undoTransactionId,'RESTORE_PENDING',{restoreFailure:failureDetail(restoreError),
+          restoreCode:restoreError.publicError?.code??'RECOVERY_PENDING',guardRefusal:restoreError.guardRefusal??null});
+        if (restoreError.publicError) { restoreError.undoFailure=undoFailure; throw restoreError; }
+        const pending=fail('RECOVERY_PENDING','TRANSPORT_OUTCOME_UNKNOWN','restore');
+        pending.publicError.mutationState='UNKNOWN';pending.publicError.transactionRef=body.undoTransactionId;
+        pending.publicError.causeCode=undoFailure.error.code;pending.undoFailure=undoFailure;
+        // The exact failed rollback source result remains durable, separate from the original failure.
+        throw pending;
+      }
+    }
+    const response=await this.#scopedResponse(body,origin,evidence,scope,preUndoContent,preUndoContent,
+      restored.actualContent,'VERIFIED',restored.lighting);
+    return this.#finishScoped(body,origin,response,replayKey,requestHash);
   }
 
   async #undo(body) {
@@ -746,13 +944,23 @@ export class CanvasRegionV1 {
     const outcomes = [];
     for (const [transactionId, row] of Object.entries(this.store.snapshot.pending)) {
       if (row.kind !== 'REGION') continue;
-      const body = { ...row.body, requestId: `${row.body.requestId}:recover` };
+      const body = row.direction === 'SCOPED_UNDO' ? {...row.body} : { ...row.body, requestId: `${row.body.requestId}:recover` };
       try {
         // Recovery restores the snapshot (a rollback): REGION_RESTORE body clearance + protection.
         this.#adapterCompatible();
         await this.#guarded(body, 'RecoverRegion');
         const content = await decodeSnapshot(await this.#snapshots().read(row.snapshot),
           row.snapshot, row.beforeSummary);
+        if(row.direction==='SCOPED_UNDO') {
+          const origin=this.store.snapshot.transactions[row.originTransactionId];
+          const evidence=await this.#originEvidence(origin);
+          validateScopedRegionUndoRequest(body,evidence);
+          const scope=deriveConfirmedRegionUndoScope(evidence);
+          if(!same(scope,row.confirmedUndoScope) || D('confirmed-region-undo-scope',scope)!==row.confirmedUndoScopeDigest) throw fail('UNDO_CONFLICT','PAYLOAD_CHANGED');
+          const {replayKey,requestHash}=this.#replay(row.body,'UndoScopedRegionCommit');
+          await this.#scopedRollback(body,origin,evidence,scope,content,row.undoFailure ?? failureDetail({publicError:{code:'RECOVERY_PENDING',phase:'restore',retryability:'SAME_TRANSACTION_QUERY',mutationState:'UNKNOWN',transactionRef:transactionId,causeCode:null,reason:'TRANSPORT_OUTCOME_UNKNOWN'}}),replayKey,requestHash);
+          outcomes.push({transactionId,status:'ROLLED_BACK'});continue;
+        }
         await this.#restore(body, transactionId, content, row.beforeSummary, row.box, 'recover');
         await this.store.commit(state => {
           state.transactions[transactionId] = { kind: row.direction === 'APPLY' ? 'REGION' :
@@ -773,18 +981,20 @@ export class CanvasRegionV1 {
     let body;
     try {
       if (operation === 'ApplyRegionCommit') body = validateRegionCommitRequest(raw);
-      else if (operation === 'UndoRegionCommit') body = validateRequest(REGION_WIRE, 'UndoRegionCommit', raw);
+      else if (operation === 'UndoRegionCommit' || operation === 'UndoScopedRegionCommit') body = validateRequest(REGION_WIRE, operation, raw);
       else throw fail('UNSUPPORTED_OPERATION', 'INVALID_SHAPE', 'decode');
       await this.canvas.ready;
       if (!this.store || this.store.unavailable)
         throw fail('CAPABILITY_UNAVAILABLE', 'REQUIRED_FACT_UNKNOWN');
-      return operation === 'ApplyRegionCommit' ? await this.#commit(body) : await this.#undo(body);
+      return operation === 'ApplyRegionCommit' ? await this.#commit(body) :
+        operation === 'UndoScopedRegionCommit' ? await this.#scopedUndo(body) : await this.#undo(body);
     } catch (error) {
       const failure = error.publicError ?? publicError(error);
       // Contracts 2.7.0: only an admitted (decoded) request names its target world.
       return { contractVersion: REGION_WIRE, requestId: (body ?? raw)?.requestId ?? 'invalid-request',
         result: null, error: body ? withTargetWorld(failure, body, trustedSessionWorld(this.store, body)) : failure,
-        guardRefusal: error.guardRefusal ?? null, applyFailure: null };
+        guardRefusal: error.guardRefusal ?? null, applyFailure: null,
+        ...(operation === 'UndoScopedRegionCommit' ? {undoFailure:error.undoFailure ?? null} : {}) };
     }
   }
 }

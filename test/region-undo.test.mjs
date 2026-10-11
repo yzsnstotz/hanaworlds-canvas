@@ -671,7 +671,7 @@ test('protocol major + capabilities decide compatibility; patch and provenance d
         'PROTOCOL_COMPATIBLE');
       assert.throws(() => checkProtocolCompatibility(canvasProtocolHandshake,
         [protocolRequirement('canvas-region/v2')]), e => e.code === 'UNSUPPORTED_VERSION');
-      assert.equal(canvas.status().version, '0.15.1');
+      assert.equal(canvas.status().version, '0.16.0');
     } finally { await rm(directory, { recursive: true, force: true }); }
   });
 
@@ -688,7 +688,7 @@ test('host provides the region port, its handshake and tool description beside c
       await canvas.ready;
       const port = ports.get('hanaworldsCanvasRegionV1');
       const description = await port.describe();
-      assert.deepEqual(description.operations, ['ApplyRegionCommit', 'UndoRegionCommit']);
+      assert.deepEqual(description.operations, ['ApplyRegionCommit', 'UndoRegionCommit', 'UndoScopedRegionCommit']);
       assert.equal(description.worldSource.status, 'UNBOUND');
       assert.doesNotMatch(JSON.stringify(description), /mapblocks|16x16x16/);
       assert.equal(port.protocolHandshake.protocols[0].protocol, 'canvas-region');
@@ -1286,21 +1286,21 @@ test('D-21=A restores all eight confirmed cells and preserves edits in eight uns
     for (let z = 0; z < 4; z++) for (let x = 2; x < 4; x++)
       world.nodes.set(k([x, 0, z]), { materialRef: 'mcl_core:gold_block', orientation: 0, extra: sign });
     ({ canvas, region } = await boot(directory, world));
-    const response = await region.call('UndoRegionCommit', undo(localContext, applied.result.historyRevision));
+    const response = await region.call('UndoScopedRegionCommit', { ...undo(localContext, applied.result.historyRevision), expectedScopeDigest: canvas.store.snapshot.transactions['region-tx-1'].confirmedUndoScopeDigest });
     const residualBeforeAssertion = Array.from({ length: 8 }, (_, i) => [i % 2, 0, Math.floor(i / 2)])
       .filter(position => world.get(position).materialRef !== 'air').length;
     t.diagnostic(`confirmed cells remaining after Undo response: ${residualBeforeAssertion}`);
     assert.equal(response.error, null, JSON.stringify(response.error));
-    assert.equal(response.result.status, 'VERIFIED');
+    assert.equal(response.result.outcome.status, 'VERIFIED');
     let residual = 0;
     for (let z = 0; z < 4; z++) for (let x = 0; x < 4; x++) {
       const cell = world.get([x, 0, z]);
       if (x < 2) {
         if (cell.materialRef !== 'air') residual++;
-      } else assert.deepEqual(cell, { materialRef: 'mcl_core:gold_block', orientation: 0, extra: sign });
+      } else assert.equal(canonicalJSON(cell), canonicalJSON({ materialRef: 'mcl_core:gold_block', orientation: 0, extra: sign }));
     }
     assert.equal(residual, 0, 'all eight confirmed cells must be restored');
-    assert.deepEqual(await region.call('UndoRegionCommit', undo(localContext, applied.result.historyRevision)), response);
+    assert.deepEqual(await region.call('UndoScopedRegionCommit', { ...undo(localContext, applied.result.historyRevision), expectedScopeDigest: canvas.store.snapshot.transactions['region-tx-1'].confirmedUndoScopeDigest }), response);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
@@ -1317,7 +1317,7 @@ test('D-21=A an edit in the confirmed eight cells refuses Undo without writing',
     assert.equal(applied.error, null);
     world.nodes.set('0,0,0', { materialRef: 'mcl_core:gold_block', orientation: 0 });
     const writes = world.writes.length;
-    const response = await region.call('UndoRegionCommit', undo(localContext, applied.result.historyRevision));
+    const response = await region.call('UndoScopedRegionCommit', { ...undo(localContext, applied.result.historyRevision), expectedScopeDigest: canvas.store.snapshot.transactions['region-tx-1'].confirmedUndoScopeDigest });
     assert.equal(response.error.reason, 'EXTERNAL_EDIT_CONFLICT');
     assert.equal(world.writes.length, writes);
     assert.equal(world.get([0, 0, 0]).materialRef, 'mcl_core:gold_block');
@@ -1356,4 +1356,191 @@ test('published v2.8.0 validator rejects truthful D-21=A receipts when only unsp
       result: { ...response.result, actualSummary } }, applied.result),
       error => error.publicError?.code === 'READBACK_MISMATCH');
   } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+async function scopedCase(run,{partition={edge:[16,16,16]},lighting='REQUIRED',origin=[0,0,0],size=[4,1,4],profile=stateProfile}={}) {
+  const directory=await mkdtemp(join(tmpdir(),'canvas-scoped-safety-'));
+  try {
+    const world=fixtureWorld({profile});world.connection.capabilities.worldGeometry.partition=partition;
+    world.connection.capabilities.worldGeometry.postWriteLighting=lighting;
+    const {canvas,region}=await boot(directory,world),localContext=await select(canvas);
+    const compiled=compile(origin,size,[{materialRef:'mcl_core:glass',orientation:0}],
+      Array.from({length:size.reduce((a,b)=>a*b,1)},(_,i)=>i%size[0]<size[0]/2?0:-1),partition);
+    const request=commit(localContext,compiled),applied=await region.call('ApplyRegionCommit',request);
+    assert.equal(applied.error,null,JSON.stringify(applied.error));
+    const row=canvas.store.snapshot.transactions[request.transactionId];
+    const q={...undo(localContext,applied.result.historyRevision),expectedScopeDigest:row.confirmedUndoScopeDigest};
+    await run({directory,world,canvas,region,localContext,compiled,request,applied,row,q});
+  }finally{await rm(directory,{recursive:true,force:true});}
+}
+
+test('scoped undo refuses missing/forged scope, wrong source/world and expired identity before writing',async()=>{
+  await scopedCase(async({world,region,q})=>{
+    const before=world.writes.length;
+    const missing={...q};delete missing.expectedScopeDigest;
+    const cases=[missing,{...q,expectedScopeDigest:'e'.repeat(64)},{...q,originTransactionId:'another'},
+      {...q,worldRef:'another'},{...q,expectedHistoryRevision:'expired'},
+      {...q,localContext:{...q.localContext,selectionRevision:'expired'}}];
+    for(const bad of cases){const r=await region.call('UndoScopedRegionCommit',bad);assert.ok(r.error,JSON.stringify(bad));assert.equal(r.error.mutationState,'NONE');assert.equal(world.writes.length,before);}
+    world.incarnation='expired';const r=await region.call('UndoScopedRegionCommit',q);assert.equal(r.error.code,'CURRENT_WORLD_MISMATCH');assert.equal(world.writes.length,before);
+  });
+});
+
+test('scoped undo verifies retained origin operations, snapshot scope and source StateProfile before writing',async()=>{
+  await scopedCase(async({canvas,world,region,q,row})=>{
+    const writes=world.writes.length;
+    const bad=structuredClone(row);bad.originRequest.operationDigest='f'.repeat(64);
+    await canvas.store.commit(s=>{s.transactions[q.originTransactionId]=bad;});
+    let r=await region.call('UndoScopedRegionCommit',q);assert.equal(r.error.code,'NON_CANONICAL_AMBIGUITY');assert.equal(world.writes.length,writes);
+    bad.originRequest=structuredClone(row.originRequest);bad.confirmedUndoScope.positions.push([3,0,3]);
+    await canvas.store.commit(s=>{s.transactions[q.originTransactionId]=bad;});
+    r=await region.call('UndoScopedRegionCommit',q);assert.equal(r.error.code,'UNDO_CONFLICT');assert.equal(world.writes.length,writes);
+    await canvas.store.commit(s=>{s.transactions[q.originTransactionId]=row;});
+    world.connection.capabilities.stateProfile={...stateProfile,derivedFields:['changed-source-profile']};
+    r=await region.call('UndoScopedRegionCommit',q);assert.equal(r.error.code,'CAPABILITY_GAP');assert.equal(world.writes.length,writes);
+  });
+});
+
+test('scoped undo keeps source CAS after read; concurrent outside edit refuses with NONE and no rollback retry',async()=>{
+  await scopedCase(async({world,canvas,region,q})=>{
+    const source=world.region.call,requests=[];
+    world.region.call=async(op,req)=>{
+      if(op==='WriteRegion'&&req.purpose==='RESTORE'){
+        requests.push(structuredClone(req));world.nodes.set('3,0,0',{materialRef:'mcl_core:gold_block',orientation:0});
+      }
+      return source(op,req);
+    };
+    const r=await region.call('UndoScopedRegionCommit',q);
+    assert.equal(r.error.code,'RESTORE_FAILED');assert.equal(r.error.mutationState,'NONE');assert.notEqual(r.error.reason,'EXTERNAL_EDIT_CONFLICT');
+    assert.equal(requests.length,1);assert.ok(requests[0].writes.every(w=>w.expectedCurrentDigest));
+    assert.equal(world.get([3,0,0]).materialRef,'mcl_core:gold_block');assert.equal(world.get([0,0,0]).materialRef,'mcl_core:glass');
+    assert.deepEqual(canvas.store.snapshot.pending,{});
+  });
+});
+
+test('scoped undo forwards exact source guard/CAS failures and mutationState without a second write',async()=>{
+  await scopedCase(async({world,canvas,region,q})=>{
+    const source=world.region.call;
+    const sourceError={code:'TRANSACTION_CONFLICT',phase:'restore',retryability:'AFTER_NEW_FACTS',mutationState:'NONE',transactionRef:q.undoTransactionId,causeCode:null,reason:'REVISION_CHANGED'};
+    let attempts=0;
+    world.region.call=async(op,req)=>op==='WriteRegion'? (attempts++,{contractVersion:req.contractVersion,requestId:req.requestId,result:null,error:sourceError,guardRefusal:null}) : source(op,req);
+    const r=await region.call('UndoScopedRegionCommit',q);assert.equal(canonicalJSON(r.error),canonicalJSON(sourceError));assert.equal(canonicalJSON(r.undoFailure.error),canonicalJSON(sourceError));assert.equal(attempts,1);assert.deepEqual(canvas.store.snapshot.pending,{});
+  });
+  await scopedCase(async({world,region,q})=>{
+    world.guardRestore=REGION_G1;const r=await region.call('UndoScopedRegionCommit',q);
+    assert.equal(canonicalJSON(r.error),canonicalJSON(guardRefusalError(REGION_G1,{transactionRef:q.undoTransactionId})));
+    assert.equal(canonicalJSON(r.guardRefusal),canonicalJSON(REGION_G1));assert.equal(world.get([0,0,0]).materialRef,'mcl_core:glass');
+  });
+});
+
+for(const lighting of ['NONE','REQUIRED'])test(`scoped undo across nonstandard negative partitions keeps ${lighting} source facts and replays once`,async()=>{
+  await scopedCase(async({world,canvas,region,q,directory})=>{
+    world.nodes.set('-1,0,0',{materialRef:'mcl_core:gold_block',orientation:0,extra:sign});
+    const r=await region.call('UndoScopedRegionCommit',q);assert.equal(r.error,null,JSON.stringify(r));
+    assert.equal(r.result.outcome.postWriteLighting,lighting);assert.equal(r.result.outcome.lighting===null,lighting==='NONE');
+    assert.equal(world.get([-1,0,0]).materialRef,'mcl_core:gold_block');
+    const writes=world.writes.length,object=canvas.store.snapshot.transactions[q.originTransactionId].objectRef;
+    const reopened=await boot(directory,world);assert.equal(canonicalJSON(await reopened.region.call('UndoScopedRegionCommit',q)),canonicalJSON(r));
+    assert.equal(world.writes.length,writes);assert.equal(reopened.canvas.store.snapshot.history[object].length,2);
+  },{partition:{edge:[4,8,4]},origin:[-6,0,0],size:[8,1,4],lighting});
+});
+
+test('scoped undo partial failure rolls back confirmed cells while preserving outside and original failure',async()=>{
+  await scopedCase(async({world,canvas,region,q})=>{
+    const source=world.region.call;let attempts=0;
+    world.region.call=async(op,req)=>{
+      if(op==='WriteRegion'&&req.purpose==='RESTORE'&&++attempts===1){
+        const real=await source(op,req);real.result.chunks[0]={chunkPos:real.result.chunks[0].chunkPos,status:'UNKNOWN',readbackDigest:null};
+        world.nodes.set('3,0,0',{materialRef:'mcl_core:gold_block',orientation:0,extra:sign});return real;
+      }
+      return source(op,req);
+    };
+    const r=await region.call('UndoScopedRegionCommit',q);assert.equal(r.error,null,JSON.stringify(r));assert.equal(r.result.outcome.status,'ROLLED_BACK');
+    assert.equal(r.undoFailure.error.code,'RESTORE_FAILED');assert.equal(r.undoFailure.error.mutationState,'UNKNOWN');
+    assert.equal(world.get([0,0,0]).materialRef,'mcl_core:glass');assert.equal(world.get([3,0,0]).materialRef,'mcl_core:gold_block');
+    assert.equal(attempts,2);assert.deepEqual(canvas.store.snapshot.pending,{});
+    const origin=canvas.store.snapshot.transactions[q.originTransactionId];assert.equal(canvas.store.snapshot.history[origin.objectRef].length,1);
+  });
+});
+
+test('scoped undo rollback fault persists source failures and original scope; reopen restores only that scope',async()=>{
+  await scopedCase(async({world,canvas,region,q,directory})=>{
+    const source=world.region.call;let attempts=0;
+    const initial={code:'APPLY_FAILED',phase:'restore',retryability:'AFTER_NEW_FACTS',mutationState:'PARTIAL',transactionRef:q.undoTransactionId,causeCode:null,reason:'APPLY_ERROR'};
+    const rollbackError={code:'RESTORE_FAILED',phase:'restore',retryability:'AFTER_MANUAL_RECOVERY',mutationState:'PARTIAL',transactionRef:q.undoTransactionId,causeCode:'APPLY_FAILED',reason:'RESTORE_ERROR'};
+    world.region.call=async(op,req)=>{
+      if(op==='WriteRegion'&&req.purpose==='RESTORE'){
+        attempts++;
+        if(attempts===1){world.nodes.set('0,0,0',{materialRef:'air',orientation:0});return {contractVersion:req.contractVersion,requestId:req.requestId,result:null,error:initial,guardRefusal:null};}
+        return {contractVersion:req.contractVersion,requestId:req.requestId,result:null,error:rollbackError,guardRefusal:null};
+      }return source(op,req);
+    };
+    const r=await region.call('UndoScopedRegionCommit',q);assert.equal(canonicalJSON(r.error),canonicalJSON(rollbackError));
+    const pending=canvas.store.snapshot.pending[q.undoTransactionId];assert.equal(pending.confirmedUndoScope.positions.length,8);
+    assert.equal(canonicalJSON(pending.undoFailure.error),canonicalJSON(initial));assert.equal(canonicalJSON(pending.restoreFailure.error),canonicalJSON(rollbackError));
+    world.nodes.set('3,0,0',{materialRef:'mcl_core:gold_block',orientation:0,extra:sign});world.region.call=source;
+    const reopened=await boot(directory,world);assert.deepEqual(await reopened.region.recoverPending(),[{transactionId:q.undoTransactionId,status:'ROLLED_BACK'}]);
+    assert.equal(world.get([0,0,0]).materialRef,'mcl_core:glass');assert.equal(world.get([3,0,0]).materialRef,'mcl_core:gold_block');
+    const writes=world.writes.length;const replay=await reopened.region.call('UndoScopedRegionCommit',q);assert.equal(replay.result.outcome.status,'ROLLED_BACK');assert.equal(world.writes.length,writes);
+    assert.equal(reopened.canvas.store.snapshot.history[reopened.canvas.store.snapshot.transactions[q.originTransactionId].objectRef].length,1);
+  });
+});
+
+for(const badReceipt of ['requestId','worldRef','lightingDeclaration','errorTransactionRef','errorWorldRef'])test(`scoped undo successful source write with invalid ${badReceipt} is uncertain and rolls back safely`,async()=>{
+ await scopedCase(async({world,canvas,region,q})=>{
+  const source=world.region.call;let restores=0;
+  world.region.call=async(op,req)=>{
+   const r=await source(op,req);
+   if(op==='WriteRegion'&&req.purpose==='RESTORE'&&++restores===1){
+    if(badReceipt==='requestId')r.requestId='foreign-response';
+    if(badReceipt==='worldRef')r.result.worldRef='foreign-world';
+    if(badReceipt==='lightingDeclaration'){r.result.postWriteLighting='NONE';r.result.lighting=null;}
+    if(badReceipt==='errorTransactionRef'||badReceipt==='errorWorldRef'){
+     r.result=null;r.guardRefusal=null;r.error={code:'RESTORE_FAILED',phase:'restore',retryability:'AFTER_NEW_FACTS',mutationState:'NONE',transactionRef:badReceipt==='errorTransactionRef'?'another-transaction':q.undoTransactionId,causeCode:null,reason:'RESTORE_ERROR',...(badReceipt==='errorWorldRef'?{worldRef:'another-world'}:{})};
+    }
+   }return r;
+  };
+  const r=await region.call('UndoScopedRegionCommit',q);
+  assert.equal(r.error,null,JSON.stringify(r));assert.equal(r.result.outcome.status,'ROLLED_BACK');
+  assert.equal(r.undoFailure.error.mutationState,'UNKNOWN');assert.equal(restores,2);
+  assert.equal(world.get([0,0,0]).materialRef,'mcl_core:glass');assert.deepEqual(canvas.store.snapshot.pending,{});
+  if(badReceipt==='errorTransactionRef'||badReceipt==='errorWorldRef'){
+   const diagnostic=canvas.store.snapshot.transactions[q.undoTransactionId].sourceValidationFailure;
+   assert.equal(diagnostic.error.mutationState,'NONE');
+   assert.equal(diagnostic.error.transactionRef,badReceipt==='errorTransactionRef'?'another-transaction':q.undoTransactionId);
+   if(badReceipt==='errorWorldRef')assert.equal(diagnostic.error.worldRef,'another-world');
+  }
+ });
+});
+
+test('scoped pending recovery never reports whole transaction NONE from a rollback guard refusal',async()=>{
+ await scopedCase(async({world,canvas,region,q})=>{
+  const source=world.region.call;let restores=0;
+  world.region.call=async(op,req)=>{
+   if(op==='WriteRegion'&&req.purpose==='RESTORE'){
+    if(++restores===1){world.nodes.set('0,0,0',{materialRef:'air',orientation:0});return {contractVersion:req.contractVersion,requestId:req.requestId,result:null,guardRefusal:null,error:{code:'APPLY_FAILED',phase:'restore',retryability:'AFTER_NEW_FACTS',mutationState:'PARTIAL',transactionRef:q.undoTransactionId,causeCode:null,reason:'APPLY_ERROR'}};}
+    return {contractVersion:req.contractVersion,requestId:req.requestId,result:null,guardRefusal:REGION_G1,error:guardRefusalError(REGION_G1,{transactionRef:q.undoTransactionId})};
+   }return source(op,req);
+  };
+  const r=await region.call('UndoScopedRegionCommit',q);assert.ok(r.error);
+  const actions=await canvas.readHistoryActions('session-1');assert.notEqual(actions.recovery[0].mutationState,'NONE');
+  assert.equal(actions.recovery[0].originalFailure.error.mutationState,'PARTIAL');
+  assert.equal(actions.recovery[0].restoreFailure.error.mutationState,'NONE');assert.equal(world.get([0,0,0]).materialRef,'air');
+ });
+});
+
+test('scoped rollback and reopened recovery refuse unproved in-scope edits without guessing external attribution',async()=>{
+ await scopedCase(async({world,canvas,region,q,directory})=>{
+  const source=world.region.call;let attempts=0;
+  world.region.call=async(op,req)=>{
+   if(op==='WriteRegion'&&req.purpose==='RESTORE'&&++attempts===1){
+    world.nodes.set('0,0,0',{materialRef:'mcl_core:gold_block',orientation:0});
+    return {contractVersion:req.contractVersion,requestId:req.requestId,result:null,error:{code:'APPLY_FAILED',phase:'restore',retryability:'AFTER_NEW_FACTS',mutationState:'PARTIAL',transactionRef:q.undoTransactionId,causeCode:null,reason:'APPLY_ERROR'},guardRefusal:null};
+   }return source(op,req);
+  };
+  const r=await region.call('UndoScopedRegionCommit',q);assert.equal(r.error.code,'RECOVERY_PENDING');assert.notEqual(r.error.reason,'EXTERNAL_EDIT_CONFLICT');
+  assert.equal(attempts,1);assert.equal(world.get([0,0,0]).materialRef,'mcl_core:gold_block');
+  const reopened=await boot(directory,world);const result=await reopened.region.recoverPending();assert.equal(result[0].status,'RECOVERY_PENDING');
+  assert.equal(attempts,1);assert.equal(world.get([0,0,0]).materialRef,'mcl_core:gold_block');assert.ok(reopened.canvas.store.snapshot.pending[q.undoTransactionId]);
+ });
 });

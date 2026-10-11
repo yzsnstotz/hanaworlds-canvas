@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { CanvasV5, CanvasStore } from '../../src/index.mjs';
+import { CanvasV5, CanvasStore, CanvasRegionV1 } from '../../src/index.mjs';
 import { openUndoFixtureWorld, undoSessionRef, undoWorldRef } from './undo-fixture-world.mjs';
 import { fixtureSessions } from '../../scripts/fixture-sessions.mjs';
 
@@ -57,9 +57,9 @@ export async function openUndoHost(directory, { world: preparedWorld } = {}) {
         intentDigest: digest({ page: '/undo', action, objectRef }),
         surfaceActionDigest: digest({ page: '/undo', action, objectRef, transactionId: id }),
         localContext: actions.localContext };
-      const response = await canvas.call(step.operation, request);
+      const response = step.operation === 'UndoScopedRegionCommit' ? await new CanvasRegionV1(canvas,world.regionAdapter).call(step.operation,{contractVersion:'canvas-region/v3',sessionRef:undoSessionRef,requestId:id,worldRef:actions.worldRef,originTransactionId:step.historyTransactionId,undoTransactionId:id,expectedHistoryRevision:step.expectedHistoryRevision,expectedScopeDigest:step.expectedScopeDigest,localContext:actions.localContext}) : await canvas.call(step.operation, request);
       await world.flush();
-      return { operation: step.operation, transactionId: id, status: response.result?.status ?? null,
+      return { operation: step.operation, transactionId: id, status: (response.result?.outcome ?? response.result)?.status ?? null,
         error: response.error ?? null, request };
     });
     queue = run.catch(() => {});

@@ -11,6 +11,7 @@ const undoReasons = {
   NOTHING_TO_UNDO: '这笔已撤回。',
   WORLD_CHANGED_SINCE: '之后世界又有新改动；Canvas 只撤回世界最近一次改动。',
   TRANSACTION_PENDING: '有一笔改动仍在处理中，完成后才能撤回。',
+  REGION_SCOPE_EVIDENCE_UNAVAILABLE: '这条区域历史缺少可信确认范围，暂不能撤回。',
   REGION_UNDO_HAS_NO_REDO: '批量区域改动在这里不提供撤回。',
   HISTORY_MOVED: '这笔已不是该对象的最近改动，请刷新后再看。',
   OBJECT_NOT_FOUND: 'Canvas 找不到这个对象。',

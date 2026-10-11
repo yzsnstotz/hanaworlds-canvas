@@ -348,9 +348,12 @@ export class CanvasV5 {
         // NONE requires the exact public Abort confirmation, never just the Apply error.
         // Keep the original failure separate from a later query/readback failure.
         mutationState: row.abortConfirmation?.mutationState === 'NONE' ? 'NONE' :
+          row.direction === 'SCOPED_UNDO' ? (row.undoFailure?.error?.mutationState === 'PARTIAL' || row.restoreFailure?.error?.mutationState === 'PARTIAL' ? 'PARTIAL' : 'UNKNOWN') :
           row.queriedReceipt?.error?.mutationState ?? 'UNKNOWN',
         abortConfirmation: row.abortConfirmation ?? null,
-        originalFailure: row.applyFailure ?? row.failure ?? null,
+        originalFailure: row.undoFailure ?? row.applyFailure ?? row.failure ?? null,
+        ...(row.direction === 'SCOPED_UNDO' ? {restoreFailure: row.restoreFailure ?? null,
+          sourceValidationFailure: row.sourceValidationFailure ?? null} : {}),
         queryFailure: row.queryFailure ?? null }))
       .sort((a, b) => a.transactionId.localeCompare(b.transactionId));
     const pending = recovery.length > 0;
@@ -364,10 +367,14 @@ export class CanvasV5 {
         const blocked = pending ? 'TRANSACTION_PENDING' : null;
         let undo, redo;
         if (region) {
-          // canvas-region/v3 publishes ApplyRegionCommit and UndoRegionCommit only. A move is
-          // offered only when the same entry can be moved back, so region Undo is named, not offered.
-          undo = { available: false, reason: undone ? 'NOTHING_TO_UNDO' : 'REGION_UNDO_HAS_NO_REDO' };
-          redo = { available: false, reason: undone ? 'REGION_REDO_NOT_IN_PROTOCOL' : 'NOTHING_TO_REDO' };
+          const origin=s.transactions[rows[0]?.transactionId];
+          const scopeReady=origin?.confirmedUndoScopeDigest && origin?.verifiedAfterSnapshot && origin?.originRequest;
+          undo = undone ? {available:false,reason:'NOTHING_TO_UNDO'} :
+            blocked ? {available:false,reason:blocked} : !scopeReady ?
+            {available:false,reason:'REGION_SCOPE_EVIDENCE_UNAVAILABLE'} :
+            {available:true,operation:'UndoScopedRegionCommit',historyTransactionId:head.transactionId,
+              expectedHistoryRevision:head.historyRevision,expectedScopeDigest:origin.confirmedUndoScopeDigest};
+          redo = {available:false,reason:'REGION_REDO_NOT_IN_PROTOCOL'};
         } else {
           const expected = { expectedHistoryRevision: head.historyRevision,
             expectedWorldRevision: headTransaction.receipt.observedWorldRevision,
@@ -384,7 +391,8 @@ export class CanvasV5 {
           originTransactionId: rows[0]?.transactionId ?? null, applied: !undone,
           footprint: s.footprints[worldRef]?.[object.objectRef]?.positions ?? [],
           // Cells this entry changes: the verified cell scope, or the committed region box.
-          cells: region ? boxCells(s.transactions[rows[0].transactionId].box, VOXEL_GRID) :
+          cells: region ? s.transactions[rows[0].transactionId].confirmedUndoScope?.positions ??
+            boxCells(s.transactions[rows[0].transactionId].box, VOXEL_GRID) :
             s.transactions[rows[0].transactionId].after.coveredPositions,
           undo, redo };
       });

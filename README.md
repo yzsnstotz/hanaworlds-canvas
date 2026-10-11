@@ -1,8 +1,8 @@
 # HanaWorlds Canvas
 
-Canvas `0.15.1` manages local world selection, object footprints, recoverable
+Canvas `0.16.0` manages local world selection, object footprints, recoverable
 transactions and durable Undo/Redo history. It provides `canvas/v7` and
-`canvas-region/v3`, using the formal Contracts `v2.8.0` git tag.
+`canvas-region/v3`, using the formal Contracts `v2.12.0` git tag.
 
 Host compatibility is pinned to the official DSH `0.2.1-alpha.2` Typert protocol
 and Cordis `4.0.5-alpha.1`; no other host version is declared supported.

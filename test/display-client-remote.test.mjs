@@ -47,6 +47,7 @@ async function compose(seed, { fixtureWorld = false, mountFailure, panelFailure,
     const { undoWorldFile } = await import('./support/undo-host.mjs');
     world = await openUndoFixtureWorld(undoWorldFile(store));
     host.provide('hanaworldsWorldAdapterV6', world.adapter);
+    host.provide('hanaworldsWorldAdapterRegionV1', world.regionAdapter);
     host.provide('hanaworldsLuantiNativeFacts', world.nativeFacts);
   }
   const { default: canvasPlugin } = await import(process.env.CANVAS_ENTRY ?? new URL('../src/index.mjs', import.meta.url).href);
@@ -114,7 +115,7 @@ async function compose(seed, { fixtureWorld = false, mountFailure, panelFailure,
   const close = async () => { await fiber.dispose(); await client.fiber.dispose(); await host.fiber.dispose();
     await rm(profile, { recursive: true, force: true }); };
   try { await fiber; } catch (error) { await close(); throw error; }
-  return { gateway, wire, registered, close, world, canvas, client, fiber };
+  return { host, gateway, wire, registered, close, world, canvas, client, fiber };
 }
 
 test('partial sidebar setup and a rejecting remote cleanup still show the original Canvas fault', async () => {
@@ -368,4 +369,29 @@ test('shipped client redoes the clicked origin through the public gateway and re
       ['fixture:brick', 'fixture:brick', 'fixture:brick']);
     assert.equal(await reasonOf(element.props.redo(undoSessionRef, object.objectRef, origin)), 'NOTHING_TO_REDO');
   } finally { await close(); }
+});
+
+test('formal Canvas panel uses scoped region undo and reports region Redo unavailable (FIXTURE source)',async()=>{
+  const {createUndoExample}=await import('./support/undo-example.mjs');
+  const {undoSessionRef,undoWorldRef}=await import('./support/undo-fixture-world.mjs');
+  const {encodeRegionBlock,digestValue}=await import('hanaworlds-contracts');
+  const {registered,close,world,canvas,host}=await compose(d=>createUndoExample(d),{fixtureWorld:true});
+  try {
+    const region=host.get('hanaworldsCanvasRegionV1');
+    const localContext=canvas.current(undoSessionRef).localContext;
+    const block=encodeRegionBlock({origin:[20,2,20],size:[4,1,4],palette:[{materialRef:'fixture:stone',orientation:0}],indices:Array.from({length:16},(_,i)=>i%4<2?0:-1)});
+    const operations={contractVersion:'region-operations/v2',worldRef:undoWorldRef,buildDigest:'b'.repeat(64),catalogueDigest:'c'.repeat(64),compilerRevision:'fixture-scope-panel',partition:{edge:[16,16,16]},chunks:[{chunkPos:[1,0,1],block}]};
+    const result=await region.call('ApplyRegionCommit',{contractVersion:'canvas-region/v3',sessionRef:undoSessionRef,requestId:'panel-scope-commit',worldRef:undoWorldRef,transactionId:'panel-scope-commit',operations,operationDigest:digestValue('region-operations',operations).sha256,guarantee:'RECOVERABLE_VERIFIED',localContext});
+    assert.equal(result.error,null,JSON.stringify(result.error));
+    const element=panel(registered,undoSessionRef);
+    let object=(await element.props.readActions(undoSessionRef)).objects.find(o=>o.mode==='REGION');
+    assert.equal(object.undo.available,true);assert.equal(object.redo.available,false);assert.equal(object.redo.reason,'REGION_REDO_NOT_IN_PROTOCOL');
+    const receipt=await element.props.undo(undoSessionRef,object.objectRef,'panel-scope-commit');
+    assert.equal(receipt.status,'VERIFIED');
+    object=(await element.props.readActions(undoSessionRef)).objects.find(o=>o.mode==='REGION');
+    assert.equal(object.undo.available,false);assert.equal(object.redo.reason,'REGION_REDO_NOT_IN_PROTOCOL');
+    assert.equal(canvas.store.snapshot.transactions[receipt.transactionId].confirmedUndoScope.positions.length,8);
+    assert.equal(canvas.store.snapshot.history[object.objectRef].length,2);
+    assert.equal(world.calls.filter(c=>c.port==='world-adapter-region/v3'&&c.operation==='WriteRegion').length,2);
+  }finally{await close();}
 });

@@ -7,9 +7,9 @@ import { contractHandshake, version, operationContracts, schemaBundle,
 import { CanvasV5, canvasProtocolHandshake, ADAPTER_CELL_REQUIREMENT,
   ADAPTER_REGION_REQUIREMENT } from '../src/index.mjs';
 
-// contracts-history-receipt-01: remote annotated tag v2.8.0 (peeled commit), checked at admission.
-const release = { tag: 'v2.8.0', version: '2.8.0',
-  revision: '5af62be25dcab110fcbb8502183922010f078f04' };
+// canvas-11 scoped undo: remote annotated tag v2.12.0 (peeled commit), checked at admission.
+const release = { tag: 'v2.12.0', version: '2.12.0',
+  revision: '33c34372fd5092a83b6f3cc81c086470fa76d794' };
 const repository = 'git+https://github.com/yzsnstotz/hanaworlds-contracts.git';
 const root = new URL('../', import.meta.url);
 const json = async url => JSON.parse(await readFile(url, 'utf8'));
@@ -21,7 +21,8 @@ assert.match(dependency, /#v2\.\d+\.\d+$/);
 assert.equal(manifest.dependencies['hanaworlds-contracts'], dependency, 'exact public git tag required');
 assert.equal(lock.packages[''].dependencies['hanaworlds-contracts'], dependency, 'root lock drift');
 assert.equal(lock.packages['node_modules/hanaworlds-contracts'].version, release.version);
-assert.equal(lock.packages['node_modules/hanaworlds-contracts'].resolved,
+assert.equal(lock.packages['node_modules/hanaworlds-contracts'].resolved
+  .replace('git+ssh://git@github.com/', 'git+https://github.com/'),
   `${repository}#${release.revision}`, 'published tag commit required');
 assert.equal(installed.version, release.version, 'installed package drift');
 assert.equal(version, release.version, 'SDK version drift');
@@ -29,7 +30,7 @@ assert.equal(contractHandshake.contracts, `hanaworlds-contracts@${release.versio
 for (const [wire, operations] of Object.entries({
   'canvas/v7': ['SelectWorldConnection', 'ReadWorldSelectionContext', 'ReserveWorldRetirement',
     'HistoryQuery', 'InspectPlacementRegion', 'AnalyzeAffectedObjects', 'ApplyRecoverableCommit', 'Undo', 'Redo'],
-  'canvas-region/v3': ['ApplyRegionCommit', 'UndoRegionCommit'],
+  'canvas-region/v3': ['ApplyRegionCommit', 'UndoRegionCommit', 'UndoScopedRegionCommit'],
   'world-adapter/v8': ['ReadLocalConnection', 'InspectRegion', 'PrepareRecoverableTransaction',
     'ApplyCompiledTransaction', 'Readback', 'RestoreTransaction'],
   'world-adapter-region/v3': ['ReadRegion', 'WriteRegion'],
@@ -38,6 +39,8 @@ for (const [wire, operations] of Object.entries({
   for (const operation of operations) assert.ok(published.includes(operation), `${wire}:${operation}`);
 }
 assert.ok(schemaBundle.definitions.PlacementFootprint.properties.geometryProfile);
+assert.ok(canvasProtocolHandshake.capabilities.includes('canvas-region/v3:confirmed-scope-undo'));
+assert.ok(schemaBundle.definitions.UndoScopedRegionCommitRequest.required.includes('expectedScopeDigest'));
 // canvas-05 relays the published optional Error.worldRef (no null form); old errors still decode.
 assert.deepEqual(schemaBundle.definitions.Error.properties.worldRef, { $ref: '#/definitions/Ref' });
 assert.ok(!schemaBundle.definitions.Error.required.includes('worldRef'));
@@ -46,7 +49,7 @@ validateType('PlacementFootprint', { geometryProfile: 'voxel-grid/v1',
 assert.equal(checkProtocolCompatibility(new CanvasV5({ store: null }).protocolHandshake,
   [protocolRequirement('canvas/v7', [], 1)]).result, 'PROTOCOL_COMPATIBLE');
 assert.equal(checkProtocolCompatibility(canvasProtocolHandshake,
-  [protocolRequirement('canvas-region/v3', canvasProtocolHandshake.capabilities, 1)]).result,
+  [protocolRequirement('canvas-region/v3', canvasProtocolHandshake.capabilities, 2)]).result,
   'PROTOCOL_COMPATIBLE');
 assert.equal(ADAPTER_CELL_REQUIREMENT.major, 8);
 assert.equal(ADAPTER_CELL_REQUIREMENT.minMinor, 0); // no later named-port dependency

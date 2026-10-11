@@ -28,3 +28,8 @@ ctx.on('AffectedObjectNotificationRequired', event => {
 if (event.event === 'AffectedObjectNotificationRequired') {
   const operation: 'DecideAffectedObjectNotification' = event.operation;
 }
+
+import type {UndoScopedRegionCommitRequest,UndoScopedRegionCommitResponse} from 'hanaworlds-contracts';
+declare const scopedUndo:UndoScopedRegionCommitRequest;
+const scopedResponse:Promise<UndoScopedRegionCommitResponse>=region.call('UndoScopedRegionCommit',scopedUndo);
+checkProtocolCompatibility(region.protocolHandshake,[protocolRequirement('canvas-region/v3',['canvas-region/v3:confirmed-scope-undo'],2)]);
