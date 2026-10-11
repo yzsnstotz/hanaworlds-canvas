@@ -1,8 +1,8 @@
 import type { ContractHandshake, OperationMap, ProtocolHandshake, RegionSnapshotContent,
   RegionSnapshotRef, RegionSummary } from 'hanaworlds-contracts';
-import type { NativeFactsPort } from './native-facts.js';
+import type { NativeFactsPort, WorldFactsPort } from './native-facts.js';
 import type Schema from '@deepseek-ai/schemastery';
-export type { NativeFactsPort, NativeFactsScopedState } from './native-facts.js';
+export type { NativeFactsPort, NativeFactsScopedState, WorldFactsPort } from './native-facts.js';
 
 /** Public declaration only: canvas major 7/minor 1, no published per-cell tokens.
  * Read this property on the real hanaworldsCanvasV5 service supplied by apply(ctx).
@@ -46,7 +46,7 @@ export class CanvasStore {
 }
 export class CanvasV5 implements CanvasV5ProtocolSource {
   constructor(options: { store: CanvasStore | null; adapter?: any;
-    nativeFacts?: NativeFactsPort; sessions?: any; adapterId?: string; config?: CanvasConfig;
+    nativeFacts?: NativeFactsPort; worldFacts?: WorldFactsPort; sessions?: any; adapterId?: string; config?: CanvasConfig;
     /** Receives immutable contracts v2 events after durable selection; failures are reported separately. */
     emitEvent?: (event: CanvasSelectionEvent) => void | Promise<void> });
   store: CanvasStore | null;
@@ -134,7 +134,7 @@ export function encodeSnapshot(content: RegionSnapshotContent, before: RegionSum
 export function decodeSnapshot(compressed: Uint8Array, ref: RegionSnapshotRef,
   before: RegionSummary): Promise<RegionSnapshotContent>;
 /** Stage 1 validation configuration supply (Canvas-own observation; not a Contracts wire). */
-export type ConfigFieldSource = 'CONTRACT_SCHEMA' | 'ENGINE_FACT' | 'UNMAPPED';
+export type ConfigFieldSource = 'CONTRACT_SCHEMA' | 'WORLD_SOURCE_FACT' | 'UNMAPPED';
 export interface ConfigFieldRow {
   status: 'SUPPLIED' | 'MISSING';
   value: unknown;
@@ -156,7 +156,8 @@ export interface ConfigProfileObservation<T> {
 }
 export interface ConfigObservation {
   contracts: string; domain: ConfigDomain | null; sessionRefs: string[];
-  sources: { catalogue: { status: string; digest?: string; cause?: string } } | null;
+  sources: { catalogue: { status: string; digest?: string; cause?: string };
+    writeProfile: { status: string; sourceRevision?: string; cause?: string } } | null;
   profiles: { compilationConfig: ConfigProfileObservation<import('hanaworlds-contracts').CompilationConfig> };
   observationDigest: string; observedSequence: number; observedAt: string;
 }

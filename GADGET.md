@@ -1,4 +1,4 @@
-# HanaWorlds Canvas 0.13.4
+# HanaWorlds Canvas 0.14.0
 
 Canvas owns local world selection, registered object footprints and transaction history.
 The single Cordis entry is `src/index.mjs`; the DSH panel is `lib/client.js`.
@@ -15,6 +15,11 @@ It consumes `world-adapter/v8` and `world-adapter-region/v3` at minimum minor 0
 with their published write-path capability tokens. Service keys remain
 `hanaworldsCanvasV5`, `hanaworldsCanvasRegionV1`, `hanaworldsWorldAdapterV6`,
 `hanaworldsWorldAdapterRegionV1`, and the `hanaworldsWorkshopV3` session port.
+Configuration facts come from the world source's C-world-facts port `hanaworldsWorldFacts`
+(`world-facts/v1` ReadCatalogue + ReadWriteProfile, the same key the desktop bridge reads);
+`hanaworldsLuantiNativeFacts` is used only for per-cell `readScopedState`.
+Region ownership is read by role: the Adapter must cover every capability Contracts assigns
+to `owner: world-source`; Canvas advertises the capabilities scoped to `canvas-region/v3`.
 
 Placement requires an explicit `PlacementFootprint.geometryProfile`; missing facts
 refuse `CAPABILITY_UNAVAILABLE`, unsupported/undeclared geometry refuses `CAPABILITY_GAP`.
@@ -32,9 +37,11 @@ Engine guards are checked before writes; refusals preserve the public error and 
 Uncertain outcomes stay pending for same-transaction query/recovery.
 
 The fresh store is `<DSH home>/data/hanaworlds-canvas-v2/canvas-v7.json`, schema 7.
-Older stores are not read or migrated. Compiler configuration contains an opaque
-`writeBackend {profileId, revision}` from public loaded-payload engine facts;
-missing, corrupt or stale facts refuse without defaults.
+Older stores are not read or migrated. Compiler configuration is forwarded unchanged from
+the world source's `ReadWriteProfile.compilationConfig` (opaque `writeBackend
+{profileId, revision}` included), checked against the current connection and the
+`ReadCatalogue` digest; an undeclared backend, absent port, peer error, corrupt or stale
+facts refuse by name without defaults. No engine, mod or package name is read.
 
 The App panel reads the selected session's objects/history and performs the published
 latest-entry Undo. It has no display-fixture sample toggle. Test peer implementations

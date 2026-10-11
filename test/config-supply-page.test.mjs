@@ -28,6 +28,17 @@ test('/supply page: no Safety supply, and every write operation names its uncove
         row.required.map(r => `${r.guard}@${r.stage}`), row.operation);
       assert.ok(row.unmet.every(u => u.finding === 'GUARD_UNAVAILABLE'), row.operation);
     }
+    // FIXTURE world source: nothing declared → named refusal; declared → the source's own config.
+    assert.equal(data.report.current.profiles.compilationConfig.fields.writeBackend.cause,
+      'NOT_DECLARED_BY_PAYLOAD');
+    assert.doesNotMatch(JSON.stringify(data), /worldedit|modRevisions|MOD_NOT_LOADED/i);
+    const toggled = await fetch(`${base}/api/fixture/backend`, { method: 'POST',
+      headers: { origin: base } });
+    assert.equal(toggled.status, 200);
+    const declared = await (await fetch(`${base}/api/supply?worldRef=supply-fixture-world`)).json();
+    const row = declared.report.current.profiles.compilationConfig.fields.writeBackend;
+    assert.equal(row.status, 'SUPPLIED');
+    assert.equal(row.provenance.kind, 'WORLD_SOURCE_FACT');
   } finally {
     await new Promise(resolve => server.close(resolve));
     await rm(directory, { recursive: true, force: true });

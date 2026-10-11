@@ -29,7 +29,7 @@ h+='<h2>Safety 规则</h2><div class="box">来源：<b>玩家确认</b>（skill 
 h+='<h2>引擎守卫（按写操作 × stage；声明来自当前连接 <span class="fixture">FIXTURE 输入</span>）</h2><div class="box">声明 '+(d.engine.declaration?j(d.engine.declaration):'<span class="MISSING">无（null）</span>')+'</div><table><tr><th>操作</th><th>状态</th><th>未覆盖（guard @ stage）</th></tr>'+d.engine.operations.map(r=>'<tr><td>'+esc(r.operation)+'</td><td class="'+(r.unmet.length?'MISSING':'SUPPLIED')+'">'+esc(r.status)+'</td><td>'+(r.unmet.length?r.unmet.map(u=>'<code>'+esc(u.guard)+' @ '+esc(u.stage)+'</code> · '+esc(u.finding)).join('<br>'):'—')+'</td></tr>').join('')+'</table><div class="box">未覆盖任一项时该操作在任何写入前被拒（CAPABILITY_UNAVAILABLE）。回滚被引擎拒绝时事务记为待人工恢复（RESTORE_FAILED，带 guardRefusal 与 applyFailure），不报成功。</div>';
 h+=profile('CompilationConfig',c.profiles.compilationConfig,d.ports.compilerConfig);
 h+='<h2>变更 / 失效记录（持久，'+d.report.history.length+' 条）</h2><table><tr><th>#</th><th>观察</th><th>被取代</th><th>原因</th></tr>';for(const r of [...d.report.history].reverse())h+='<tr><td>'+esc(r.observedSequence)+'</td><td>'+j(r.observationDigest.slice(0,16))+'</td><td>'+esc(r.supersededAt)+'</td><td>'+esc(r.invalidationReasons.join(', '))+'</td></tr>';h+='</table>';$('#out').innerHTML=h;}
-function renderFixture(f){$('#fixture').innerHTML='<div class="fixbox"><span class="fixture">FIXTURE</span> 对端输入（不是配置来源权威）：'+j(f)+'<br><button data-a="worldedit">改 FIXTURE worldedit revision</button><button data-a="noworldedit">FIXTURE Catalogue 去掉 worldedit</button><button data-a="rebind">FIXTURE 新连接 incarnation 并重选</button><button data-a="unbind">经 Canvas 解绑</button></div>';
+function renderFixture(f){$('#fixture').innerHTML='<div class="fixbox"><span class="fixture">FIXTURE</span> 对端输入（不是配置来源权威）：'+j(f)+'<br><button data-a="sourceRevision">改 FIXTURE 世界源 revision</button><button data-a="backend">FIXTURE 世界源声明/撤回写入后端</button><button data-a="rebind">FIXTURE 新连接 incarnation 并重选</button><button data-a="unbind">经 Canvas 解绑</button></div>';
 for(const b of document.querySelectorAll('#fixture button'))b.onclick=async()=>{const r=await post('/api/fixture/'+b.dataset.a);if(r.fixture)renderFixture(r.fixture);await read();};}
 async function read(){const w=$('#world').value;const r=await fetch('/api/supply?worldRef='+encodeURIComponent(w));const d=await r.json();if(d.fixture)renderFixture(d.fixture);render(d);}
 $('#read').onsubmit=e=>{e.preventDefault();read();};fetch('/api/fixture').then(r=>r.json()).then(d=>renderFixture(d.fixture));`;
@@ -49,9 +49,9 @@ export async function createConfigSupplyServer(runDirectory) {
   catch (error) { if (error.code !== 'ENOENT') throw error; }
   const peers = await supplyFixturePeers(saved);
   const persist = () => writeFile(stateFile, JSON.stringify({ incarnation: peers.incarnation,
-    worldeditRevision: peers.worldeditRevision }), { mode: 0o600 });
+    sourceRevision: peers.sourceRevision, backendDeclared: peers.backendDeclared }), { mode: 0o600 });
   const canvas = new CanvasV5({ store: await CanvasStore.open(storeDirectory), adapter: peers.adapter,
-    nativeFacts: peers.nativeFacts, sessions: peers.sessions });
+    worldFacts: peers.worldFacts, sessions: peers.sessions });
   const supply = new CanvasConfigSupply(canvas);
   let counter = 0;
   const context = async () => (await canvas.call('ReadWorldSelectionContext', {
@@ -85,8 +85,8 @@ export async function createConfigSupplyServer(runDirectory) {
     res.end(typeof value === 'string' ? value : JSON.stringify(value));
   };
   const actions = {
-    worldedit: async () => { peers.worldeditRevision = `fixture-worldedit-${Date.now()}`; await persist(); },
-    noworldedit: async () => { peers.worldeditRevision = null; await persist(); },
+    sourceRevision: async () => { peers.sourceRevision = `fixture-source-${Date.now()}`; await persist(); },
+    backend: async () => { peers.backendDeclared = !peers.backendDeclared; await persist(); },
     rebind: async () => { peers.incarnation = `supply-fixture-incarnation-${Date.now()}`; await persist();
       const error = await select(); if (error) throw Object.assign(new Error(error.code), { publicError: error }); },
     unbind: async () => { const error = await unbind();

@@ -23,14 +23,19 @@ export const REGION_WIRE = 'canvas-region/v3';
 export const REGION_ADAPTER = 'world-adapter-region/v3';
 const ADAPTER = 'world-adapter/v8';
 const PACKAGE_VERSION = packageJson.version;
+// Ownership is read by role/wire, never by a peer's package name: Canvas advertises the
+// capabilities scoped to the wire it serves; the Adapter must cover every capability Contracts
+// assigns to the world-source role (whatever package fills that role).
 export const CANVAS_REGION_CAPABILITIES = Object.freeze(regionCapabilities
-  .filter(c => c.owner === 'hanaworlds-canvas').map(c => c.id).sort());
+  .filter(c => c.id.startsWith(`${REGION_WIRE}:`)).map(c => c.id).sort());
 // A capability id is scoped by its wire ("<wire>:<name>"). Each Adapter requirement takes
 // only its own wire's ids at minimum minor 0 (the operations consumed here), and is
 // checked against the handshake of that port (G3: world-adapter/v8:* on the per-cell port,
 // world-adapter-region/v3:* on the region port).
+const WORLD_SOURCE_ROLE = 'world-source';
 const ADAPTER_CAPABILITIES = regionCapabilities
-  .filter(c => c.owner === 'world-source').map(c => c.id);
+  .filter(c => c.owner === WORLD_SOURCE_ROLE).map(c => c.id);
+if (!ADAPTER_CAPABILITIES.length) throw new Error(`CANVAS_ADAPTER_ROLE_UNDECLARED:${WORLD_SOURCE_ROLE}`);
 const adapterRequirement = wire => {
   const declared = contractProtocols.find(p => `${p.protocol}/v${p.major}` === wire);
   if (!declared) throw new Error(`CANVAS_ADAPTER_PROTOCOL_UNDECLARED:${wire}`);

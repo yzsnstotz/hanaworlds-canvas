@@ -1,6 +1,6 @@
 {
   "classification": "SOURCE/FIXTURE_NOT_REAL_WORLD",
-  "canvasPackageVersion": "0.13.4",
+  "canvasPackageVersion": "0.14.0",
   "contracts": {
     "version": "2.2.1",
     "tag": "v2.2.1",
