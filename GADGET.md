@@ -1,11 +1,11 @@
-# HanaWorlds Canvas 0.13.3
+# HanaWorlds Canvas 0.13.4
 
 Canvas owns local world selection, registered object footprints and transaction history.
 The single Cordis entry is `src/index.mjs`; the DSH panel is `lib/client.js`.
 
 Contracts is pinned to the formal release
-`git+https://github.com/yzsnstotz/hanaworlds-contracts.git#v2.2.1`,
-commit `ee53aed37117bc859d9cbb2aedee9ea7d8dfc8b1`.
+`git+https://github.com/yzsnstotz/hanaworlds-contracts.git#v2.7.0`,
+commit `b00dd055181c26fdea56e9ba6617ee4a5c3b92c3`.
 Run `npm ci`, `npm run build`, `npm run verify:contracts`, `npm run typecheck`, and `npm test`.
 The test command runs every retained test file, including Gateway/Remote, host storage,
 selection, per-cell apply/history and region rollback/recovery.

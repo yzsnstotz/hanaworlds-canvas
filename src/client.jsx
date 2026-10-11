@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ObjectsHistoryView, undoReasonLabel } from './display-view.mjs';
+import { ObjectsHistoryView, undoFailureLabel } from './display-view.mjs';
 import { displayClientContribution } from './display-remote.mjs';
 
 const PANEL_ID = 'hanaworlds-canvas-objects-history';
@@ -40,7 +40,8 @@ export function ObjectsHistoryPanel({ sessionRef, read, readActions, undo }) {
       undo(sessionRef, entry.objectRef, entry.transactionId).then(result => {
         setView(result.view);
         setOutcome({ message: `已撤回「${entry.objectName ?? '未命名对象'}」这笔改动；Canvas 已校验并读回世界。`, error: null });
-      }, failure => setOutcome({ message: null, error: undoReasonLabel(failureCode(failure)) }))
+      }, failure => setOutcome({ message: null,
+        error: undoFailureLabel(failureCode(failure), failure?.details?.worldRef ?? null) }))
         .finally(() => { setBusy(false); setConfirming(null); setRevision(value => value + 1); });
     },
   };

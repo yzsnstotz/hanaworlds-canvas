@@ -20,8 +20,13 @@ const undoReasons = {
   READBACK_MISMATCH: '世界里的方块与这笔提交后的状态不一致，未撤回。',
   ROLLED_BACK: '撤回没有通过校验，已整笔回滚，世界保持原样。',
   RECOVERY_PENDING: '撤回结果未知，Canvas 已记为待恢复。请不要重复点击。',
+  CAPABILITY_UNAVAILABLE: '需要的世界现在不可用（未启动、连不上或缺少所需能力），未撤回。',
 };
 export const undoReasonLabel = code => undoReasons[code] ?? `未撤回（${code}）`;
+// Canvas keeps no trusted world-name list, so a world is named only by the reference Canvas's
+// own public error carried; no display name is generated.
+export const undoFailureLabel = (code, worldRef = null) =>
+  worldRef ? `${undoReasonLabel(code)} 需要的世界：${worldRef}` : undoReasonLabel(code);
 function timeLabel(value) {
   if (value === null) return '未记录时间';
   return new Date(value).toLocaleString('zh-CN', { hour12: false });

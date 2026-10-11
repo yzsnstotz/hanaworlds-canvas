@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { gzip, gunzip, constants as zlib } from 'node:zlib';
 import packageJson from '../package.json' with { type: 'json' };
+import { trustedSessionWorld, withTargetWorld } from './world-error.mjs';
 import { canonicalJSON, checkProtocolCompatibility, comparePosition, contractProtocols, digestValue,
   expandRegionBlock, expectedRegionSummary, protocolRequirement, publicError,
   regionBlockBox, regionCapabilities, requireKnownRegion, guardRefusalError,
@@ -403,8 +404,7 @@ export class CanvasRegionV1 {
       Object.assign(next.pending[transactionId], { phase, ...extra }); });
   }
 
-  async #commit(raw) {
-    const body = validateRegionCommitRequest(raw);
+  async #commit(body) {
     const { replayKey, requestHash, prior } = this.#replay(body, 'ApplyRegionCommit');
     if (prior) return prior.response;
     this.#adapterCompatible();
@@ -591,8 +591,7 @@ export class CanvasRegionV1 {
     return response;
   }
 
-  async #undo(raw) {
-    const body = validateRequest(REGION_WIRE, 'UndoRegionCommit', raw);
+  async #undo(body) {
     const { replayKey, requestHash, prior } = this.#replay(body, 'UndoRegionCommit');
     if (prior) return prior.response;
     this.#adapterCompatible();
@@ -769,17 +768,21 @@ export class CanvasRegionV1 {
     return outcomes;
   }
 
-  async call(operation, body) {
+  async call(operation, raw) {
+    let body;
     try {
+      if (operation === 'ApplyRegionCommit') body = validateRegionCommitRequest(raw);
+      else if (operation === 'UndoRegionCommit') body = validateRequest(REGION_WIRE, 'UndoRegionCommit', raw);
+      else throw fail('UNSUPPORTED_OPERATION', 'INVALID_SHAPE', 'decode');
       await this.canvas.ready;
       if (!this.store || this.store.unavailable)
         throw fail('CAPABILITY_UNAVAILABLE', 'REQUIRED_FACT_UNKNOWN');
-      if (operation === 'ApplyRegionCommit') return await this.#commit(body);
-      if (operation === 'UndoRegionCommit') return await this.#undo(body);
-      throw fail('UNSUPPORTED_OPERATION', 'INVALID_SHAPE', 'decode');
+      return operation === 'ApplyRegionCommit' ? await this.#commit(body) : await this.#undo(body);
     } catch (error) {
-      return { contractVersion: REGION_WIRE, requestId: body?.requestId ?? 'invalid-request',
-        result: null, error: error.publicError ?? publicError(error),
+      const failure = error.publicError ?? publicError(error);
+      // Contracts 2.7.0: only an admitted (decoded) request names its target world.
+      return { contractVersion: REGION_WIRE, requestId: (body ?? raw)?.requestId ?? 'invalid-request',
+        result: null, error: body ? withTargetWorld(failure, body, trustedSessionWorld(this.store, body)) : failure,
         guardRefusal: error.guardRefusal ?? null, applyFailure: null };
     }
   }

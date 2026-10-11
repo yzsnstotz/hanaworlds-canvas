@@ -7,9 +7,9 @@ import { contractHandshake, version, operationContracts, schemaBundle,
 import { CanvasV5, canvasProtocolHandshake, ADAPTER_CELL_REQUIREMENT,
   ADAPTER_REGION_REQUIREMENT } from '../src/index.mjs';
 
-// contracts-brush-digests-01 REPORT + remote annotated tag, checked at admission.
-const release = { tag: 'v2.2.1', version: '2.2.1',
-  revision: 'ee53aed37117bc859d9cbb2aedee9ea7d8dfc8b1' };
+// contracts-world-error-01: remote annotated tag v2.7.0 (peeled commit), checked at admission.
+const release = { tag: 'v2.7.0', version: '2.7.0',
+  revision: 'b00dd055181c26fdea56e9ba6617ee4a5c3b92c3' };
 const repository = 'git+https://github.com/yzsnstotz/hanaworlds-contracts.git';
 const root = new URL('../', import.meta.url);
 const json = async url => JSON.parse(await readFile(url, 'utf8'));
@@ -38,6 +38,9 @@ for (const [wire, operations] of Object.entries({
   for (const operation of operations) assert.ok(published.includes(operation), `${wire}:${operation}`);
 }
 assert.ok(schemaBundle.definitions.PlacementFootprint.properties.geometryProfile);
+// canvas-05 relays the published optional Error.worldRef (no null form); old errors still decode.
+assert.deepEqual(schemaBundle.definitions.Error.properties.worldRef, { $ref: '#/definitions/Ref' });
+assert.ok(!schemaBundle.definitions.Error.required.includes('worldRef'));
 validateType('PlacementFootprint', { geometryProfile: 'voxel-grid/v1',
   widthCells: 1, depthCells: 1, heightCells: 1 });
 assert.equal(checkProtocolCompatibility(new CanvasV5({ store: null }).protocolHandshake,

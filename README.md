@@ -1,8 +1,8 @@
 # HanaWorlds Canvas
 
-Canvas `0.13.3` manages local world selection, object footprints, recoverable
+Canvas `0.13.4` manages local world selection, object footprints, recoverable
 transactions and durable Undo/Redo history. It provides `canvas/v7` and
-`canvas-region/v3`, using the formal Contracts `v2.2.1` git tag.
+`canvas-region/v3`, using the formal Contracts `v2.7.0` git tag.
 
 Install with Node `24.13.1` and run:
 
@@ -19,6 +19,14 @@ The single package entry includes the DSH objects/history panel; its bundle has 
 fixture switch. Isolated mocks and public NativeFacts fixtures exercise Canvas's real
 store and transaction paths. Retired fixture pages and evidence are preserved in the
 canvas-01 runtime archive and Git history.
+
+When Canvas fails closed because the world an admitted request needs is unavailable
+(no store, no Adapter service, Adapter unreachable, a missing port or capability), the
+public error carries the Contracts 2.7.0 optional `worldRef`: the request's own world, or
+for a selector-less request only that Session's durable binding. Nothing is written, all
+other error fields are kept, and undecoded input never names a world. The panel shows that
+reference; Canvas keeps no world-name list and generates no name. Relayable examples:
+`hanaworlds-canvas/fixtures/world-error.json` (regenerate: `node scripts/world-error-fixture.mjs`).
 
 Source, fixture, bundle and package checks remain distinct from real-world GUI
 validation and owner ACCEPTED. Product readiness is `UNPROVEN`.
