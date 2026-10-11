@@ -81,7 +81,7 @@ function engineRefusal(receipt) {
 /** Current local Canvas. Adapter is a public v6 port; it never decides history. */
 export class CanvasV5 {
   constructor({ store, adapter, nativeFacts, sessions, config,
-    adapterId = 'hanaworlds-world-adapter' }) {
+    emitEvent, adapterId = 'hanaworlds-world-adapter' }) {
     checkContractHandshake(contractHandshake);
     this.store = store;
     this.adapter = adapter;
@@ -90,6 +90,7 @@ export class CanvasV5 {
     this.sessions = sessions;
     this.nativeFacts = nativeFacts;
     this.adapterId = adapterId;
+    this.emitEvent = emitEvent;
     this.placementConfig = structuredClone(Config(config).placement);
     this.ready = Promise.resolve();
     this.storageState = store ? 'READY' : 'UNAVAILABLE';
@@ -1131,6 +1132,11 @@ export class CanvasV5 {
     const response = respond('SelectWorldConnection', answer(body, current));
     await this.#commitSelection(body, previous, current, connection, inventory,
       replayKey, admission, response);
+    const oldConnection = previous?.localContext;
+    if (!oldConnection || oldConnection.worldRef !== connection.worldRef ||
+        oldConnection.connectionRef !== connection.connectionRef ||
+        oldConnection.connectionIncarnationRef !== connection.connectionIncarnationRef)
+      await this.#publishSelectionEvent('WorldConnectionSelectionChanged', 'SelectWorldConnection', response);
     return response;
   }
   /**
@@ -1173,7 +1179,20 @@ export class CanvasV5 {
     const response = respond('SwitchWorldConnection', answer(body, current));
     await this.#commitSelection(body, previous, current, connection, inventory,
       replayKey, admission, response);
+    if (!sameWorld)
+      await this.#publishSelectionEvent('ActiveWorldChanged', 'SwitchWorldConnection', response);
     return response;
+  }
+  /** Observers receive a validated immutable receipt only after the fsynced commit. */
+  async #publishSelectionEvent(event, operation, receipt) {
+    const payload = contractsSdk.validateCanvasEvent(event,
+      { contractVersion: WIRE, event, operation, receipt });
+    try { await this.emitEvent?.(payload); }
+    catch (error) {
+      // A consumer failure cannot turn a successful durable selection into a failed call.
+      // Surface it separately; never retry the event or the already committed operation.
+      console.error('Canvas selection event delivery failed', event, error);
+    }
   }
   #context(connection, selectionRevision) {
     return { connectionRef: connection.connectionRef,
@@ -1437,6 +1456,9 @@ async function nativeDirectory(ctx) {
 }
 export function apply(ctx, config) {
   const service = new CanvasV5({ store: null, config,
+    // Cordis parallel dispatch settles every consumer (including async listeners), and its
+    // fiber-owned ctx.on subscriptions are removed on disposal. No private bridge import.
+    emitEvent: event => ctx.parallel?.(event.event, event),
     adapter: {
       get protocolHandshake() { return ctx.get?.('hanaworldsWorldAdapterV6')?.protocolHandshake; },
       call: (...args) => ctx.get?.('hanaworldsWorldAdapterV6')?.call(...args) },

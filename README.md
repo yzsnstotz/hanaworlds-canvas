@@ -1,6 +1,6 @@
 # HanaWorlds Canvas
 
-Canvas `0.13.2` manages local world selection, object footprints, recoverable
+Canvas `0.13.3` manages local world selection, object footprints, recoverable
 transactions and durable Undo/Redo history. It provides `canvas/v7` and
 `canvas-region/v3`, using the formal Contracts `v2.2.1` git tag.
 
@@ -46,3 +46,28 @@ connection port on each call. `await region.describe()` returns an unbound descr
 with unknown world geometry. Missing geometry is refused with `CAPABILITY_GAP`.
 The exported `regionToolDescription(capabilities)` generates the same description
 from an explicit world-source declaration.
+
+World selection uses the published Contracts v2.2.1 SDK (`canvas/v7` wire).
+`ReadWorldSelectionContext` always returns that Session's current selection; its
+`worldRef` argument only scopes the connection inventory. Two Sessions can share
+one world and switch independently.
+
+Subscribe on the host Cordis context to `WorldConnectionSelectionChanged`
+(a successful `SelectWorldConnection` changes the connection, incarnation or world)
+and `ActiveWorldChanged` (`SwitchWorldConnection` moves to another world):
+
+```js
+ctx.on('ActiveWorldChanged', event => {
+  const { currentSession, activeWorldRef, orderedSelectedObjectRefs } = event.receipt.result;
+  // Refresh only currentSession; switching worlds clears its object selection.
+});
+```
+
+Events contain validated immutable Contracts receipts and are dispatched after
+the store's durable commit. Reads, failed commits, refused or repeated requests,
+unchanged selections and same-world switches emit no corresponding change event.
+Consumer failures are reported separately and do not change the committed receipt;
+delivery is not retried or replayed after restart. Cordis disposes subscriptions
+with the consumer fiber. For standalone `CanvasV5`, supply `emitEvent(event)` in
+the constructor; the two session-world test files contain minimal Adapter/Session
+stand-ins and receipt examples for this seam.
