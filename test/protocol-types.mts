@@ -21,3 +21,10 @@ declare const event: CanvasSelectionEvent;
 if (event.event === 'ActiveWorldChanged') {
   const operation: 'SwitchWorldConnection' = event.operation;
 }
+ctx.on('AffectedObjectNotificationRequired', event => {
+  const operation: 'DecideAffectedObjectNotification' = event.operation;
+  const affected: ReadonlyArray<string> | undefined = event.receipt.result?.affectedObjectRefs;
+});
+if (event.event === 'AffectedObjectNotificationRequired') {
+  const operation: 'DecideAffectedObjectNotification' = event.operation;
+}

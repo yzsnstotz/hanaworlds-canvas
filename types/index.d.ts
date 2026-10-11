@@ -21,6 +21,7 @@ export interface CanvasSelectionEvents {
   ActiveWorldChanged: import('hanaworlds-contracts').ActiveWorldChanged;
   TransactionVerified: import('hanaworlds-contracts').TransactionVerified;
   HistoryPositionChanged: import('hanaworlds-contracts').HistoryPositionChanged;
+  AffectedObjectNotificationRequired: import('hanaworlds-contracts').AffectedObjectNotificationRequired;
 }
 export type CanvasSelectionEvent = CanvasSelectionEvents[keyof CanvasSelectionEvents];
 declare module '@deepseek-ai/cordis' {
@@ -29,6 +30,7 @@ declare module '@deepseek-ai/cordis' {
     ActiveWorldChanged: (event: CanvasSelectionEvents['ActiveWorldChanged']) => void | Promise<void>;
     TransactionVerified: (event: CanvasSelectionEvents['TransactionVerified']) => void | Promise<void>;
     HistoryPositionChanged: (event: CanvasSelectionEvents['HistoryPositionChanged']) => void | Promise<void>;
+    AffectedObjectNotificationRequired: (event: CanvasSelectionEvents['AffectedObjectNotificationRequired']) => void | Promise<void>;
   }
 }
 /** Canvas-owned placement policy; managed by the host plugin Config form. */
@@ -52,7 +54,7 @@ export class CanvasV5 implements CanvasV5ProtocolSource {
   constructor(options: { store: CanvasStore | null; adapter?: any;
     nativeFacts?: NativeFactsPort; worldFacts?: WorldFactsPort; sessions?: any; adapterId?: string; config?: CanvasConfig;
     /** Receives immutable contracts v2 events after the durable commit (selection, verified
-     * transaction, Undo/Redo); failures are reported separately. */
+     * transaction, Undo/Redo, affected-object notification); failures are reported separately. */
     emitEvent?: (event: CanvasSelectionEvent) => void | Promise<void> });
   store: CanvasStore | null;
   ready: Promise<void>;

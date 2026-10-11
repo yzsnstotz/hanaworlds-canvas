@@ -27,7 +27,8 @@
     "./fixtures/native-facts-scoped-state.source.json": "./fixtures/native-facts-scoped-state.source.json",
     "./fixtures/world-error.json": "./fixtures/world-error.json",
     "./display": "./src/display-host.mjs",
-    "./client": "./lib/client.js"
+    "./client": "./lib/client.js",
+    "./fixtures/affected-object-notification.json": "./fixtures/affected-object-notification.json"
   },
   "files": [
     "src/*.mjs",
@@ -55,7 +56,7 @@
     }
   },
   "scripts": {
-    "build": "node --check src/index.mjs && node --check src/local-v5.mjs && node --check src/store-v5.mjs && node --check src/region-v1.mjs && node --check src/config-supply.mjs && node --check src/display-host.mjs && node --check src/display-remote.mjs && node --check src/world-error.mjs && node scripts/build-display.mjs",
+    "build": "node --check src/index.mjs && node --check src/voxel-grid.mjs && node --check src/local-v5.mjs && node --check src/store-v5.mjs && node --check src/region-v1.mjs && node --check src/config-supply.mjs && node --check src/display-host.mjs && node --check src/display-remote.mjs && node --check src/world-error.mjs && node scripts/build-display.mjs",
     "test": "node --test test/*.test.mjs",
     "test:objects": "node --test test/objects-history-events.test.mjs test/history-receipt-reconnect.test.mjs test/display-view.test.mjs test/display-remote.test.mjs test/display-client-remote.test.mjs",
     "test:display:gateway": "node --test test/display-remote.test.mjs test/display-client-remote.test.mjs",
