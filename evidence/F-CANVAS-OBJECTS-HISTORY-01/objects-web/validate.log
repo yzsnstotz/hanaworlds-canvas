@@ -1,4 +1,0 @@
-Command: python3 /Users/yzliu/work/Docs/skills/_shared/bluemap/bluemap.py validate --card /Users/yzliu/work/projects/hana-world-mvp/bluemap/cards/F-CANVAS-OBJECTS-HISTORY-01/CARD.md
-Actual native exit_code: 0
-PASS (format only; not evidence)
-Tool chunk: dbeaa0

@@ -1,9 +1,0 @@
-runtime-resolution: START
-runtime-resolution: exit 0
-Traceback (most recent call last):
-  File "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/source/scripts/gate-cell-protocol-052.py", line 175, in <module>
-    main()
-  File "/Users/yzliu/.cache/hanaworlds-runs/S1-CANVAS-REGION-UNDO-01/source/scripts/gate-cell-protocol-052.py", line 82, in main
-    node, npm = paths
-    ^^^^^^^^^
-ValueError: too many values to unpack (expected 2)
