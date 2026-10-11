@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { canonicalJSON, contractProtocols } from 'hanaworlds-contracts';
+import { canonicalJSON, contractProtocols, validateCanvasEvent, version } from 'hanaworlds-contracts';
 import { CanvasV5, CanvasStore } from '../src/index.mjs';
 import { g3CellHandshake } from './support/g3-adapter-handshake.mjs';
 import { createUndoExample } from './support/undo-example.mjs';
@@ -20,8 +20,8 @@ import { guardSlot } from '../scripts/fixture-engine-guards.mjs';
  * not the real Adapter and proves nothing about real multi-connection support.
  */
 // Store values are null-prototype objects; compare canonical JSON.
-// canvas/v7 (Contracts 1.x) always carries the session-world seam.
-const SEAM = contractProtocols.find(row => row.protocol === 'canvas').major === 7;
+assert.match(version, /^2\./u);
+assert.equal(contractProtocols.find(row => row.protocol === 'canvas').major, 7);
 const same = (a, b, message) => assert.equal(canonicalJSON(a), canonicalJSON(b), message);
 const stateProfile = { profileVersion: 'state-profile/v3', derivedFields: ['light'], preservedFields: ['inventory', 'metadata', 'timer'], clearedFields: [] };
 const readback = (connectionRef, worldRef, incarnation) => ({ connectionRef,
@@ -49,17 +49,17 @@ function fixtureAdapter() {
         const row = live[request.connectionRef];
         return respond(readback(request.connectionRef, row.worldRef, row.incarnation));
       }
-      throw new Error(`unexpected v6 operation ${operation}`);
+      throw new Error(`unexpected world-adapter/v8 operation ${operation}`);
     } };
   return adapter;
 }
 const base = sessionRef => ({ contractVersion: 'canvas/v7', sessionRef });
-async function boot(t) {
+async function boot(t, { emitEvent } = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'canvas-session-world-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const adapter = fixtureAdapter();
   const canvas = new CanvasV5({ store: await CanvasStore.open(directory), adapter,
-    sessions: fixtureSessions() });
+    sessions: fixtureSessions(), emitEvent });
   let n = 0;
   const call = (operation, sessionRef, body) => canvas.call(operation,
     { ...base(sessionRef), requestId: `${operation}-${++n}`, ...body });
@@ -84,6 +84,86 @@ async function boot(t) {
   return { canvas, adapter, call, read, select, switchRequest, directory };
 }
 
+test('contracts v2 selection events carry durable receipts for two Sessions sharing A and S1 A→B→A', async t => {
+  assert.match(version, /^2\./u);
+  const events = [], durable = [];
+  const f = await boot(t, { async emitEvent(event) {
+    validateCanvasEvent(event.event, event);
+    assert.ok(Object.isFrozen(event));
+    assert.ok(Object.isFrozen(event.receipt.result));
+    // Reopen the real fsynced store inside the observer, before the caller sees its receipt.
+    const store = await CanvasStore.open(f.directory);
+    same(store.snapshot.sessions[event.receipt.result.currentSession], event.receipt.result);
+    durable.push(event.receipt.result.activeWorldRef);
+    events.push(event);
+  } });
+  const s1 = await f.select('S1', 'conn-a', 'world-a');
+  const s2 = await f.select('S2', 'conn-a', 'world-a');
+  same(events.map(event => event.receipt.result), [s1, s2]);
+  const toB = await f.call('SwitchWorldConnection', 'S1', f.switchRequest(s1, 'conn-b', 'world-b'));
+  assert.equal(toB.error, null);
+  // Even a read asking for A's inventory must return S1's current world B.
+  same((await f.read('S1', 'world-a')).context, toB.result);
+  same((await f.read('S2', 'world-b')).context, s2);
+  const back = await f.call('SwitchWorldConnection', 'S1', f.switchRequest(toB.result, 'conn-a', 'world-a'));
+  assert.equal(back.error, null);
+  same((await f.read('S1', 'world-b')).context, back.result);
+  same((await f.read('S2', 'world-a')).context, s2);
+  assert.deepEqual(events.map(event => event.event), ['WorldConnectionSelectionChanged',
+    'WorldConnectionSelectionChanged', 'ActiveWorldChanged', 'ActiveWorldChanged']);
+  same(events.slice(2).map(event => event.receipt), [toB, back]);
+  assert.deepEqual(durable, ['world-a', 'world-a', 'world-b', 'world-a']);
+});
+
+test('selection events exclude reads, refusals, replay, unchanged connections and same-world switches', async t => {
+  const events = [];
+  const f = await boot(t, { emitEvent: event => { events.push(event); } });
+  const s1 = await f.select('S1', 'conn-a', 'world-a');
+  assert.equal(events.length, 1);
+  const reselect = context => ({ worldRef: 'world-a', connectionRef: 'conn-a',
+    connectionIncarnationRef: f.adapter.live['conn-a'].incarnation,
+    expectedRevision: context.selectionRevision, expectedContext: context.localContext });
+  const refused = await f.call('SelectWorldConnection', 'S1', { ...reselect(s1), expectedRevision: 'stale' });
+  assert.equal(refused.error?.code, 'STALE_REVISION');
+  const unchanged = await f.call('SelectWorldConnection', 'S1', reselect(s1));
+  assert.equal(unchanged.error, null);
+  assert.equal(events.length, 1);
+  f.adapter.live['conn-a'].incarnation = 'open-a-2';
+  const request = { ...base('S1'), requestId: 'reconnect-once', ...reselect(unchanged.result) };
+  const reconnected = await f.canvas.call('SelectWorldConnection', request);
+  assert.equal(reconnected.error, null);
+  assert.equal(events.length, 2, 'a changed connection incarnation emits selection changed');
+  same(events[1].receipt, reconnected);
+  await f.canvas.call('SelectWorldConnection', request);
+  assert.equal(events.length, 2, 'a repeated request emits nothing');
+  f.adapter.live['conn-a'].incarnation = 'open-a-3';
+  const switched = await f.call('SwitchWorldConnection', 'S1', f.switchRequest(reconnected.result, 'conn-a', 'world-a'));
+  assert.equal(switched.error, null);
+  await f.read('S1', 'world-a');
+  assert.equal(events.length, 2, 'same-world reconnection is not ActiveWorldChanged');
+  const staleSwitch = await f.call('SwitchWorldConnection', 'S1', f.switchRequest(reconnected.result, 'conn-b', 'world-b'));
+  assert.ok(staleSwitch.error);
+  assert.equal(events.length, 2);
+});
+
+test('a failed durable selection emits nothing and keeps the prior binding', async t => {
+  const events = [];
+  const f = await boot(t, { emitEvent: event => { events.push(event); } });
+  const s1 = await f.select('S1', 'conn-a', 'world-a');
+  const commit = f.canvas.store.commit.bind(f.canvas.store);
+  f.canvas.store.commit = async () => { throw new Error('fixture durability failure'); };
+  const failedSelect = await f.call('SelectWorldConnection', 'S2', { worldRef: 'world-a', connectionRef: 'conn-a',
+    connectionIncarnationRef: 'open-a-1', expectedRevision: 'session-0', expectedContext: null });
+  assert.ok(failedSelect.error);
+  assert.equal(f.canvas.current('S2'), null);
+  const failed = await f.call('SwitchWorldConnection', 'S1', f.switchRequest(s1, 'conn-b', 'world-b'));
+  assert.ok(failed.error);
+  assert.equal(events.length, 1);
+  same(f.canvas.current('S1'), s1);
+  f.canvas.store.commit = commit;
+  same((await f.read('S1', 'world-a')).context, s1);
+});
+
 test('owner A: S1 and S2 share A; S1 switches A→B→A while S2 stays on A, unchanged', async t => {
   const f = await boot(t);
   const s1 = await f.select('S1', 'conn-a', 'world-a');
@@ -101,10 +181,8 @@ test('owner A: S1 and S2 share A; S1 switches A→B→A while S2 stays on A, unc
     connectionIncarnationRef: 'open-b-1', worldRef: 'world-b',
     selectionRevision: toB.result.selectionRevision });
   assert.notEqual(toB.result.selectionRevision, s1.selectionRevision);
-  // sessionRevision: Workshop's revision with the seam (unchanged by a switch); Canvas's own
-  // revision on Contracts 0.5.3.
-  if (SEAM) assert.equal(toB.result.sessionRevision, s1.sessionRevision);
-  else assert.notEqual(toB.result.sessionRevision, s1.sessionRevision);
+  // sessionRevision is Workshop's revision, unchanged by a world switch.
+  assert.equal(toB.result.sessionRevision, s1.sessionRevision);
   same((await f.read('S2', 'world-a')).context, s2);
   // ReadWorldSelectionContext carries only the requested world's inventory rows.
   const readB = await f.call('ReadWorldSelectionContext', 'S1', { worldRef: 'world-b' });

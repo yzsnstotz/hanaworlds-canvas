@@ -14,6 +14,18 @@ export interface CanvasV5ProtocolSource {
 export interface CanvasHostContext {
   get?(name: string): any;
   provide?(name: string, service: any): unknown;
+  parallel?<K extends keyof CanvasSelectionEvents>(name: K, event: CanvasSelectionEvents[K]): Promise<void>;
+}
+export interface CanvasSelectionEvents {
+  WorldConnectionSelectionChanged: import('hanaworlds-contracts').WorldConnectionSelectionChanged;
+  ActiveWorldChanged: import('hanaworlds-contracts').ActiveWorldChanged;
+}
+export type CanvasSelectionEvent = CanvasSelectionEvents[keyof CanvasSelectionEvents];
+declare module '@deepseek-ai/cordis' {
+  interface Events {
+    WorldConnectionSelectionChanged: (event: CanvasSelectionEvents['WorldConnectionSelectionChanged']) => void | Promise<void>;
+    ActiveWorldChanged: (event: CanvasSelectionEvents['ActiveWorldChanged']) => void | Promise<void>;
+  }
 }
 /** Canvas-owned placement policy; managed by the host plugin Config form. */
 export interface CanvasConfig {
@@ -34,7 +46,9 @@ export class CanvasStore {
 }
 export class CanvasV5 implements CanvasV5ProtocolSource {
   constructor(options: { store: CanvasStore | null; adapter?: any;
-    nativeFacts?: NativeFactsPort; sessions?: any; adapterId?: string; config?: CanvasConfig });
+    nativeFacts?: NativeFactsPort; sessions?: any; adapterId?: string; config?: CanvasConfig;
+    /** Receives immutable contracts v2 events after durable selection; failures are reported separately. */
+    emitEvent?: (event: CanvasSelectionEvent) => void | Promise<void> });
   store: CanvasStore | null;
   ready: Promise<void>;
   storageState: string;

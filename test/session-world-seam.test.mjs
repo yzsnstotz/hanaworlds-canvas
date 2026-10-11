@@ -12,14 +12,14 @@ import { guardSlot } from '../scripts/fixture-engine-guards.mjs';
 
 /*
  * session-world-seam/v1 (canvas/v7 minor 1): Canvas's G-S/G-U/G-L/G-D authority over the
- * exact candidate's public fixture `fixtures/session-world`. FIXTURE: the Adapter (from the
+ * published v2 package's public fixture `fixtures/session-world`. FIXTURE: the Adapter (from the
  * fixture's adapterInventory) and the session/v5 port (from its sessionDirectory) are
  * contracts-shaped stand-ins, not the real Adapter or Workshop; nothing here signs a real gate.
- * On Contracts without the seam (0.5.3) these operations do not exist and the file is skipped.
+ * Requires the published Contracts 2.x baseline; no pre-seam compatibility path.
  */
-// canvas/v7 (Contracts 1.x) always carries the session-world seam.
-const SEAM = contracts.contractProtocols.find(row => row.protocol === 'canvas').major === 7;
-const fixture = SEAM ? createRequire(import.meta.url)('hanaworlds-contracts/fixtures/session-world') : null;
+assert.match(contracts.version, /^2\./u);
+assert.equal(contracts.contractProtocols.find(row => row.protocol === 'canvas').major, 7);
+const fixture = createRequire(import.meta.url)('hanaworlds-contracts/fixtures/session-world');
 const evidence = process.env.CANVAS_SEAM_EVIDENCE ?? null;
 const stateProfile = { profileVersion: 'state-profile/v3', derivedFields: ['light'], preservedFields: ['inventory', 'metadata', 'timer'], clearedFields: [] };
 
@@ -43,7 +43,7 @@ function seamAdapter() {
             limits: [], worldGeometry: { profileVersion: 'world-geometry/v1', geometryProfiles: ['voxel-grid/v1'], partition: { edge: [16, 16, 16] }, postWriteLighting: 'REQUIRED' }, recoveryGuarantee: 'RECOVERABLE_VERIFIED', stateProfile,
             sessionDeleteSupported: true, imageMediaTypes: [], model: null, engineGuards: null } });
       }
-      throw new Error(`unexpected v6 operation ${operation}`);
+      throw new Error(`unexpected world-adapter/v8 operation ${operation}`);
     } };
   return adapter;
 }
@@ -76,9 +76,62 @@ async function boot(t, { sessions = seamSessions() } = {}) {
   return { canvas, adapter, sessions, call, read, select, inventory, S1, S2, A, B, conn, inc };
 }
 
+test('apply() publishes validated selection events through the declared Cordis base', async t => {
+  const { Context } = await import('@deepseek-ai/cordis');
+  const canvasModule = await import('../src/index.mjs');
+  const directory = await mkdtemp(join(tmpdir(), 'canvas-selection-events-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const ctx = new Context();
+  ctx.provide('dshHomePath', (...parts) => join(directory, ...parts));
+  ctx.provide('hanaworldsWorldAdapterV6', seamAdapter());
+  ctx.provide('hanaworldsWorkshopV3', seamSessions());
+  const events = [];
+  for (const name of ['WorldConnectionSelectionChanged', 'ActiveWorldChanged'])
+    ctx.on(name, event => { contracts.validateCanvasEvent(name, event); events.push(event); });
+  const fiber = ctx.plugin(canvasModule.default);
+  await fiber;
+  t.after(async () => { await fiber.dispose(); await ctx.fiber.dispose(); });
+  const canvas = ctx.get('hanaworldsCanvasV5');
+  await canvas.ready;
+  const logged = t.mock.method(console, 'error', () => {});
+  // A failed observer is reported, without rejecting the already committed selection or
+  // preventing other Cordis consumers from receiving it.
+  ctx.on('WorldConnectionSelectionChanged', async () => { throw new Error('fixture observer failure'); });
+  const call = (operation, body) => canvas.call(operation, {
+    contractVersion: 'canvas/v7', requestId: `event-${operation}`, sessionRef: 'fixture-session-S1', ...body });
+  const unbound = await call('ReadWorldSelectionContext', { worldRef: 'fixture-world-A' });
+  assert.equal(unbound.error, null);
+  const selected = await call('SelectWorldConnection', { worldRef: 'fixture-world-A',
+    connectionRef: 'fixture-connection-A', connectionIncarnationRef: 'fixture-incarnation-A-1',
+    expectedRevision: unbound.result.selection.sessionRevision, expectedContext: null });
+  assert.equal(selected.error, null, JSON.stringify(selected.error));
+  assert.equal(events.length, 1);
+  assert.equal(logged.mock.callCount(), 1);
+  assert.equal(logged.mock.calls[0].arguments[0], 'Canvas selection event delivery failed');
+  const switched = await call('SwitchWorldConnection', { worldRef: 'fixture-world-A',
+    fromWorldRef: 'fixture-world-A', toWorldRef: 'fixture-world-B', toConnectionRef: 'fixture-connection-B',
+    expectedRevision: selected.result.selectionRevision, expectedContext: selected.result.localContext });
+  assert.equal(switched.error, null);
+  assert.deepEqual(events.map(event => event.event), ['WorldConnectionSelectionChanged', 'ActiveWorldChanged']);
+  assert.equal(contracts.canonicalJSON(events.map(event => event.receipt)), contracts.canonicalJSON([selected, switched]));
+  // Cordis removes consumer subscriptions with their fiber.
+  const consumerEvents = [];
+  const consumer = ctx.plugin({ name: 'fixture-event-consumer', apply(c) {
+    c.on('ActiveWorldChanged', event => { consumerEvents.push(event); });
+  } });
+  await consumer;
+  await consumer.dispose();
+  const back = await call('SwitchWorldConnection', { requestId: 'event-back-to-a', worldRef: 'fixture-world-B',
+    fromWorldRef: 'fixture-world-B', toWorldRef: 'fixture-world-A', toConnectionRef: 'fixture-connection-A',
+    expectedRevision: switched.result.selectionRevision, expectedContext: switched.result.localContext });
+  assert.equal(back.error, null);
+  assert.equal(events.length, 3);
+  assert.deepEqual(consumerEvents, []);
+});
+
 const CANVAS_TOKEN = /^fixture-(selection|inventory|reservation)-/u;
-test('minimal consistency: Canvas reproduces the candidate public ownerAScenario (steps 1–14)',
-  { skip: !SEAM && 'Contracts without session-world-seam/v1' }, async t => {
+test('minimal consistency: Canvas reproduces the published public ownerAScenario (steps 1–14)',
+  async t => {
     const f = await boot(t);
     const map = new Map(), deviations = [], log = [];
     const bind = (expected, actual, path) => {
@@ -143,7 +196,7 @@ test('minimal consistency: Canvas reproduces the candidate public ownerAScenario
   });
 
 test('G-S: Select/Switch/Read need a Workshop-known Session; no port fails closed',
-  { skip: !SEAM && 'Contracts without session-world-seam/v1' }, async t => {
+  async t => {
     const f = await boot(t);
     const unknown = fixture.sessionDirectory.unknown.request.sessionRef;
     const calls = f.adapter.calls.length;
@@ -165,7 +218,7 @@ test('G-S: Select/Switch/Read need a Workshop-known Session; no port fails close
   });
 
 test('G-U: Unselect is a CAS back to UNBOUND; refusals change nothing',
-  { skip: !SEAM && 'Contracts without session-world-seam/v1' }, async t => {
+  async t => {
     const f = await boot(t);
     const s1 = await f.select(f.S1, f.A);
     const unselect = extra => f.call('UnselectWorldConnection', { sessionRef: f.S1, worldRef: f.A,
@@ -192,7 +245,7 @@ test('G-U: Unselect is a CAS back to UNBOUND; refusals change nothing',
   });
 
 test('G-D: retirement reservation serializes world deletion with selection',
-  { skip: !SEAM && 'Contracts without session-world-seam/v1' }, async t => {
+  async t => {
     const f = await boot(t);
     const s1 = await f.select(f.S1, f.A);
     let inv = (await f.inventory(f.A)).result;
@@ -248,7 +301,7 @@ test('G-D: retirement reservation serializes world deletion with selection',
   });
 
 test('G-D race: a reservation made while a Select awaits the Adapter wins; the Select commits nothing',
-  { skip: !SEAM && 'Contracts without session-world-seam/v1' }, async t => {
+  async t => {
     const f = await boot(t);
     const unbound = (await f.read(f.S1)).result.selection;
     const port = f.canvas.adapter;
@@ -272,7 +325,7 @@ test('G-D race: a reservation made while a Select awaits the Adapter wins; the S
   });
 
 test('G-L: Canvas only retires on Workshop’s call; UNSUPPORTED deletion leaves everything unchanged',
-  { skip: !SEAM && 'Contracts without session-world-seam/v1' }, async t => {
+  async t => {
     const f = await boot(t);
     const s1 = await f.select(f.S1, f.A);
     const s2 = await f.select(f.S2, f.A);
@@ -306,7 +359,7 @@ test('G-L: Canvas only retires on Workshop’s call; UNSUPPORTED deletion leaves
   });
 
 test('C2: connection state of a BOUND selection is derived from the Adapter inventory',
-  { skip: !SEAM && 'Contracts without session-world-seam/v1' }, async t => {
+  async t => {
     const f = await boot(t);
     await f.select(f.S1, f.A);
     const selection = (await f.read(f.S1)).result.selection;
@@ -330,7 +383,7 @@ test('C2: connection state of a BOUND selection is derived from the Adapter inve
  * fiber; real Loader/Host mapping is NOT_RUN.
  */
 test('apply() consumes Workshop’s public hanaworldsWorkshopV3; other keys and a disposed provider fail closed',
-  { skip: !SEAM && 'Contracts without session-world-seam/v1' }, async t => {
+  async t => {
     const { Context } = await import('cordis');
     const canvasModule = await import('../src/index.mjs');
     const read = async canvas => canvas.call('ReadWorldSelectionContext', { contractVersion: 'canvas/v7',

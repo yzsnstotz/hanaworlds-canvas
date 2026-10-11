@@ -1,4 +1,4 @@
-# HanaWorlds Canvas 0.13.2
+# HanaWorlds Canvas 0.13.3
 
 Canvas owns local world selection, registered object footprints and transaction history.
 The single Cordis entry is `src/index.mjs`; the DSH panel is `lib/client.js`.
