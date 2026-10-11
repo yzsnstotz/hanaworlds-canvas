@@ -11,7 +11,7 @@ const css = `
 `;
 
 const failureCode = failure => failure?.details?.reason ?? failure?.code ?? failure?.message ?? String(failure);
-export function ObjectsHistoryPanel({ sessionRef, read, readActions, undo }) {
+export function ObjectsHistoryPanel({ sessionRef, read, readActions, undo, changes }) {
   const [view, setView] = useState(null);
   const [actions, setActions] = useState(null);
   const [pending, setPending] = useState(false);
@@ -20,6 +20,7 @@ export function ObjectsHistoryPanel({ sessionRef, read, readActions, undo }) {
   const [confirming, setConfirming] = useState(null);
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState({ message: null, error: null });
+  const [liveError, setLiveError] = useState(null);
   useEffect(() => {
     let active = true;
     setView(null); setActions(null); setError(null); setConfirming(null); setPending(true);
@@ -31,6 +32,20 @@ export function ObjectsHistoryPanel({ sessionRef, read, readActions, undo }) {
     return () => { active = false; };
   }, [sessionRef, revision, read, readActions]);
   useEffect(() => { setOutcome({ message: null, error: null }); }, [sessionRef]);
+  // Canvas's change feed: every durable commit that changes this Session's objects/history
+  // (a build from Workshop or skills, an Undo/Redo anywhere) re-reads the panel. A broken feed
+  // is shown with its cause; it is not reopened behind the person's back.
+  useEffect(() => {
+    if (!changes || sessionRef === null) return undefined;
+    let active = true;
+    setLiveError(null);
+    const handle = changes(sessionRef);
+    (async () => {
+      for await (const _change of handle) if (active) setRevision(value => value + 1);
+      if (active) setLiveError('CHANGES_ENDED');
+    })().catch(failure => { if (active) setLiveError(failureCode(failure)); });
+    return () => { active = false; handle.dispose(); };
+  }, [sessionRef, changes]);
   const undoControls = undo && {
     confirming, busy, message: outcome.message, error: outcome.error,
     request: entry => { setOutcome({ message: null, error: null }); setConfirming(entry.transactionId); },
@@ -45,7 +60,7 @@ export function ObjectsHistoryPanel({ sessionRef, read, readActions, undo }) {
         .finally(() => { setBusy(false); setConfirming(null); setRevision(value => value + 1); });
     },
   };
-  return <ObjectsHistoryView view={view} pending={pending} error={error}
+  return <ObjectsHistoryView view={view} pending={pending} error={error} liveError={liveError}
     actions={actions} undo={undoControls} refresh={() => setRevision(value => value + 1)} />;
 }
 function CanvasIcon() {
@@ -93,11 +108,13 @@ function registerPanel(ctx) {
     return result.value;
   };
   const read = remote('read'), readActions = remote('actions'), undo = remote('undo');
+  // A stream method returns its RemoteStreamHandle directly (no result envelope).
+  const changes = sessionRef => ctx.remote.hanaworldsCanvasDisplay.changes(sessionRef);
   registerStyle(ctx);
   function CanvasPanel({ useSessions }) {
     const sessionRef = useSessions(state => Object.values(state.byId)
       .find(session => (session.retainedBy.mainView ?? 0) > 0)?.id ?? null);
-    return <ObjectsHistoryPanel sessionRef={sessionRef} read={read} readActions={readActions} undo={undo} />;
+    return <ObjectsHistoryPanel sessionRef={sessionRef} read={read} readActions={readActions} undo={undo} changes={changes} />;
   }
   registerSlots(ctx, CanvasPanel);
 }

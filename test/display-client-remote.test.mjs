@@ -58,7 +58,14 @@ async function compose(seed, { fixtureWorld = false, mountFailure, panelFailure,
   const wire = [];
   const connection = { isLoopback: true, generation: { getSnapshot: () => undefined },
     registerGenerationSource: () => () => {}, start: () => ({ stop() {} }),
-    rpc: { open: async function* () {}, call: async (path, endpoint, body) => {
+    // Remote streams of the Canvas display reach the official Host Gateway; the internal
+    // $events pump stays an empty FIXTURE stream.
+    rpc: { open: (path, endpoint, body, signal) => {
+      const [namespace, method] = endpoint.split('/');
+      if (namespace !== 'hanaworldsCanvasDisplay') return (async function* () {})();
+      wire.push({ path, endpoint, args: body.args, stream: true });
+      return (async function* () { yield* await gateway.stream({ namespace, method, args: body.args, signal }); })();
+    }, call: async (path, endpoint, body) => {
       const [namespace, method] = endpoint.split('/');
       try {
         const value = await gateway.invoke({ namespace, method, args: body.args });
@@ -249,6 +256,42 @@ test('shipped client undoes exactly the clicked latest entry through canvas/v7 U
       await writeFile(process.env.CANVAS_CLIENT_UNDO_OUT, JSON.stringify({ fixture: true, artifact, sessionRef: undoSessionRef,
         actions, result, worldCalls: world.calls, wire }, null, 2));
     }
+  } finally { await close(); }
+});
+
+test('shipped panel follows Canvas changes: a commit made elsewhere reaches it without a refresh (FIXTURE world)', async () => {
+  const { createUndoExample } = await import('./support/undo-example.mjs');
+  const { undoSessionRef } = await import('./support/undo-fixture-world.mjs');
+  const { wire, registered, close, canvas } = await compose(directory => createUndoExample(directory), { fixtureWorld: true });
+  try {
+    const element = panel(registered, undoSessionRef);
+    assert.equal(typeof element.props.changes, 'function', 'the panel is wired to the change feed');
+    const handle = element.props.changes(undoSessionRef);
+    const notices = [];
+    let finalRevision = null;
+    // Every durable step is a notice (the reserved pending row too: it changes what Undo
+    // offers); read until the committed registry revision has arrived.
+    const reading = (async () => { for await (const notice of handle) {
+      notices.push(notice); if (notice.registryRevision === finalRevision) return; } })();
+    await new Promise(resolve => setTimeout(resolve, 20));
+    // Not the panel: a public canvas/v7 Undo issued by another surface (Workshop/skills).
+    const actions = await canvas.readHistoryActions(undoSessionRef);
+    const step = actions.objects[1].undo;
+    const request = { contractVersion: 'canvas/v7', sessionRef: undoSessionRef, requestId: 'elsewhere-undo',
+      worldRef: actions.worldRef, objectRef: actions.objects[1].objectRef, transactionId: 'elsewhere-undo',
+      historyTransactionId: step.historyTransactionId, expectedHistoryRevision: step.expectedHistoryRevision,
+      expectedWorldRevision: step.expectedWorldRevision, expectedObjectRevisions: step.expectedObjectRevisions,
+      intentDigest: 'e'.repeat(64), surfaceActionDigest: 'f'.repeat(64), localContext: actions.localContext };
+    assert.equal((await canvas.call(step.operation, request)).result.status, 'VERIFIED');
+    finalRevision = canvas.store.snapshot.registryRevisions[actions.worldRef];
+    if (notices.at(-1)?.registryRevision !== finalRevision) await reading;
+    handle.dispose();
+    assert.ok(notices.length >= 1);
+    assert.ok(notices.every(notice => notice.worldRef === actions.worldRef));
+    assert.equal(notices.at(-1).registryRevision, finalRevision);
+    assert.ok(wire.some(row => row.endpoint === 'hanaworldsCanvasDisplay/changes' && row.stream));
+    const view = await element.props.read(undoSessionRef);
+    assert.equal(view.history.find(row => row.transactionId === 'elsewhere-undo').status, 'UNDONE');
   } finally { await close(); }
 });
 

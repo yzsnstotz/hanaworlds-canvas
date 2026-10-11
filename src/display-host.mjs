@@ -18,11 +18,21 @@ export class CanvasDisplayService extends TypertRemoteService {
     for (const name of ['read', 'actions', 'undo'])
       Remote(this[name], { kind: 'method', name, private: false, static: false,
         addInitializer: initializer => initializer.call(this) });
+    Remote({ mode: 'stream' })(this.changes, { kind: 'method', name: 'changes', private: false,
+      static: false, addInitializer: initializer => initializer.call(this) });
     // Methods are invoked through Cordis's traced service proxy, so state is a plain property.
     this.undoQueue = Promise.resolve();
   }
   async read(sessionRef) {
     return canvasFor(this.ctx, 'readObjectsHistory').readObjectsHistory(sessionRef);
+  }
+  /**
+   * Logical stream: one item after each durable Canvas commit that changes what this Session's
+   * panel shows, so a build, Undo or Redo made anywhere (Workshop, skills, this panel) appears
+   * without the person refreshing. Items carry no data; the panel re-reads read/actions.
+   */
+  changes(sessionRef, signal) {
+    return canvasFor(this.ctx, 'watchObjectsHistory').watchObjectsHistory(sessionRef, signal);
   }
   /** What the panel may offer: Canvas's own readHistoryActions, reduced to Undo. Never executes. */
   async actions(sessionRef) {
