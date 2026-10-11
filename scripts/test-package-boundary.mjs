@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, writeFile, mkdir, cp, realpath, unlink, stat } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { tmpdir, homedir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -8,13 +8,20 @@ import { createHash } from 'node:crypto';
 import { build } from 'esbuild';
 import { inspectPackage } from './package-boundary.mjs';
 const root = fileURLToPath(new URL('../', import.meta.url));
-const evidenceRoot = process.env.CANVAS_BOUNDARY_EVIDENCE ?? join(root, '.runtime/package-boundary');
+// A project below the source tree can resolve its development node_modules via
+// ancestor lookup. Keep the default proof outside it, without caller setup.
+const evidenceRoot = process.env.CANVAS_BOUNDARY_EVIDENCE ?? join(homedir(), '.cache/hanaworlds-canvas/package-boundary');
+assert.ok(!resolve(evidenceRoot).startsWith(resolve(root) + '/') && resolve(evidenceRoot) !== resolve(root),
+  'package boundary evidence must be outside the development source tree');
 await mkdir(evidenceRoot, { recursive: true });
 const directory = await mkdtemp(join(evidenceRoot, 'run-'));
 const config = join(directory, 'empty-config'); await mkdir(config);
+// npm scripts inject the resolved user cache into npm_config_cache. The isolated
+// pack must use our writable global cache even when that setting names an absent
+// volume; keep package-manager security settings at their defaults.
 const env = { PATH: process.env.PATH, HOME: process.env.HOME, TMPDIR: join(directory, 'temp'),
   XDG_CONFIG_HOME: config, XDG_STATE_HOME: join(directory, 'state'), CI: 'true',
-  npm_config_cache: process.env.npm_config_cache ?? join(process.env.HOME, '.cache/npm') };
+  npm_config_cache: join(homedir(), '.cache/npm') };
 await mkdir(env.TMPDIR);
 function command(binary, args, cwd, name, extra = {}, expectSuccess = true) {
   const result = spawnSync(binary, args, { cwd, env: { ...env, ...extra }, encoding: 'utf8' });
