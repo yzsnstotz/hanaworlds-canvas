@@ -107,3 +107,36 @@ delivery is not retried or replayed after restart. Cordis disposes subscriptions
 with the consumer fiber. For standalone `CanvasV5`, supply `emitEvent(event)` in
 the constructor; the two session-world test files contain minimal Adapter/Session
 stand-ins and receipt examples for this seam.
+
+
+### Independent production artifact
+
+`hanaworlds-contracts` is exact **development supply** from public git tag `v2.12.0`
+(commit `33c34372fd5092a83b6f3cc81c086470fa76d794`). `npm run build` compiles
+all Host, display, and public NativeFacts-consumer entries into `lib/`, including
+necessary SDK validators/schema. The production package has no Contracts runtime
+package dependency. Installed package-version readback stays dynamic. Cordis,
+Typert, Schemastery, canonicalize, ICU and Host Zod remain normal externals;
+Client React remains the Host's shared external. No sibling/Host implementation is bundled.
+
+`npm run test:package-boundary` runs a normal `npm pack` lifecycle, inspects the
+actual tgz manifest and every runtime artifact (static/dynamic imports, require,
+resolve, package imports, package-relative resource URLs and JSON/schema references),
+and rejects external Contracts resolution or missing local artifacts. `npm test`,
+normal build and prepack include this gate. Child prepack rebuilds and verifies
+without recursively starting another boundary pack. The gate then installs the
+actual tgz under pnpm **11.28.5 default strict policies** in a new production-only
+project, loads all public entries, runs the official Cordis Host and shared React
+loader, and exercises durable cell Undo/Redo and region transactions using explicit
+fixture peers. The development fixture validators are compiled only into that test
+harness; they are absent from the product tgz and production dependency graph.
+Negative artifact/policy/runtime checks must fail. Evidence includes exact production
+lock, full resolution graph, tgz SHA256 and generated source hashes.
+
+TypeScript declarations intentionally refer to Contracts **development types**;
+consumers compiling those declarations install the same public tag in their own
+devDependencies. Cross-provider code validates `error.publicError` as the published
+Error envelope rather than checking a private exception constructor. Upstream
+Contracts release semantics are unchanged. These checks prove component production
+install/runtime with fixture peers; they do not establish real-world guard coverage,
+Session connection stability, official subscriptions, UI or owner acceptance.

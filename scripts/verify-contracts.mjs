@@ -18,8 +18,8 @@ const lock = await json(new URL('package-lock.json', root));
 const installed = await json(new URL(import.meta.resolve('hanaworlds-contracts/package.json')));
 const dependency = `${repository}#${release.tag}`;
 assert.match(dependency, /#v2\.\d+\.\d+$/);
-assert.equal(manifest.dependencies['hanaworlds-contracts'], dependency, 'exact public git tag required');
-assert.equal(lock.packages[''].dependencies['hanaworlds-contracts'], dependency, 'root lock drift');
+assert.equal(manifest.devDependencies['hanaworlds-contracts'], dependency, 'exact public git tag required');
+assert.equal(lock.packages[''].devDependencies['hanaworlds-contracts'], dependency, 'root lock drift');
 assert.equal(lock.packages['node_modules/hanaworlds-contracts'].version, release.version);
 assert.equal(lock.packages['node_modules/hanaworlds-contracts'].resolved
   .replace('git+ssh://git@github.com/', 'git+https://github.com/'),
@@ -58,6 +58,19 @@ assert.equal(ADAPTER_REGION_REQUIREMENT.minMinor, 0);
 const bundle = await readFile(new URL('lib/client.js', root), 'utf8');
 for (const banned of ['display-fixture', 'displayFixture', 'SAMPLE_KEY', '查看示例数据', 'example-house'])
   assert.ok(!bundle.includes(banned), `published client contains ${banned}`);
+
+
+for (const section of ['dependencies', 'peerDependencies', 'optionalDependencies'])
+  assert.ok(!manifest[section]?.['hanaworlds-contracts'], `production supplier in ${section}`);
+assert.equal(lock.packages['node_modules/hanaworlds-contracts'].dev, true);
+const generated = await json(new URL('lib/build-source.json', root));
+assert.equal(generated.supplier.tag, dependency);
+assert.equal(generated.supplier.version, release.version);
+assert.equal(generated.supplier.revision, release.revision);
+assert.equal(generated.supplier.packageSHA256, createHash('sha256').update(await readFile(new URL(import.meta.resolve('hanaworlds-contracts/package.json')))).digest('hex'));
+for (const [path, digest] of Object.entries({ ...generated.inputs, ...generated.artifacts }))
+  assert.equal(createHash('sha256').update(await readFile(new URL(path, root))).digest('hex'), digest, `build source drift: ${path}`);
+assert.ok(Object.keys(generated.inputs).some(p => p.startsWith('node_modules/hanaworlds-contracts/dist/')));
 console.log(JSON.stringify({ result: 'BASELINE_CONSISTENT', ...release, dependency,
   installed: fileURLToPath(new URL(import.meta.resolve('hanaworlds-contracts/package.json'))),
   bundleSHA256: createHash('sha256').update(bundle).digest('hex') }));

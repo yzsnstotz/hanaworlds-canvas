@@ -19,9 +19,10 @@ its six commits through that revision, and this Canvas origin's tracked paths.
   dependency notice in `NOTICE`.
 - WorldEdit and the Luanti Adapter are separate origins; no bytes from either
   are in the Canvas package. `hanaworlds-contracts` (MIT, HanaWorlds-owned,
-  https://github.com/yzsnstotz/hanaworlds-contracts) is a separately installed
-  dependency referenced by `#semver:^0.5.6`; the former vendored 0.3.4 subset
-  was removed. Canvas does not relicense third-party source or alter Contracts
+  https://github.com/yzsnstotz/hanaworlds-contracts) is exact development supply from public tag `v2.12.0`.
+  The build compiles only reachable SDK/schema into Canvas artifacts and carries
+  its MIT license and NOTICE. It ships no resolvable Contracts package or fixture suite;
+  `lib/build-source.json` records exact tag/SHA and generated artifact digests. Canvas does not relicense third-party source or alter Contracts
   semantics.
 
 The repository history and owner-authored baseline notice are the available

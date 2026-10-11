@@ -1,3 +1,7 @@
+/** Declaration-only Contracts consumption: TypeScript consumers install the exact public
+ * v2.12.0 git tag as a devDependency. JS artifacts embed runtime validation and require no
+ * Contracts package. Cross-provider errors are consumed through validated public Error
+ * envelopes, never through a shared private SDK constructor or singleton. */
 import type { ContractHandshake, OperationMap, ProtocolHandshake, RegionSnapshotContent,
   RegionSnapshotRef, RegionSummary } from 'hanaworlds-contracts';
 import type { NativeFactsPort, WorldFactsPort } from './native-facts.js';

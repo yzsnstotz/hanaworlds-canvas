@@ -525,3 +525,20 @@ test('host apply() reads the world source C-world-facts port, never an engine-na
     assert.equal(report.current.profiles.compilationConfig.fields.writeBackend.status, 'MISSING');
   } finally { await rm(profile, { recursive: true, force: true }); }
 });
+
+test('foreign provider public errors keep their validated code without SDK constructor identity', async () => {
+  const directory = await temp();
+  try {
+    const world = fixtureWorld();
+    const canvas = await boundCanvas(directory, world);
+    const publicFailure = { code: 'CAPABILITY_GAP', phase: 'validate', retryability: 'AFTER_NEW_FACTS',
+      mutationState: 'NONE', transactionRef: null, causeCode: null, reason: 'REQUIRED_FACT_UNKNOWN' };
+    world.worldFacts.call = async () => { throw Object.assign(new Error('private provider detail'),
+      { publicError: structuredClone(publicFailure) }); };
+    const report = await new CanvasConfigSupply(canvas).read('local-world');
+    assert.equal(report.current.sources.catalogue.cause, 'CAPABILITY_GAP');
+    world.worldFacts.call = async () => { throw { publicError: { code: 'INVENTED_ERROR' } }; };
+    const malformed = await new CanvasConfigSupply(canvas).read('local-world');
+    assert.equal(malformed.current.sources.catalogue.cause, 'WORLD_FACT_UNREADABLE');
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
