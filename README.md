@@ -132,6 +132,12 @@ fixture peers. The development fixture validators are compiled only into that te
 harness; they are absent from the product tgz and production dependency graph.
 Negative artifact/policy/runtime checks must fail. Evidence includes exact production
 lock, full resolution graph, tgz SHA256 and generated source hashes.
+By default, evidence and fresh production projects live in
+`~/.cache/hanaworlds-canvas/package-boundary`, outside the development source tree
+so Node cannot find its development dependencies through parent directories.
+`CANVAS_BOUNDARY_EVIDENCE` may select another location outside that tree. Child npm
+pack uses the writable global `~/.cache/npm` cache independently of inherited npm
+cache settings; pnpm security policies remain at their defaults.
 
 TypeScript declarations intentionally refer to Contracts **development types**;
 consumers compiling those declarations install the same public tag in their own
