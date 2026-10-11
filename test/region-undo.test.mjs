@@ -9,7 +9,7 @@ import { canonicalJSON, checkProtocolCompatibility, comparePosition, contractHan
   guardRefusalError, validateResponse,
   encodeRegionBlock, expandRegionBlock, protocolRequirement, regionChunksOfBox,
   validateRegionSnapshotContent, createPlacementProposal, confirmedPlacementBinding,
-  validateRegionCommitSubmission, regionRollbackCauseOf } from 'hanaworlds-contracts';
+  validateRegionCommitSubmission, regionRollbackCauseOf, summarizeRegionStates, validateRegionUndo } from 'hanaworlds-contracts';
 import { restoreFailedResponse as regionRestoreFailedResponse } from '../src/region-v1.mjs';
 import { CanvasV5, CanvasStore, CanvasRegionV1, canvasProtocolHandshake,
   ADAPTER_REGION_REQUIREMENT, ADAPTER_CELL_REQUIREMENT, apply as applyCanvas } from '../src/index.mjs';
@@ -1267,5 +1267,93 @@ test('required restore lighting covers unchanged and changed partitions after in
     assert.equal(response.result.lighting.status, 'COMPLETE');
     assert.equal(canonicalJSON(response.result.lighting.box), canonicalJSON({ min: [0, 0, 0], max: [8, 0, 0] }));
     assert.deepEqual(canvas.store.snapshot.pending, {});
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+// D-21=A: eight confirmed cells and eight UNSPECIFIED cells share one source partition.
+// Explicit peer fixture; this is a component regression, not I-K3 real-product evidence.
+test('D-21=A restores all eight confirmed cells and preserves edits in eight unspecified cells after reopen', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'canvas-region-scope-'));
+  try {
+    const world = fixtureWorld();
+    let { canvas, region } = await boot(directory, world);
+    const localContext = await select(canvas);
+    const compiled = compile([0, 0, 0], [4, 1, 4],
+      [{ materialRef: 'mcl_core:glass', orientation: 0 }],
+      Array.from({ length: 16 }, (_, i) => i % 4 < 2 ? 0 : -1));
+    const applied = await region.call('ApplyRegionCommit', commit(localContext, compiled));
+    assert.equal(applied.error, null);
+    for (let z = 0; z < 4; z++) for (let x = 2; x < 4; x++)
+      world.nodes.set(k([x, 0, z]), { materialRef: 'mcl_core:gold_block', orientation: 0, extra: sign });
+    ({ canvas, region } = await boot(directory, world));
+    const response = await region.call('UndoRegionCommit', undo(localContext, applied.result.historyRevision));
+    const residualBeforeAssertion = Array.from({ length: 8 }, (_, i) => [i % 2, 0, Math.floor(i / 2)])
+      .filter(position => world.get(position).materialRef !== 'air').length;
+    t.diagnostic(`confirmed cells remaining after Undo response: ${residualBeforeAssertion}`);
+    assert.equal(response.error, null, JSON.stringify(response.error));
+    assert.equal(response.result.status, 'VERIFIED');
+    let residual = 0;
+    for (let z = 0; z < 4; z++) for (let x = 0; x < 4; x++) {
+      const cell = world.get([x, 0, z]);
+      if (x < 2) {
+        if (cell.materialRef !== 'air') residual++;
+      } else assert.deepEqual(cell, { materialRef: 'mcl_core:gold_block', orientation: 0, extra: sign });
+    }
+    assert.equal(residual, 0, 'all eight confirmed cells must be restored');
+    assert.deepEqual(await region.call('UndoRegionCommit', undo(localContext, applied.result.historyRevision)), response);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test('D-21=A an edit in the confirmed eight cells refuses Undo without writing', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'canvas-region-scope-conflict-'));
+  try {
+    const world = fixtureWorld();
+    const { canvas, region } = await boot(directory, world);
+    const localContext = await select(canvas);
+    const compiled = compile([0, 0, 0], [4, 1, 4],
+      [{ materialRef: 'mcl_core:glass', orientation: 0 }],
+      Array.from({ length: 16 }, (_, i) => i % 4 < 2 ? 0 : -1));
+    const applied = await region.call('ApplyRegionCommit', commit(localContext, compiled));
+    assert.equal(applied.error, null);
+    world.nodes.set('0,0,0', { materialRef: 'mcl_core:gold_block', orientation: 0 });
+    const writes = world.writes.length;
+    const response = await region.call('UndoRegionCommit', undo(localContext, applied.result.historyRevision));
+    assert.equal(response.error.reason, 'EXTERNAL_EDIT_CONFLICT');
+    assert.equal(world.writes.length, writes);
+    assert.equal(world.get([0, 0, 0]).materialRef, 'mcl_core:gold_block');
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+
+test('published v2.8.0 validator rejects truthful D-21=A receipts when only unspecified cells change', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'canvas-region-contract-scope-'));
+  try {
+    const world = fixtureWorld();
+    const { canvas, region } = await boot(directory, world);
+    const localContext = await select(canvas);
+    const compiled = compile([0, 0, 0], [4, 1, 4],
+      [{ materialRef: 'mcl_core:glass', orientation: 0 }],
+      Array.from({ length: 16 }, (_, i) => i % 4 < 2 ? 0 : -1));
+    const applied = await region.call('ApplyRegionCommit', commit(localContext, compiled));
+    assert.equal(applied.error, null);
+    const box = { min: [0, 0, 0], max: [3, 0, 3] };
+    const summary = () => summarizeRegionStates(worldRef, compiled.operations.partition,
+      [{ chunkPos: [0, 0, 0], state: world.state(box) }]);
+    world.nodes.set('3,0,0', { materialRef: 'mcl_core:gold_block', orientation: 0 });
+    const preUndoSummary = summary();
+    world.nodes.delete('3,0,0');
+    const request = undo(localContext, applied.result.historyRevision);
+    const response = await region.call('UndoRegionCommit', request);
+    assert.equal(response.error, null);
+    world.nodes.set('3,0,0', { materialRef: 'mcl_core:gold_block', orientation: 0 });
+    const actualSummary = summary();
+    // Desired receipt: confirmed cells restored; external gold remains untouched.
+    assert.throws(() => validateRegionUndo(request, { ...response,
+      result: { ...response.result, preUndoSummary, actualSummary } }, applied.result),
+      error => error.publicError?.reason === 'EXTERNAL_EDIT_CONFLICT');
+    // The post-Undo equality independently forbids the same preserved external edit.
+    assert.throws(() => validateRegionUndo(request, { ...response,
+      result: { ...response.result, actualSummary } }, applied.result),
+      error => error.publicError?.code === 'READBACK_MISMATCH');
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
