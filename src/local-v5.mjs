@@ -18,6 +18,7 @@ import { CanvasRegionV1, ADAPTER_CELL_REQUIREMENT, ENGINE_GUARD_REQUIREMENTS, re
 import { CanvasConfigSupply } from './config-supply.mjs';
 import { expectedWrittenRecord, withDerivedReadback } from './state-profile.mjs';
 import { resolveHistoryOutcome } from './history-recovery.mjs';
+import packageJson from '../package.json' with { type: 'json' };
 
 export { CanvasStore, CanvasRegionV1, CanvasConfigSupply };
 const WIRE = 'canvas/v7';
@@ -27,7 +28,7 @@ const SESSION = 'session/v5';
 // pre-seam canvas behaviour left to switch to.
 const canvasProtocol = contractProtocols.find(row => row.protocol === 'canvas');
 if (!canvasProtocol || canvasProtocol.major !== 7) throw new Error('CANVAS_PROTOCOL_UNDECLARED');
-const PACKAGE_VERSION = '0.13.2';
+const PACKAGE_VERSION = packageJson.version;
 // The public wire defines canvas major 6, minor 0. Contracts publishes no
 // per-cell Canvas capability token; regional tokens describe the region port.
 const cellRequirement = protocolRequirement(WIRE, []);

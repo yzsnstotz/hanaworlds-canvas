@@ -3,6 +3,7 @@ import { mkdir, open, readFile, rename } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { gzip, gunzip, constants as zlib } from 'node:zlib';
+import packageJson from '../package.json' with { type: 'json' };
 import { canonicalJSON, checkProtocolCompatibility, comparePosition, contractProtocols, digestValue,
   expandRegionBlock, expectedRegionSummary, protocolRequirement, publicError,
   regionBlockBox, regionCapabilities, requireKnownRegion, guardRefusalError,
@@ -20,7 +21,7 @@ import { canonicalJSON, checkProtocolCompatibility, comparePosition, contractPro
 export const REGION_WIRE = 'canvas-region/v3';
 export const REGION_ADAPTER = 'world-adapter-region/v3';
 const ADAPTER = 'world-adapter/v8';
-const PACKAGE_VERSION = '0.13.2';
+const PACKAGE_VERSION = packageJson.version;
 export const CANVAS_REGION_CAPABILITIES = Object.freeze(regionCapabilities
   .filter(c => c.owner === 'hanaworlds-canvas').map(c => c.id).sort());
 // A capability id is scoped by its wire ("<wire>:<name>"). Each Adapter requirement takes

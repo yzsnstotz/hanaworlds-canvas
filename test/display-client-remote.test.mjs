@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import vm from 'node:vm';
-import { Context } from '@deepseek-ai/cordis';
+import { Context, Service } from '@deepseek-ai/cordis';
 import { TypertRegistry } from '@deepseek-ai/dsh-typert-registry';
 import { TypertGatewayService } from '@deepseek-ai/dsh-api-gateway';
 
@@ -19,7 +19,7 @@ const clientFace = async name => import(pathToFileURL(join(await sdkPackage(name
 const artifact = process.env.CANVAS_CLIENT_ARTIFACT ??
   fileURLToPath(new URL('../lib/client.js', import.meta.url));
 
-function loadClientBundle(source) {
+function loadClientBundle(source, sharedReact) {
   // React is external to the bundle; this stub only builds element records (no rendering).
   const react = { createElement: (type, props, ...children) => ({ type, props: { ...props, children } }),
     Fragment: Symbol('Fragment'), useState: init => [typeof init === 'function' ? init() : init, () => {}],
@@ -29,10 +29,11 @@ function loadClientBundle(source) {
     localStorage: { getItem: () => null, setItem: () => {} } },
     document: { head: { append() {} }, createElement: () => ({ dataset: {}, remove() {} }) } };
   vm.runInNewContext(source, sandbox, { filename: artifact });
-  return factory(id => { if (id === 'react') return react; throw new Error(`unexpected require ${id}`); });
+  return factory(id => { if (id === 'react') return sharedReact ?? react; throw new Error(`unexpected require ${id}`); });
 }
 
-async function compose(seed, { fixtureWorld = false } = {}) {
+async function compose(seed, { fixtureWorld = false, mountFailure, panelFailure,
+  panelFailureSlot = 'main', cleanupFailure, sharedReact } = {}) {
   const profile = await mkdtemp(join(tmpdir(), 'canvas-client-remote-'));
   const store = join(profile, 'data', 'hanaworlds-canvas-v2');
   if (seed) await seed(store);
@@ -72,17 +73,87 @@ async function compose(seed, { fixtureWorld = false } = {}) {
   await client.plugin(await clientFace('dsh-typert-registry'));
   client.provide('connection', connection);
   await client.plugin(await clientFace('dsh-api-gateway'));
+  if (mountFailure) client.get('remote').$mount = async () => { throw mountFailure; };
+  if (cleanupFailure) {
+    const remote = client.get('remote'), mount = remote.$mount;
+    remote.$mount = async function (contribution) {
+      const dispose = await mount.call(this, contribution);
+      return async () => { await dispose(); throw cleanupFailure; };
+    };
+  }
   const registered = [];
-  client.provide('slots', { inject: (_name, register) => register(),
-    register: (meta, component) => { registered.push({ meta, component }); return () => {}; } });
+  let failPanel = !!panelFailure;
+  // FIXTURE declared slots, with the public renderer's synchronous setup and
+  // caller-fiber effect ownership; registration cleanup is real Cordis.
+  new class extends Service {
+    constructor() { super(client, 'slots'); }
+    inject(_name, register) {
+      const dispose = this.ctx.effect(register);
+      return () => { void dispose(); };
+    }
+    register(meta, component) {
+      return this.ctx.effect(() => {
+        if (failPanel && meta.name === panelFailureSlot) { failPanel = false; throw panelFailure; }
+        const entry = { meta, component };
+        registered.push(entry);
+        return () => { registered.splice(registered.indexOf(entry), 1); };
+      });
+    }
+  }();
   client.provide('layout', {});
   client.provide('sessions', {});
-  const bundle = loadClientBundle(await readFile(artifact, 'utf8'));
+  const bundle = loadClientBundle(await readFile(artifact, 'utf8'), sharedReact);
   const fiber = client.plugin({ name: bundle.name, inject: bundle.inject, apply: bundle.apply });
-  await fiber;
   const close = async () => { await fiber.dispose(); await client.fiber.dispose(); await host.fiber.dispose();
     await rm(profile, { recursive: true, force: true }); };
-  return { gateway, wire, registered, close, world, canvas };
+  try { await fiber; } catch (error) { await close(); throw error; }
+  return { gateway, wire, registered, close, world, canvas, client, fiber };
+}
+
+test('partial sidebar setup and a rejecting remote cleanup still show the original Canvas fault', async () => {
+  const React = (await import('react')).default;
+  const { renderToStaticMarkup } = await import('react-dom/server');
+  const failure = Object.assign(new Error('sidebar setup failed'), { code: 'FIXTURE_PANEL_FAILED' });
+  const cleanup = Object.assign(new Error('remote cleanup failed'), { code: 'FIXTURE_CLEANUP_FAILED' });
+  const { registered, close, client, fiber } = await compose(null, { panelFailure: failure,
+    panelFailureSlot: 'sidebar.panellist', cleanupFailure: cleanup, sharedReact: React });
+  try {
+    assert.equal(fiber.state, 2);
+    assert.equal(registered.length, 2, 'the partial normal panel is removed before fault registration');
+    const main = registered.find(entry => entry.meta.name === 'main');
+    const html = renderToStaticMarkup(React.createElement(main.component));
+    assert.match(html, /FIXTURE_PANEL_FAILED/);
+    assert.match(html, /FIXTURE_CLEANUP_FAILED/);
+    assert.match(html, /remote cleanup failed/);
+    assert.equal(client.get('remote.hanaworldsCanvasDisplay'), undefined);
+  } finally { await close(); }
+  assert.equal(registered.length, 0, 'unloading the failed client removes its fault slots');
+});
+
+for (const [failurePoint, stage] of [['mountFailure', 'REMOTE_MOUNT'], ['panelFailure', 'PANEL_REGISTER']]) {
+  test(`client apply isolates ${failurePoint} in a named Canvas fault card`, async () => {
+    const React = (await import('react')).default;
+    const { renderToStaticMarkup } = await import('react-dom/server');
+    const failure = Object.assign(new Error('fixture initialization failed <script>'), { code: 'FIXTURE_INIT_FAILED' });
+    const { registered, close, client, fiber, wire } = await compose(null,
+      { [failurePoint]: failure, sharedReact: React });
+    try {
+      assert.equal(fiber.state, 2, 'the Canvas client remains ACTIVE after apply fails');
+      const main = registered.find(entry => entry.meta.name === 'main');
+      assert.ok(main, 'failed Canvas retains a main panel');
+      assert.ok(registered.find(entry => entry.meta.name === 'sidebar.panellist'));
+      const html = renderToStaticMarkup(React.createElement(main.component));
+      assert.match(html, /role="alert"/);
+      assert.match(html, /Canvas.*初始化失败/);
+      assert.match(html, new RegExp(stage));
+      assert.match(html, /FIXTURE_INIT_FAILED/);
+      assert.match(html, /fixture initialization failed &lt;script&gt;/);
+      assert.doesNotMatch(html, /<script>/);
+      assert.equal(client.get('remote.hanaworldsCanvasDisplay'), undefined,
+        'a failed initialization releases the mounted remote namespace');
+      assert.equal(wire.length, 0, 'the fault panel makes no world call');
+    } finally { await close(); }
+  });
 }
 
 test('shipped Canvas client reads hanaworldsCanvasDisplay through the public DSH Remote (FIXTURE carrier)', async () => {
