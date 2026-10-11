@@ -12,7 +12,7 @@ are separate origins and are not bundled or relicensed by Canvas.
 
 hanaworlds-contracts (MIT, HanaWorlds-owned) is a separately installed
 dependency from https://github.com/yzsnstotz/hanaworlds-contracts
-(exact public git tag v2.8.0); no Contracts bytes are copied into this repository.
+(exact public git tag v2.10.0); no Contracts bytes are copied into this repository.
 
 Canvas display bundle includes Zod 4.6.5 (MIT) from the official DSH runtime,
 https://github.com/colinhacks/zod, for the public Remote schemas. Host peers:

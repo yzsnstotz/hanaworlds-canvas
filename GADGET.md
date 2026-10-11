@@ -4,13 +4,13 @@ Canvas owns local world selection, registered object footprints and transaction 
 The single Cordis entry is `src/index.mjs`; the DSH panel is `lib/client.js`.
 
 Contracts is pinned to the formal release
-`git+https://github.com/yzsnstotz/hanaworlds-contracts.git#v2.8.0`,
-commit `5af62be25dcab110fcbb8502183922010f078f04`.
+`git+https://github.com/yzsnstotz/hanaworlds-contracts.git#v2.10.0`,
+commit `d0b73ca04b2abc1c4d594309d3158ee4a7a08a6f`.
 Run `npm ci`, `npm run build`, `npm run verify:contracts`, `npm run typecheck`, and `npm test`.
 The test command runs every retained test file, including Gateway/Remote, host storage,
 selection, per-cell apply/history and region rollback/recovery.
 
-Canvas provides `canvas/v7` minor 1 and `canvas-region/v3` minor 1.
+Canvas provides `canvas/v7` minor 2 and `canvas-region/v3` minor 1.
 It consumes `world-adapter/v8` and `world-adapter-region/v3` at minimum minor 0
 with their published write-path capability tokens. Service keys remain
 `hanaworldsCanvasV5`, `hanaworldsCanvasRegionV1`, `hanaworldsWorldAdapterV6`,
@@ -20,6 +20,29 @@ Configuration facts come from the world source's C-world-facts port `hanaworldsW
 `hanaworldsLuantiNativeFacts` is used only for per-cell `readScopedState`.
 Region ownership is read by role: the Adapter must cover every capability Contracts assigns
 to `owner: world-source`; Canvas advertises the capabilities scoped to `canvas-region/v3`.
+
+Read placement settings through `hanaworldsCanvasV5.call('ReadPlacementSettings', request)`.
+Use the current Session/world and exact selection `localContext`; the published
+`ReadPlacementSettingsRequest` permits null context only to receive an unbound error.
+The result carries Session/world/context and `placementSettings` with all four effective
+search values and `settingsRevision`. These are read from existing per-world state and
+checked against the currently loaded Canvas Config. Descriptor defaults are never returned
+as current-value evidence. Missing or unsynchronized settings refuse
+`CAPABILITY_UNAVAILABLE / POLICY_UNAVAILABLE`; no policy is repaired during the read.
+Identity is read before and after; the live connection is read twice. A changed Session,
+world, selection or connection refuses `CURRENT_WORLD_MISMATCH`, and a settings/config
+change refuses `STALE_REVISION`. Unbound/unknown Sessions and failed reads receive named
+errors. Repeated requests read current state and create no replay record.
+Zero world writes, inspections, history entries and persistent changes; startup sync is unchanged.
+Contracts publishes `placementSettingsRead.surface`, the existing descriptor/invariant exports,
+and `docs/placement-settings.md`: SafetyProfile remains from confirmed intent and AvatarEnvelope
+remains a world-source declaration. This operation creates neither profile.
+
+This candidate remains blocked for the strict whole-read stability requirement: independent
+Session and Adapter reads cannot prove one atomic snapshot. A live Adapter reconnection during
+the final identity await, without a Canvas selection update, is not observed. The card's
+`read-race-evidence.json` reproduces it; a shared provider revision guard is required before
+this candidate can be treated as satisfying that requirement. It is not merged into main.
 
 Placement requires an explicit `PlacementFootprint.geometryProfile`; missing facts
 refuse `CAPABILITY_UNAVAILABLE`, unsupported/undeclared geometry refuses `CAPABILITY_GAP`.
