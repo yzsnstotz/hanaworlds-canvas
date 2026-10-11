@@ -1,6 +1,6 @@
 # HanaWorlds Canvas
 
-Canvas `0.13.4` manages local world selection, object footprints, recoverable
+Canvas `0.14.0` manages local world selection, object footprints, recoverable
 transactions and durable Undo/Redo history. It provides `canvas/v7` and
 `canvas-region/v3`, using the formal Contracts `v2.7.0` git tag.
 

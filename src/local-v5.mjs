@@ -81,7 +81,7 @@ function engineRefusal(receipt) {
 
 /** Current local Canvas. Adapter is a public v6 port; it never decides history. */
 export class CanvasV5 {
-  constructor({ store, adapter, nativeFacts, sessions, config,
+  constructor({ store, adapter, nativeFacts, worldFacts, sessions, config,
     emitEvent, adapterId = 'hanaworlds-world-adapter' }) {
     checkContractHandshake(contractHandshake);
     this.store = store;
@@ -90,6 +90,7 @@ export class CanvasV5 {
     // that a Session exists; Canvas never infers that from a Ref.
     this.sessions = sessions;
     this.nativeFacts = nativeFacts;
+    this.worldFacts = worldFacts;
     this.adapterId = adapterId;
     this.emitEvent = emitEvent;
     this.placementConfig = structuredClone(Config(config).placement);
@@ -1495,21 +1496,17 @@ export function apply(ctx, config) {
       if (typeof current?.readScopedState !== 'function')
         throw fail('CAPABILITY_UNAVAILABLE', 'REQUIRED_FACT_UNKNOWN');
       return current.readScopedState(...args);
-    },
-    // Read-only Catalogue of the paired World (Adapter rechecks the pairing itself).
-    readCatalogue: (...args) => {
-      const current = ctx.get?.('hanaworldsLuantiNativeFacts');
-      if (typeof current?.readCatalogue !== 'function')
-        throw fail('CAPABILITY_UNAVAILABLE', 'REQUIRED_FACT_UNKNOWN');
-      return current.readCatalogue(...args);
-    },
-    // The loaded payload's write-backend declaration (CompilationConfig.backendProfileId source).
-    // Absent on the Host → the supply names CONFIG_ENGINE_FACTS_PORT_ABSENT, never a default.
-    get readConfigEngineFacts() {
-      const current = ctx.get?.('hanaworldsLuantiNativeFacts');
-      return typeof current?.readConfigEngineFacts === 'function' ?
-        (...args) => current.readConfigEngineFacts(...args) : undefined;
-    } } });
+    } },
+    // C-world-facts (world-facts/v1) of the bound World's source, under the Host key the world
+    // source publishes (the same neutral key the desktop bridge reads). Read on every call; no
+    // engine-named service is consulted. Absent → the supply names WORLD_FACTS_PORT_ABSENT.
+    worldFacts: {
+      get protocolHandshake() { return ctx.get?.('hanaworldsWorldFacts')?.protocolHandshake; },
+      get contractHandshake() { return ctx.get?.('hanaworldsWorldFacts')?.contractHandshake; },
+      get call() {
+        const current = ctx.get?.('hanaworldsWorldFacts');
+        return typeof current?.call === 'function' ? (...args) => current.call(...args) : undefined;
+      } } });
   ctx.provide?.('hanaworldsCanvasV5', service);
   // Host service names are Canvas's choice; the wire shapes are Contracts canvas-/world-adapter-region/v3.
   ctx.provide?.('hanaworldsCanvasRegionV1', new CanvasRegionV1(service, {
