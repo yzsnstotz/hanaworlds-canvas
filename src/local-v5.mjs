@@ -1000,6 +1000,68 @@ export class CanvasV5 {
     const response = respond('ListObjects', answer(body, result));
     return this.#remember(replayKey, admission.requestDigest, response);
   }
+  /** C-canvas minor 2: observe effective policy without inspections, replay or commits. */
+  async #readPlacementSettings(body) {
+    const initial = this.store.snapshot;
+    const session = structuredClone(initial.sessions[body.sessionRef] ?? null);
+    const savedConnection = structuredClone(initial.connections[body.sessionRef] ?? null);
+    const settings = structuredClone(initial.placementSettings[body.worldRef] ?? null);
+    const config = structuredClone(this.placementConfig);
+    const readPort = async read => {
+      try { return await read(); }
+      catch (error) {
+        const code = error?.publicError?.code;
+        if (code && contractsSdk.placementSettingsRead.errors.includes(code) &&
+            !['SCHEMA_INVALID', 'TRANSACTION_CONFLICT', 'UNKNOWN_REQUIRED_FIELD'].includes(code))
+          throw fail(code, error.publicError.reason, error.publicError.phase);
+        throw fail('READBACK_FAILED', 'REQUIRED_FACT_UNKNOWN', 'readback');
+      }
+    };
+    const identity = await readPort(() => this.#identity(body));
+    if (!session) throw fail('WORLD_NOT_BOUND', 'SCOPE_DENIED');
+    const check = () => {
+      if (!this.store || this.store.unavailable)
+        throw fail('CAPABILITY_UNAVAILABLE', 'REQUIRED_FACT_UNKNOWN');
+      const state = this.store.snapshot;
+      if (state.retiredSessions?.[body.sessionRef]) throw fail('SESSION_NOT_FOUND', 'SCOPE_DENIED');
+      if (!same(state.sessions[body.sessionRef], session) ||
+          session.sessionRevision !== identity.sessionRevision ||
+          session.activeWorldRef !== body.worldRef || !same(session.localContext, body.localContext) ||
+          !same(state.connections[body.sessionRef], savedConnection))
+        throw fail('CURRENT_WORLD_MISMATCH', 'SCOPE_DENIED');
+      if (state.worldSelections?.[body.worldRef]?.retired) throw fail('WORLD_NOT_FOUND', 'SCOPE_DENIED');
+      if (!same(state.placementSettings[body.worldRef] ?? null, settings)) throw fail('STALE_REVISION');
+      if (!same(this.placementConfig, config)) throw fail('STALE_REVISION');
+    };
+    check();
+    validateCurrentRequest(WIRE, 'ReadPlacementSettings', body,
+      this.#facts(body, 'ReadPlacementSettings').facts);
+    if (!settings) throw fail('CAPABILITY_UNAVAILABLE', 'POLICY_UNAVAILABLE');
+    try { validateType('PlacementSettings', settings); }
+    catch { throw fail('CAPABILITY_UNAVAILABLE', 'POLICY_UNAVAILABLE'); }
+    const values = Object.fromEntries(Object.keys(this.placementConfig).map(key => [key, settings[key]]));
+    if (!same(values, this.placementConfig)) throw fail('CAPABILITY_UNAVAILABLE', 'POLICY_UNAVAILABLE');
+    if (!savedConnection || typeof this.adapter?.call !== 'function')
+      throw fail('ADAPTER_UNAVAILABLE', 'REQUIRED_FACT_UNKNOWN');
+    const readConnection = async suffix => {
+      const connection = await readPort(() => this.#adapter('ReadLocalConnection', {
+        contractVersion: ADAPTER, sessionRef: body.sessionRef,
+        requestId: `${body.requestId}:${suffix}`, connectionRef: body.localContext.connectionRef }));
+      check();
+      if (!same(connection, savedConnection)) throw fail('CURRENT_WORLD_MISMATCH', 'SCOPE_DENIED');
+    };
+    await readConnection('settings-connection-before');
+    const afterIdentity = await readPort(() => this.#identity(body));
+    if (!same(afterIdentity, identity)) throw fail('CURRENT_WORLD_MISMATCH', 'SCOPE_DENIED');
+    await readConnection('settings-connection-after');
+    const finalIdentity = await readPort(() => this.#identity(body));
+    if (!same(finalIdentity, identity)) throw fail('CURRENT_WORLD_MISMATCH', 'SCOPE_DENIED');
+    check();
+    const response = respond('ReadPlacementSettings', answer(body, {
+      sessionRef: body.sessionRef, worldRef: body.worldRef,
+      localContext: body.localContext, placementSettings: settings }));
+    return validateBoundResponse(WIRE, 'ReadPlacementSettings', body, response);
+  }
   async #inspectPlacementRegion(body) {
     const { replayKey, prior, admission, connection } = await this.#bound('InspectPlacementRegion', body);
     const state = this.store.snapshot;
@@ -1482,6 +1544,7 @@ export class CanvasV5 {
       if (operation === 'ListWorldConnections' || operation === 'ReadWorldSelectionContext')
         return await this.#listConnections(body, operation);
       if (operation === 'ListObjects') return await this.#listObjects(body);
+      if (operation === 'ReadPlacementSettings') return await this.#readPlacementSettings(body);
       if (operation === 'SetObjectSelection') return await this.#setObjectSelection(body);
       if (operation === 'InspectPlacementRegion')
         return await this.#inspectPlacementRegion(body);

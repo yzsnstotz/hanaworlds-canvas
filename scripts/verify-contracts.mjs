@@ -3,13 +3,13 @@ import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { contractHandshake, version, operationContracts, schemaBundle,
-  validateType, protocolRequirement, checkProtocolCompatibility } from 'hanaworlds-contracts';
+  validateType, validateBoundResponse, protocolRequirement, checkProtocolCompatibility } from 'hanaworlds-contracts';
 import { CanvasV5, canvasProtocolHandshake, ADAPTER_CELL_REQUIREMENT,
   ADAPTER_REGION_REQUIREMENT } from '../src/index.mjs';
 
-// contracts-history-receipt-01: remote annotated tag v2.8.0 (peeled commit), checked at admission.
-const release = { tag: 'v2.8.0', version: '2.8.0',
-  revision: '5af62be25dcab110fcbb8502183922010f078f04' };
+// canvas-placement-settings-01: remote package-root v2.10.0 annotated tag (peeled commit).
+const release = { tag: 'v2.10.0', version: '2.10.0',
+  revision: 'd0b73ca04b2abc1c4d594309d3158ee4a7a08a6f' };
 const repository = 'git+https://github.com/yzsnstotz/hanaworlds-contracts.git';
 const root = new URL('../', import.meta.url);
 const json = async url => JSON.parse(await readFile(url, 'utf8'));
@@ -28,7 +28,7 @@ assert.equal(version, release.version, 'SDK version drift');
 assert.equal(contractHandshake.contracts, `hanaworlds-contracts@${release.version}`);
 for (const [wire, operations] of Object.entries({
   'canvas/v7': ['SelectWorldConnection', 'ReadWorldSelectionContext', 'ReserveWorldRetirement',
-    'HistoryQuery', 'InspectPlacementRegion', 'AnalyzeAffectedObjects', 'ApplyRecoverableCommit', 'Undo', 'Redo'],
+    'HistoryQuery', 'ReadPlacementSettings', 'InspectPlacementRegion', 'AnalyzeAffectedObjects', 'ApplyRecoverableCommit', 'Undo', 'Redo'],
   'canvas-region/v3': ['ApplyRegionCommit', 'UndoRegionCommit'],
   'world-adapter/v8': ['ReadLocalConnection', 'InspectRegion', 'PrepareRecoverableTransaction',
     'ApplyCompiledTransaction', 'Readback', 'RestoreTransaction'],
@@ -38,6 +38,11 @@ for (const [wire, operations] of Object.entries({
   for (const operation of operations) assert.ok(published.includes(operation), `${wire}:${operation}`);
 }
 assert.ok(schemaBundle.definitions.PlacementFootprint.properties.geometryProfile);
+assert.equal(new CanvasV5({ store: null }).protocolHandshake.protocols[0].minor, 2);
+const settingsFixture = await json(new URL(import.meta.resolve('hanaworlds-contracts/fixtures/placement-settings')));
+for (const exchange of settingsFixture.exchanges) {
+  validateBoundResponse('canvas/v7', 'ReadPlacementSettings', exchange.request, exchange.response);
+}
 // canvas-05 relays the published optional Error.worldRef (no null form); old errors still decode.
 assert.deepEqual(schemaBundle.definitions.Error.properties.worldRef, { $ref: '#/definitions/Ref' });
 assert.ok(!schemaBundle.definitions.Error.required.includes('worldRef'));

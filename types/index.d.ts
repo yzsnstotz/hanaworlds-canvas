@@ -4,7 +4,7 @@ import type { NativeFactsPort, WorldFactsPort } from './native-facts.js';
 import type Schema from '@deepseek-ai/schemastery';
 export type { NativeFactsPort, NativeFactsScopedState, WorldFactsPort } from './native-facts.js';
 
-/** Public declaration only: canvas major 7/minor 1, no published per-cell tokens.
+/** Public declaration only: canvas major 7/minor 2, no published per-cell tokens.
  * Read this property on the real hanaworldsCanvasV5 service supplied by apply(ctx).
  * It declares the protocol; it does not establish storage/world readiness.
  */

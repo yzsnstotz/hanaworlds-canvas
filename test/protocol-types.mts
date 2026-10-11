@@ -1,10 +1,14 @@
 import type { CanvasV5ProtocolSource, CanvasV5, CanvasRegionV1 } from 'hanaworlds-canvas';
 import { checkProtocolCompatibility, protocolRequirement } from 'hanaworlds-contracts';
+import type { ReadPlacementSettingsRequest, ReadPlacementSettingsResponse } from 'hanaworlds-contracts';
 import { Context } from '@deepseek-ai/cordis';
 import type { CanvasSelectionEvent } from 'hanaworlds-canvas';
 declare const publicService: CanvasV5ProtocolSource;
 declare const canvas: CanvasV5;
 declare const region: CanvasRegionV1;
+declare const settingsRequest: ReadPlacementSettingsRequest;
+const settingsResponse: Promise<ReadPlacementSettingsResponse> = canvas.call('ReadPlacementSettings', settingsRequest);
+void settingsResponse;
 const requirement = protocolRequirement('canvas/v7', []);
 checkProtocolCompatibility(publicService.protocolHandshake, [requirement]);
 checkProtocolCompatibility(canvas.protocolHandshake, [requirement]);
