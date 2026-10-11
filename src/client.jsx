@@ -52,6 +52,37 @@ function CanvasIcon() {
 }
 export const name = PANEL_ID;
 export const inject = ['slots', 'layout', 'sessions', 'remote'];
+function registerStyle(ctx) {
+  ctx.effect(() => {
+    const style = document.createElement('style'); style.textContent = css;
+    style.dataset.hanaworldsCanvas = 'objects-history'; document.head.append(style);
+    return () => style.remove();
+  });
+}
+function registerSlots(ctx, Panel) {
+  ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: PANEL_ID }, Panel));
+  ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({ name: 'sidebar.panellist',
+    id: PANEL_ID, order: 45, label: () => '对象与历史（Canvas）' }, CanvasIcon));
+}
+function registerFailure(ctx, stage, error, cleanupErrors) {
+  registerStyle(ctx);
+  function CanvasFailurePanel() {
+    return <main className="hw-canvas-display">
+      <section className="hw-canvas-card hw-canvas-error" role="alert">
+        <h1>Canvas（对象与历史）初始化失败</h1>
+        <p>对象与历史面板暂时不可用。请将此故障卡交给维护人员。</p>
+        <dl><dt>模块</dt><dd>hanaworlds-canvas</dd>
+          <dt>阶段</dt><dd>{stage}</dd>
+          <dt>故障</dt><dd>{failureCode(error)}</dd>
+          <dt>详情</dt><dd>{error?.message ?? String(error)}</dd>
+          {cleanupErrors.length > 0 && <><dt>清理故障</dt><dd>{cleanupErrors.map(failure =>
+            `${failureCode(failure)}: ${failure?.message ?? String(failure)}`).join('; ')}</dd></>}
+        </dl>
+      </section>
+    </main>;
+  }
+  registerSlots(ctx, CanvasFailurePanel);
+}
 // The mounted namespace is the traced child Service `remote.hanaworldsCanvasDisplay`; the panel
 // runs inside a fiber that injects it, as the public DSH Client Remote contract requires.
 function registerPanel(ctx) {
@@ -61,23 +92,35 @@ function registerPanel(ctx) {
     return result.value;
   };
   const read = remote('read'), readActions = remote('actions'), undo = remote('undo');
-  ctx.effect(() => {
-    const style = document.createElement('style'); style.textContent = css;
-    style.dataset.hanaworldsCanvas = 'objects-history'; document.head.append(style);
-    return () => style.remove();
-  });
+  registerStyle(ctx);
   function CanvasPanel({ useSessions }) {
     const sessionRef = useSessions(state => Object.values(state.byId)
       .find(session => (session.retainedBy.mainView ?? 0) > 0)?.id ?? null);
     return <ObjectsHistoryPanel sessionRef={sessionRef} read={read} readActions={readActions} undo={undo} />;
   }
-  ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: PANEL_ID }, CanvasPanel));
-  ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({ name: 'sidebar.panellist',
-    id: PANEL_ID, order: 45, label: () => '对象与历史（Canvas）' }, CanvasIcon));
+  registerSlots(ctx, CanvasPanel);
 }
 export async function apply(ctx) {
-  const disposeRemote = await ctx.remote.$mount(displayClientContribution);
-  const panel = ctx.inject(['remote.hanaworldsCanvasDisplay', 'slots', 'sessions'], registerPanel);
-  try { await panel; } catch (error) { await panel.dispose(); await disposeRemote(); throw error; }
-  return async () => { await panel.dispose(); await disposeRemote(); };
+  let disposeRemote, panel, stage = 'REMOTE_MOUNT';
+  const dispose = async () => {
+    const failures = [];
+    for (const release of [() => panel?.dispose(), () => disposeRemote?.()]) {
+      try { await release(); } catch (error) { failures.push(error); }
+    }
+    return failures;
+  };
+  try {
+    disposeRemote = await ctx.remote.$mount(displayClientContribution);
+    stage = 'PANEL_REGISTER';
+    panel = ctx.inject(['remote.hanaworldsCanvasDisplay', 'slots', 'sessions'], registerPanel);
+    await panel;
+  } catch (error) {
+    const cleanupErrors = await dispose();
+    registerFailure(ctx, stage, error, cleanupErrors);
+    return;
+  }
+  return async () => {
+    const failures = await dispose();
+    if (failures.length) throw new AggregateError(failures, 'Canvas 资源清理失败');
+  };
 }
