@@ -18,7 +18,7 @@ import { canonicalJSON, checkProtocolCompatibility, contractProtocols, digestVal
 /*
  * canvas-region/v3 over the public Contracts 1.x region v2 shapes.
  * Canvas is the only transaction decider. The Adapter region port only reads
- * and writes mapblock chunks (world-adapter-region/v3) and advertises its own
+ * and writes world-source partitions (world-adapter-region/v3) and advertises its own
  * ProtocolHandshake; compatibility is protocol major + minor + required capabilities.
  */
 export const REGION_WIRE = 'canvas-region/v3';
@@ -337,9 +337,9 @@ export class CanvasRegionV1 {
     return response.result;
   }
   /**
-   * Load-then-know read of every mapblock of `box`; still unknown rejects. The
+   * Load-then-know read of every world-source partition of `box`; still unknown rejects. The
    * result is aligned to `layout` ([chunkPos, box] of the compiled chunks): Brush
-   * omits mapblocks without specified cells, and every compiled chunk must be read.
+   * omits partitions without specified cells, and every compiled chunk must be read.
    */
   async #read(body, box, purpose, suffix, layout) {
     const request = { contractVersion: REGION_ADAPTER, sessionRef: body.sessionRef,
@@ -518,14 +518,23 @@ export class CanvasRegionV1 {
   }
   /**
    * Whole-region restore to `content` (a durable image): read current,
-   * RESTORE every chunk that differs, read back, require the target summary.
+   * RESTORE the target image, read back, require the target summary. A required
+   * light pass covers the entire saved layout; NONE only rewrites changed chunks.
    */
   async #restore(body, transactionId, content, targetSummary, box, suffix) {
+    const geometry = await this.#geometry(body);
+    if (!same(content.partition, geometry.partition))
+      throw fail('CAPABILITY_GAP', 'GEOMETRY_PROFILE_UNSUPPORTED');
     const layout = content.chunks.map(c => [c.chunkPos, regionBlockBox(c.state.block)]);
     const current = await this.#read(body, box, 'INSPECT', `${suffix}-current`, layout);
-    const writes = content.chunks.map((c, i) => ({ chunkPos: c.chunkPos,
-      expectedCurrentDigest: current.chunks[i].stateDigest, ops: null, state: c.state }))
-      .filter((w, i) => w.expectedCurrentDigest !== content.chunks[i].stateDigest);
+    const targets = content.chunks.map((c, i) => ({ chunkPos: c.chunkPos,
+      expectedCurrentDigest: current.chunks[i].stateDigest, ops: null, state: c.state }));
+    const changed = targets.filter((w, i) => w.expectedCurrentDigest !== content.chunks[i].stateDigest);
+    // Equal state digests do not establish that a required light pass completed.
+    // Restore the entire saved layout through the source's normal write path
+    // for REQUIRED: even unchanged chunks may need light recalculation after an
+    // interrupted write. NONE needs only changed chunks and no lighting fact.
+    const writes = geometry.postWriteLighting === 'NONE' ? changed : targets;
     let lighting = null;
     if (writes.length) {
       const written = await this.#write(body, transactionId, 'RESTORE', writes, suffix);
@@ -564,8 +573,7 @@ export class CanvasRegionV1 {
       pending.publicError.causeCode = restoreCode;
       throw pending;
     }
-    const lighting = (await this.#geometry(body)).postWriteLighting === 'NONE' ? null :
-      restored.lighting ?? facts.lighting ?? { status: 'NOT_COMPLETE', box, method: 'canvas:no-write-observed' };
+    const lighting = restored.lighting;
     const result = { transactionId: body.transactionId, worldRef: body.worldRef,
       status: 'ROLLED_BACK', operationDigest: body.operationDigest, beforeSummary,
       expectedAfterSummary, actualSummary: restored.actual, snapshot,
@@ -595,7 +603,7 @@ export class CanvasRegionV1 {
     if (origin?.kind !== 'REGION' || origin.result.status !== 'VERIFIED')
       throw fail('UNDO_CONFLICT', 'PAYLOAD_CHANGED');
     if (origin.worldRef !== body.worldRef) throw fail('CURRENT_WORLD_MISMATCH', 'SCOPE_DENIED');
-    await this.#current(body);
+    await this.#guarded({ ...body, operations: origin.operations }, 'UndoRegionCommit');
     if (state.history[origin.objectRef]?.at(-1)?.transactionId !== body.originTransactionId ||
         origin.result.historyRevision !== body.expectedHistoryRevision)
       throw fail('UNDO_CONFLICT');
@@ -678,8 +686,7 @@ export class CanvasRegionV1 {
         throw pending;
       }
       const result = await this.#undoResult(body, origin, 'ROLLED_BACK', preUndoSummary, back.actual,
-        rev('history-none'), back.lighting ?? { status: 'NOT_COMPLETE', box: origin.box,
-          method: 'canvas:no-write-observed' });
+        rev('history-none'), back.lighting);
       const response = this.#answer(body, 'UndoRegionCommit', result);
       validateRegionUndo(body, response, origin.result);
       await this.store.commit(next => {
