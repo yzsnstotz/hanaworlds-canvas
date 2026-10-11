@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import canonicalize from 'canonicalize';
 import { digestValue, requestDigest, validateBoundResponse, validateResponse,
- validateCommitReadback } from 'hanaworlds-contracts';
+ validateCommitReadback, requireGeometryProfile } from 'hanaworlds-contracts';
+import { withDerivedReadback } from './state-profile.mjs';
 const same = (a, b) => canonicalize(a) === canonicalize(b);
 const D = (kind, value) => digestValue(kind, value).sha256;
 function pendingError(transactionId, causeCode) {
@@ -39,6 +40,8 @@ export async function resolveHistoryOutcome(canvas, { sessionRef, transactionId 
     connection.result.connectionIncarnationRef!==body.localContext.connectionIncarnationRef)
   throw pendingError(transactionId,'CURRENT_WORLD_MISMATCH');
  if(completedRow?.recoveryResolution) return structuredClone(completedRow.recoveryResolution);
+ for(const record of [...row.before.records,...row.expected.records])
+  requireGeometryProfile(connection.result.capabilities.worldGeometry,record.geometryProfile);
  const receipt=await call('QueryTransaction',{transactionId,transactionPayloadDigest:prepared.transactionPayloadDigest});
  if(receipt.transactionId!==transactionId || receipt.transactionPayloadDigest!==prepared.transactionPayloadDigest ||
     receipt.operationDigest!==prepared.historyOperationDigest || !same(receipt.localContext,body.localContext))
@@ -68,7 +71,7 @@ export async function resolveHistoryOutcome(canvas, { sessionRef, transactionId 
    receiptDigest:D('receipt',receipt),historyRevision:`history-${randomUUID()}`,status:'VERIFIED'}:null;
   if(D('readback',actual.projection)!==actual.readbackDigest || receipt.readbackDigest!==actual.readbackDigest)
    throw pendingError(transactionId,'READBACK_MISMATCH');
-  validateCommitReadback(receipt,expected,actual.projection,history);
+  validateCommitReadback(receipt,withDerivedReadback(expected,actual.projection),actual.projection,history);
   const operation=row.direction==='REDO'?'Redo':'Undo';
   const response=validateResponse('canvas/v7',operation,{contractVersion:'canvas/v7',requestId:body.requestId,result:receipt,error:null,guardRefusal:null});
   const resolution={transactionId,status:receipt.status,mutationState:verified?'VERIFIED':'ROLLED_BACK',readbackDigest:actual.readbackDigest,receipt,response};
@@ -121,7 +124,7 @@ export async function resolveHistoryOutcome(canvas, { sessionRef, transactionId 
   });
  }
  const read=await call('Readback',{transactionId,coveredPositions:row.before.coveredPositions,stateProfile:row.before.stateProfile});
- if(!same(read.projection,row.before) || D('readback',read.projection)!==read.readbackDigest)
+ if(!same(read.projection,withDerivedReadback(row.before,read.projection)) || D('readback',read.projection)!==read.readbackDigest)
   throw pendingError(transactionId,'READBACK_MISMATCH');
  const operation=row.direction==='REDO'?'Redo':'Undo';
  const original=row.failure?.error;

@@ -29,7 +29,7 @@ import { fixtureEngineGuards, guardSlot } from '../scripts/fixture-engine-guards
  * snapshot files and reopen path are the real component runtime.
  */
 const D = (kind, value) => digestValue(kind, value).sha256;
-const stateProfile = { profileVersion: 'state-profile/v3', derivedFields: ['light'], preservedFields: ['inventory', 'metadata', 'timer'], clearedFields: [] };
+const stateProfile = { profileVersion: 'state-profile/v3', derivedFields: ['light'], preservedFields: [], clearedFields: ['inventory', 'metadata', 'timer'] };
 const WORLD = 'local-world';
 const worldRef = WORLD;
 const connectionOf = worldRef => ({ connectionRef: 'local-connection', connectionIncarnationRef: 'socket-open-1',
@@ -56,11 +56,12 @@ const cellHandshake = (major = 8, minor = 0, capabilities = CELL_CAPS) =>
 const k = p => p.join(',');
 const REGION_G1 = { guard: 'BODY_CLEARANCE', stage: 'REGION_RESTORE', finding: 'BODY_OCCUPIED' };
 
-function fixtureWorld({ protocolHandshake = handshake(), worldRef = WORLD, inspection = null } = {}) {
+function fixtureWorld({ protocolHandshake = handshake(), worldRef = WORLD, inspection = null, profile = stateProfile } = {}) {
   const connection = connectionOf(worldRef);
+  connection.capabilities.stateProfile = profile;
   const nodes = new Map(); // "x,y,z" -> {materialRef, orientation, extra?}
   const loaded = new Set(['0,-1,0', '0,0,0']);
-  const world = { nodes, loaded, unloadable: new Set(), calls: [], writes: [],
+  const world = { connection, nodes, loaded, unloadable: new Set(), calls: [], writes: [],
     failApply: null, corruptAfterApply: false, failRestore: false,
     incarnation: connection.connectionIncarnationRef };
   const ground = p => p[1] < 0 ? { materialRef: 'mcl_core:stone', orientation: 0 } :
@@ -84,7 +85,7 @@ function fixtureWorld({ protocolHandshake = handshake(), worldRef = WORLD, inspe
       .map(p => ({ position: p, ...world.get(p).extra }));
     return { profileVersion: 'region-state/v2', worldRef,
       block: encodeRegionBlock({ origin: box.min, size: box.max.map((v, a) => v - box.min[a] + 1),
-        palette, indices }), extras, stateProfile };
+        palette, indices }), extras, stateProfile: profile };
   };
   const setBlock = block => {
     const { box, indices, palette } = expandRegionBlock(block);
@@ -101,7 +102,7 @@ function fixtureWorld({ protocolHandshake = handshake(), worldRef = WORLD, inspe
         payloadVersion: connection.payloadVersion, readiness: 'READY',
         connectionIncarnationRef: world.incarnation }] });
     if (operation === 'ReadLocalConnection')
-      return respond({ ...connection, connectionIncarnationRef: world.incarnation });
+      return respond(structuredClone({ ...connection, connectionIncarnationRef: world.incarnation }));
     if (operation === 'InspectRegion' && inspection) {
       const targetFacts = { ...inspection.targetFacts, worldRef, worldRevision: request.expectedWorldRevision };
       return respond({ outcome: 'REGION_INSPECTED', inspection: { ...inspection,
@@ -121,7 +122,7 @@ function fixtureWorld({ protocolHandshake = handshake(), worldRef = WORLD, inspe
         const id = k(chunkPos);
         if (world.unloadable.has(id)) return { chunkPos, box, availability: 'UNKNOWN',
           loadMethod: null, unknownReason: 'LOAD_FAILED', state: null, stateDigest: null };
-        const loadMethod = loaded.has(id) ? 'ALREADY_LOADED' : 'LOADED_BY_EMERGE';
+        const loadMethod = loaded.has(id) ? 'ALREADY_LOADED' : 'LOADED_ON_DEMAND';
         loaded.add(id);
         const state = world.state(box);
         return { chunkPos, box, availability: 'KNOWN', loadMethod, unknownReason: null,
@@ -181,10 +182,10 @@ function fixtureWorld({ protocolHandshake = handshake(), worldRef = WORLD, inspe
 }
 
 /** Test-side Brush: whole-box indices -> mapblock chunks, omitting chunks with nothing specified. */
-function compile(origin, size, palette, indices) {
+function compile(origin, size, palette, indices, partition = { edge: [16, 16, 16] }) {
   const box = { min: origin, max: origin.map((o, a) => o + size[a] - 1) };
   const chunks = [];
-  for (const { chunkPos, box: cb } of regionChunksOfBox(box, { edge: [16, 16, 16] })) {
+  for (const { chunkPos, box: cb } of regionChunksOfBox(box, partition)) {
     const sub = [];
     for (let z = cb.min[2]; z <= cb.max[2]; z++) for (let y = cb.min[1]; y <= cb.max[1]; y++)
       for (let x = cb.min[0]; x <= cb.max[0]; x++)
@@ -195,7 +196,7 @@ function compile(origin, size, palette, indices) {
   }
   const operations = { contractVersion: 'region-operations/v2', buildDigest: 'b'.repeat(64),
     compilerRevision: 'fixture-brush-region-1', worldRef, catalogueDigest: 'c'.repeat(64),
-    partition: { edge: [16, 16, 16] }, chunks };
+    partition, chunks };
   return { operations, operationDigest: D('region-operations', operations) };
 }
 /** 40x3x4 box over mapblocks x0..2, y-1..0: carve air at y=-2, fill dirt, stairs with
@@ -649,11 +650,11 @@ test('protocol major + capabilities decide compatibility; patch and provenance d
       assert.equal((await runCell(undefined)).error.code, 'UNSUPPORTED_VERSION');
       assert.equal((await runCell(cellHandshake(5))).error.code, 'UNSUPPORTED_VERSION');
       if (ADAPTER_CELL_REQUIREMENT.capabilities.length) {
-        assert.equal((await runCell(cellHandshake(7, 0, CELL_CAPS.filter(c =>
+        assert.equal((await runCell(cellHandshake(8, 0, CELL_CAPS.filter(c =>
           !c.endsWith('write-path-state-facts'))))).error.code, 'CAPABILITY_UNAVAILABLE');
         assert.equal((await runCell(cellHandshake(6, 1))).error.code, 'UNSUPPORTED_VERSION');
       }
-      assert.equal((await run(handshake(), { contractVersion: 'canvas-region/v3' })).error.code,
+      assert.equal((await run(handshake(), { contractVersion: 'canvas-region/v2' })).error.code,
         'UNSUPPORTED_VERSION');
       assert.equal(world.writes.length, 0);
       const ok = await run(handshake(3, 3, ADAPTER_CAPS, '0.9.7-other-patch'));
@@ -667,7 +668,7 @@ test('protocol major + capabilities decide compatibility; patch and provenance d
       assert.equal(checkProtocolCompatibility(canvasProtocolHandshake, [requirement]).result,
         'PROTOCOL_COMPATIBLE');
       assert.throws(() => checkProtocolCompatibility(canvasProtocolHandshake,
-        [protocolRequirement('canvas-region/v3')]), e => e.code === 'UNSUPPORTED_VERSION');
+        [protocolRequirement('canvas-region/v2')]), e => e.code === 'UNSUPPORTED_VERSION');
       assert.equal(canvas.status().version, '0.13.2');
     } finally { await rm(directory, { recursive: true, force: true }); }
   });
@@ -696,7 +697,7 @@ test('Contracts public region fixture operations reproduce the contract summarie
     const fixture = createRequire(import.meta.url)('hanaworlds-contracts/fixtures/region');
     const directory = await mkdtemp(join(tmpdir(), 'canvas-region-public-'));
     try {
-      const world = fixtureWorld({ worldRef: 'fixture-world' });
+      const world = fixtureWorld({ worldRef: 'fixture-world', profile: fixture.readResponse.result.chunks[0].state.stateProfile });
       // Seed the in-memory world with the contract's before-image states (extras included).
       for (const chunk of fixture.readResponse.result.chunks) {
         const { box, indices, palette } = expandRegionBlock(chunk.state.block);
@@ -743,7 +744,7 @@ test('confirmed REGION: own source is retained, A-to-B and stale/missing/foreign
     const {canvas,region}=await boot(directory,world),localContext=await select(canvas,selectedWorld);
     const inspected=await canvas.call('InspectPlacementRegion',{contractVersion:'canvas/v7',
       sessionRef:'session-1',requestId:'region-source-inspection',worldRef:selectedWorld,
-      anchor:{kind:'CURRENT_VIEW',invocationId:'region-confirmation-fixture'},footprint:{widthCells:20,heightCells:2,depthCells:3},localContext});
+      anchor:{kind:'CURRENT_VIEW',invocationId:'region-confirmation-fixture'},footprint:{geometryProfile:'voxel-grid/v1',widthCells:20,heightCells:2,depthCells:3},localContext});
     assert.equal(inspected.error,null,JSON.stringify(inspected));
     const source=inspected.result.inspection, sourceId=source.inspectionId;
     const placement=createPlacementProposal(source,official.intent.confirmedIntent.placement.target);
@@ -904,7 +905,7 @@ test('Canvas incomplete APPLY cause states its validated write progress, not def
             worldRef:request.worldRef, purpose:'APPLY', localContext:request.localContext,
             chunks:request.writes.map((w,i) => i === 0 && first ? first.chunks[0] :
               {chunkPos:w.chunkPos, status:mode === 'unknown' && i === 0 ? 'UNKNOWN' : 'NOT_WRITTEN', readbackDigest:null}),
-            lighting:{status:'NOT_COMPLETE',box:{min:[-18,8,3],max:[21,8,6]}, method:'FIXTURE:captured-interruption-shape'}}};
+            postWriteLighting:'REQUIRED', lighting:{status:'NOT_COMPLETE',box:{min:[-18,8,3],max:[21,8,6]}, method:'FIXTURE:captured-interruption-shape'}}};
         observed = {request, response}; return response;
       };
       let {canvas,region} = await boot(directory,world);
@@ -933,4 +934,103 @@ test('Canvas incomplete APPLY cause states its validated write progress, not def
       assert.deepEqual(canvas.store.snapshot.pending,{});
     } finally {await rm(directory,{recursive:true,force:true});}
   }
+});
+
+
+test('placement requires explicit declared geometry and checks its response before retention', async () => {
+  const fx = JSON.parse(await readFile(new URL(import.meta.resolve('hanaworlds-contracts/fixtures/confirmed-placement'))));
+  const worldRef = fx.canvasRegion.accept[0].commit.worldRef;
+  const directory = await mkdtemp(join(tmpdir(), 'canvas-geometry-placement-'));
+  try {
+    const world = fixtureWorld({ worldRef, inspection: fx.inspections.regionView });
+    const { canvas } = await boot(directory, world), localContext = await select(canvas, worldRef);
+    const base = { contractVersion: 'canvas/v7', sessionRef: 'session-1', worldRef, localContext,
+      anchor: { kind: 'CURRENT_VIEW', invocationId: 'geometry-test' } };
+    const footprint = { widthCells: 20, heightCells: 2, depthCells: 3 };
+    for (const [id, profile, code] of [
+      ['missing', undefined, 'CAPABILITY_UNAVAILABLE'], ['unsupported', 'mesh/v1', 'CAPABILITY_GAP'],
+    ]) {
+      const response = await canvas.call('InspectPlacementRegion', { ...base, requestId: id,
+        footprint: profile ? { ...footprint, geometryProfile: profile } : footprint });
+      assert.equal(response.error.code, code);
+      assert.equal(response.error.mutationState, 'NONE');
+      assert.equal(world.calls.includes('InspectRegion'), false);
+    }
+    world.connection.capabilities.worldGeometry = null;
+    const gap = await canvas.call('InspectPlacementRegion', { ...base, requestId: 'undeclared',
+      footprint: { ...footprint, geometryProfile: 'voxel-grid/v1' } });
+    assert.equal(gap.error.code, 'CAPABILITY_GAP');
+    assert.equal(world.calls.includes('InspectRegion'), false);
+    world.connection.capabilities.worldGeometry = structuredClone(connection.capabilities.worldGeometry);
+    const successfulRequest = { ...base, requestId: 'geometry-replay',
+      footprint: { ...footprint, geometryProfile: 'voxel-grid/v1' } };
+    const first = await canvas.call('InspectPlacementRegion', successfulRequest);
+    assert.equal(first.error, null, JSON.stringify(first));
+    const count = world.calls.length;
+    assert.deepEqual(await canvas.call('InspectPlacementRegion', successfulRequest), first);
+    assert.equal(world.calls.length, count);
+    const retained = structuredClone(canvas.store.snapshot.placementInspections);
+    const adapterCall = world.adapter.call.bind(world.adapter);
+    world.adapter.call = async (operation, request) => {
+      if (operation === 'InspectRegion') {
+        assert.deepEqual(Object.keys(request.footprint).sort(), ['depthCells', 'heightCells', 'widthCells'],
+          'the minor-0 adapter receives its published dimensions only');
+        const response = await adapterCall(operation, request);
+        response.result.inspection.targetFacts.geometryProfile = 'mesh/v1';
+        return response;
+      }
+      return adapterCall(operation, request);
+    };
+    const invalid = await canvas.call('InspectPlacementRegion', { ...base, requestId: 'bad-response',
+      footprint: { ...footprint, geometryProfile: 'voxel-grid/v1' } });
+    assert.ok(invalid.error);
+    assert.equal(canonicalJSON(canvas.store.snapshot.placementInspections), canonicalJSON(retained));
+    assert.deepEqual(canvas.store.snapshot.pending, {});
+    assert.equal(world.writes.length, 0);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test('region uses current world partition after selection instead of cached or default facts', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'canvas-current-partition-'));
+  try {
+    const world = fixtureWorld();
+    const { canvas, region } = await boot(directory, world), localContext = await select(canvas);
+    const partition = { edge: [8, 4, 8] };
+    world.connection.capabilities.worldGeometry.partition = partition;
+    const compiled = compile([0,0,0], [9,1,1], [{ materialRef: 'fixture:solid', orientation: 2 }],
+      Int32Array.from({ length: 9 }, () => 0), partition);
+    const response = await region.call('ApplyRegionCommit', commit(localContext, compiled));
+    assert.equal(response.error, null, JSON.stringify(response));
+    assert.equal(response.result.status, 'VERIFIED', JSON.stringify(response));
+    assert.equal(canonicalJSON(response.result.actualSummary.partition), canonicalJSON(partition));
+    assert.deepEqual(world.writes, [{ purpose: 'APPLY', chunks: 2 }]);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test('region Undo rollback preserves declared lighting NONE with no invented lighting result', async () => {
+ const directory=await mkdtemp(join(tmpdir(),'canvas-region-none-'));
+ try {
+  const world=fixtureWorld();world.connection.capabilities.worldGeometry.postWriteLighting='NONE';
+  const original=world.region.call.bind(world.region);let failUndo=false;
+  world.region.call=async(operation,request)=>{
+   if(operation==='WriteRegion'&&request.purpose==='RESTORE'&&failUndo){
+    failUndo=false;world.nodes.set('9,-1,0',{materialRef:'fixture:unexpected',orientation:0});
+    throw Error('fixture lost Undo after partial write');
+   }
+   const response=await original(operation,request);
+   if(operation==='WriteRegion'&&response.result)
+    return {...response,result:{...response.result,postWriteLighting:'NONE',lighting:null}};
+   return response;
+  };
+  const {canvas,region}=await boot(directory,world),localContext=await select(canvas);
+  const applied=await region.call('ApplyRegionCommit',commit(localContext,terrain()));
+  assert.equal(applied.result?.status,'VERIFIED',JSON.stringify(applied));
+  failUndo=true;
+  const response=await region.call('UndoRegionCommit',undo(localContext,applied.result.historyRevision));
+  assert.equal(response.error,null,JSON.stringify(response));
+  assert.equal(response.result.status,'ROLLED_BACK');
+  assert.equal(response.result.postWriteLighting,'NONE');assert.equal(response.result.lighting,null);
+  assert.deepEqual(canvas.store.snapshot.pending,{});
+  assert.deepEqual(response.result.actualSummary,response.result.preUndoSummary);
+ } finally {await rm(directory,{recursive:true,force:true});}
 });

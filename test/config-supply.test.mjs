@@ -17,10 +17,10 @@ import { guardSlot } from '../scripts/fixture-engine-guards.mjs';
 const stateProfile = { profileVersion: 'state-profile/v3', derivedFields: ['light'], preservedFields: ['inventory', 'metadata', 'timer'], clearedFields: [] };
 const fixtureCatalogue = (await (async () => JSON.parse(await readFile(new URL(
   import.meta.resolve('hanaworlds-contracts/fixtures/main')))).request.catalogue)());
-const withWorldedit = revision => ({ ...fixtureCatalogue,
-  modRevisions: { ...fixtureCatalogue.modRevisions, worldedit: revision } });
+const withEngineRevision = revision => ({ ...fixtureCatalogue,
+  engineRevisions: { ...fixtureCatalogue.engineRevisions, fixtureEngine: revision } });
 
-function fixtureWorld({ catalogue = withWorldedit('fixture-worldedit-1') } = {}) {
+function fixtureWorld({ catalogue = withEngineRevision('fixture-engine-1') } = {}) {
   const env = { incarnation: 'socket-open-1', catalogue, adapterCalls: [], catalogueReads: 0,
     duringRead: null };
   const connection = () => ({ connectionRef: 'local-connection',
@@ -114,13 +114,9 @@ test('bound World: every field names its source; sourceless fields are refused b
         assert.equal(row.provenance.kind, 'CONTRACT_SCHEMA');
         assert.equal(row.provenance.sourceRevision, contractHandshake.contracts);
       }
-    // worldeditRevision is the bound World's loaded Catalogue fact, bound to that Catalogue.
-    assert.deepEqual(compile.fields.worldeditRevision, { status: 'SUPPLIED',
-      value: 'fixture-worldedit-1', provenance: { kind: 'ENGINE_FACT',
-        ref: 'hanaworldsLuantiNativeFacts.readCatalogue(worldRef).modRevisions.worldedit',
-        sourceRevision: digestValue('catalogue', world.catalogue).sha256 } });
+    // The opaque backend needs a current loaded-payload declaration.
     assert.deepEqual(compile.missing.map(row => [row.field, row.sourceKind]),
-      [['backendProfileId', 'ENGINE_FACT']]);
+      [['writeBackend', 'ENGINE_FACT']]);
     assert.equal(compile.status, 'SOURCE_MISSING');
     assert.equal(compile.value, null);
     assert.equal(compile.revision, null);
@@ -129,27 +125,24 @@ test('bound World: every field names its source; sourceless fields are refused b
       publicError(error).code === 'CAPABILITY_UNAVAILABLE' && publicError(error).phase === 'validate' &&
       error.publicError.code === 'CAPABILITY_UNAVAILABLE' &&
       error.publicError.reason === 'REQUIRED_FACT_UNKNOWN' &&
-      error.missingSources[0].field === 'backendProfileId');
+      error.missingSources[0].field === 'writeBackend');
     // Read-only: no Adapter call, no World mutation.
     assert.deepEqual(world.adapterCalls, []);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
-test('World Catalogue without worldedit: worldeditRevision is refused, not filled', async () => {
+test('Catalogue alone never invents a write backend', async () => {
   const directory = await temp();
   try {
     const world = fixtureWorld({ catalogue: fixtureCatalogue });
-    const supply = new CanvasConfigSupply(await boundCanvas(directory, world));
-    const row = (await supply.read('local-world')).current.profiles.compilationConfig
-      .fields.worldeditRevision;
-    assert.equal(row.status, 'MISSING');
-    assert.equal(row.cause, 'MOD_NOT_LOADED');
-    world.nativeFacts = null;
-    const absent = new CanvasConfigSupply(new CanvasV5({ store: await CanvasStore.open(directory),
-      adapter: world.adapter, sessions: fixtureSessions() }));
-    const report = await absent.read('local-world');
-    assert.equal(report.current.sources.catalogue.cause, 'NATIVE_FACTS_CATALOGUE_PORT_ABSENT');
-    assert.equal(report.current.profiles.compilationConfig.fields.worldeditRevision.status, 'MISSING');
+    const canvas = await boundCanvas(directory, world);
+    const report = await new CanvasConfigSupply(canvas).read('local-world');
+    assert.equal(report.current.profiles.compilationConfig.fields.writeBackend.cause,
+      'CONFIG_ENGINE_FACTS_PORT_ABSENT');
+    canvas.nativeFacts = null;
+    const absent = await new CanvasConfigSupply(canvas).read('local-world');
+    assert.equal(absent.current.sources.catalogue.cause, 'NATIVE_FACTS_CATALOGUE_PORT_ABSENT');
+    assert.equal(absent.current.profiles.compilationConfig.fields.writeBackend.status, 'MISSING');
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
@@ -164,13 +157,11 @@ test('changes and invalidation are recorded durably and read back after restart'
     // Same sources: same observation, nothing new recorded.
     assert.equal(again.current.observationDigest, first.current.observationDigest);
     assert.equal(again.history.length, 0);
-    world.catalogue = withWorldedit('fixture-worldedit-2');
+    world.catalogue = withEngineRevision('fixture-engine-2');
     const changed = await supply.read('local-world');
     assert.notEqual(changed.current.observationDigest, first.current.observationDigest);
-    assert.equal(changed.current.profiles.compilationConfig.fields.worldeditRevision.value,
-      'fixture-worldedit-2');
-    assert.deepEqual(changed.history.at(-1).invalidationReasons, ['SOURCE_REVISION_CHANGED',
-      'COMPILATIONCONFIG_CHANGED']);
+    assert.equal(changed.current.sources.catalogue.digest, digestValue('catalogue', world.catalogue).sha256);
+    assert.deepEqual(changed.history.at(-1).invalidationReasons, ['SOURCE_REVISION_CHANGED']);
     assert.equal(changed.history.at(-1).supersededBy, changed.current.observationDigest);
     // A new connection incarnation is a new domain.
     world.incarnation = 'socket-open-2';
@@ -218,7 +209,7 @@ test('assembly: a complete profile validates and its revision follows value and 
   const fields = Object.fromEntries(schemaBundle.definitions.CompilationConfig.required.map(field => {
     const schema = schemaBundle.definitions.CompilationConfig.properties[field];
     return [field, { status: 'SUPPLIED', value: Object.hasOwn(schema, 'const') ? schema.const :
-      `FIXTURE-${field}`, provenance: { kind: 'FIXTURE', ref: field, sourceRevision: 'f-1' } }];
+      structuredClone(configFixture.provider.valid[0].facts.writeBackend.writeBackend), provenance: { kind: 'FIXTURE', ref: field, sourceRevision: 'f-1' } }];
   }));
   const domain = { worldRef: 'w', connectionRef: 'c', connectionIncarnationRef: 'i',
     payloadVersion: 'p', capabilityRevision: 'r' };
@@ -230,8 +221,8 @@ test('assembly: a complete profile validates and its revision follows value and 
   assert.equal(assembleProfile('compilationConfig', fields, domain).revision, a.revision);
   assert.notEqual(assembleProfile('compilationConfig', fields,
     { ...domain, connectionIncarnationRef: 'i2' }).revision, a.revision);
-  assert.notEqual(assembleProfile('compilationConfig', { ...fields, worldeditRevision:
-    { ...fields.worldeditRevision, value: 'FIXTURE-other' } }, domain).revision, a.revision);
+  assert.notEqual(assembleProfile('compilationConfig', { ...fields, writeBackend:
+    { ...fields.writeBackend, value: { profileId: 'FIXTURE-other', revision: 'r2' } } }, domain).revision, a.revision);
 });
 
 test('host keys: Workshop consumer shapes plus Canvas own provenance readback', async () => {
@@ -253,8 +244,7 @@ test('host keys: Workshop consumer shapes plus Canvas own provenance readback', 
     assert.equal(ports.has('hanaworldsSafetyProfile'), false);
     await select(canvas, world, 'session-1');
     const report = await ports.get('hanaworldsCanvasConfigSupply').read('local-world');
-    assert.equal(report.current.profiles.compilationConfig.fields.worldeditRevision.value,
-      'fixture-worldedit-1');
+    assert.equal(report.current.profiles.compilationConfig.fields.writeBackend.status, 'MISSING');
     await assert.rejects(ports.get('hanaworldsCompilerConfig').read('local-world'),
       error => error.publicError.code === 'CAPABILITY_UNAVAILABLE');
   } finally { await rm(profile, { recursive: true, force: true }); }
@@ -268,7 +258,7 @@ test('v1: no Safety declaration or player geometry in the supply or its durable 
     const supply = new CanvasConfigSupply(canvas);
     assert.equal(supply.readSafetyProfile, undefined);
     await supply.read('local-world');
-    world.catalogue = withWorldedit('fixture-worldedit-2');
+    world.catalogue = withEngineRevision('fixture-engine-2');
     await supply.read('local-world');
     const stored = await readFile(join(directory, 'canvas-v7.json'), 'utf8');
     for (const word of ['SafetyProfile', 'safetyProfile', 'avatarDimensions',
@@ -315,15 +305,15 @@ test('candidate backend uses only the public loaded payload declaration, with pr
     const supply = new CanvasConfigSupply(await boundCanvas(directory, world));
     world.adapterCalls.length = 0;
     const report = await supply.read('local-world');
-    const row = report.current.profiles.compilationConfig.fields.backendProfileId;
+    const row = report.current.profiles.compilationConfig.fields.writeBackend;
     assert.equal(row.status, 'SUPPLIED');
-    assert.equal(row.value, facts.writeBackend.backendProfileId);
+    assert.deepEqual(row.value, facts.writeBackend.writeBackend);
     assert.equal(row.provenance.kind, 'ENGINE_FACT');
     assert.equal(row.provenance.sourceRevision, facts.sourceRevision);
     assert.equal(row.provenance.basis, 'LOADED_PAYLOAD_DECLARATION');
     const result = await supply.readCompilerConfig('local-world');
     validateType('CompilationConfig', result.compilationConfig);
-    assert.equal(result.compilationConfig.backendProfileId, row.value);
+    assert.deepEqual(result.compilationConfig.writeBackend, row.value);
     assert.deepEqual(world.adapterCalls, []);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
@@ -336,7 +326,7 @@ test('candidate backend refusal, absence and corrupt facts never default and exp
     for (const input of configFixture.consumer.assemble) {
       const facts = fixtureEngine(world, input.facts);
       if (facts.writeBackend.availability === 'KNOWN') continue;
-      const row = (await supply.read('local-world')).current.profiles.compilationConfig.fields.backendProfileId;
+      const row = (await supply.read('local-world')).current.profiles.compilationConfig.fields.writeBackend;
       assert.equal(row.value, null);
       assert.equal(row.cause, facts.writeBackend.reason);
       await assert.rejects(supply.readCompilerConfig('local-world'), e => {
@@ -346,11 +336,11 @@ test('candidate backend refusal, absence and corrupt facts never default and exp
     }
     const facts = fixtureEngine(world);
     facts.sourceRevision = '0'.repeat(64);
-    const row = (await supply.read('local-world')).current.profiles.compilationConfig.fields.backendProfileId;
+    const row = (await supply.read('local-world')).current.profiles.compilationConfig.fields.writeBackend;
     assert.equal(row.value, null);
     assert.equal(row.cause, 'NON_CANONICAL_AMBIGUITY');
     delete world.nativeFacts.readConfigEngineFacts;
-    const absent = (await supply.read('local-world')).current.profiles.compilationConfig.fields.backendProfileId;
+    const absent = (await supply.read('local-world')).current.profiles.compilationConfig.fields.writeBackend;
     assert.equal(absent.sourceKind, 'ENGINE_FACT');
     assert.equal(absent.cause, 'CONFIG_ENGINE_FACTS_PORT_ABSENT');
   } finally { await rm(directory, { recursive: true, force: true }); }
@@ -387,7 +377,7 @@ test('candidate connection and Catalogue mismatches are stale, never usable back
       else altered.catalogueDigest = '0'.repeat(64);
       world.nativeFacts.readConfigEngineFacts = async () => altered;
       assert.equal((await supply.read('local-world')).current.profiles.compilationConfig
-        .fields.backendProfileId.value, null);
+        .fields.writeBackend.value, null);
       await assert.rejects(supply.readCompilerConfig('local-world'), e => {
         const error = publicError(e); validateType('Error', error);
         return error.code === 'STALE_REVISION' && error.reason === 'REVISION_CHANGED';
@@ -399,10 +389,10 @@ test('candidate connection and Catalogue mismatches are stale, never usable back
 test('single and multiple missing-source refusals validate as public Error, without schema fallback', async () => {
   // Only the refusal projection is isolated here; policy values are never installed or changed.
   for (const missing of [
-    [{ field: 'backendProfileId', reason: 'REQUIRED_FACT_UNKNOWN' }],
-    [{ field: 'worldeditRevision', reason: 'REQUIRED_FACT_UNKNOWN' }],
-    [{ field: 'backendProfileId', reason: 'REQUIRED_FACT_UNKNOWN' },
-      { field: 'worldeditRevision', reason: 'REQUIRED_FACT_UNKNOWN' }],
+    [{ field: 'writeBackend', reason: 'REQUIRED_FACT_UNKNOWN' }],
+    [{ field: 'unmappedFixtureField', reason: 'REQUIRED_FACT_UNKNOWN' }],
+    [{ field: 'writeBackend', reason: 'REQUIRED_FACT_UNKNOWN' },
+      { field: 'unmappedFixtureField', reason: 'REQUIRED_FACT_UNKNOWN' }],
   ]) {
     const supply = new CanvasConfigSupply(null);
     supply.read = async () => ({ current: { observationDigest: 'FIXTURE-refusal', profiles:
@@ -428,7 +418,7 @@ test('candidate public fixture shape failures are refused through the consumer w
       await assert.rejects(supply.readCompilerConfig('local-world'), error => {
         const projected = publicError(error); validateType('Error', projected);
         return ['CAPABILITY_UNAVAILABLE', 'STALE_REVISION'].includes(projected.code) &&
-          error.missingSources.some(row => row.field === 'backendProfileId');
+          error.missingSources.some(row => row.field === 'writeBackend');
       }, item.title);
     }
     const stored = await readFile(join(directory, 'canvas-v7.json'), 'utf8');
@@ -456,7 +446,7 @@ test('config fact read changing the selected connection is rejected before recor
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
-test('host apply() forwards readConfigEngineFacts: backendProfileId comes from the engine facts', async () => {
+test('host apply() forwards readConfigEngineFacts: writeBackend comes from the engine facts', async () => {
   // Regression (real-GO assembly finding): apply() wired only readScopedState/readCatalogue, so a
   // Host-assembled Canvas always reported CONFIG_ENGINE_FACTS_PORT_ABSENT.
   const profile = await temp();
@@ -473,13 +463,13 @@ test('host apply() forwards readConfigEngineFacts: backendProfileId comes from t
     await canvas.ready;
     await select(canvas, world, 'session-1');
     const row = (await ports.get('hanaworldsCanvasConfigSupply').read('local-world'))
-      .current.profiles.compilationConfig.fields.backendProfileId;
+      .current.profiles.compilationConfig.fields.writeBackend;
     assert.equal(row.status, 'SUPPLIED');
-    assert.equal(row.value, facts.writeBackend.backendProfileId);
+    assert.deepEqual(row.value, facts.writeBackend.writeBackend);
     // Without the method on the Host port the source is named absent, never defaulted.
     delete world.nativeFacts.readConfigEngineFacts;
     const absent = (await ports.get('hanaworldsCanvasConfigSupply').read('local-world'))
-      .current.profiles.compilationConfig.fields.backendProfileId;
+      .current.profiles.compilationConfig.fields.writeBackend;
     assert.equal(absent.cause, 'CONFIG_ENGINE_FACTS_PORT_ABSENT');
   } finally { await rm(profile, { recursive: true, force: true }); }
 });

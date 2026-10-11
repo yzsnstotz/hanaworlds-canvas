@@ -8,7 +8,8 @@ import { admitRequest, validateRequest, validateResponse, validateBoundResponse,
   validateCurrentRequest, validateWorldSelection, validateCommitReadback,
   projectScopedPreparedTransaction, checkContractHandshake, contractHandshake,
   digestValue, requestDigest, publicError, validateExactEffects,
-  validateRegionInspection, checkConfirmedPlacementApply } from 'hanaworlds-contracts';
+  validateRegionInspection, checkConfirmedPlacementApply,
+  validatePlacementRegionRequest, validatePlacementRegionResponse } from 'hanaworlds-contracts';
 import { checkProtocolCompatibility, contractProtocols, protocolRequirement,
   validateType, requireGeometryProfile } from 'hanaworlds-contracts';
 import * as contractsSdk from 'hanaworlds-contracts';
@@ -402,8 +403,8 @@ export class CanvasV5 {
   }
   async #analyze(body) {
     const { replayKey, prior, admission, connection } = await this.#bound('AnalyzeAffectedObjects', body);
-    for (const effect of body.operations.effects) requireGeometryProfile(connection.capabilities.worldGeometry, effect.geometryProfile);
     if (prior) return prior.response;
+    for (const effect of body.operations.effects) requireGeometryProfile(connection.capabilities.worldGeometry, effect.geometryProfile);
     const session = this.current(body.sessionRef);
     if (body.expectedSelectionRevision !== session.selectionRevision ||
         body.expectedRegistryRevision !==
@@ -742,6 +743,8 @@ export class CanvasV5 {
     const stateProfile = origin.after.stateProfile;
     const expectedCurrent = redo ? origin.before : origin.after;
     const target = redo ? origin.after : origin.before;
+    for (const record of [...expectedCurrent.records, ...target.records])
+      requireGeometryProfile(connection.capabilities.worldGeometry, record.geometryProfile);
     const current = await this.#read({ ...body,
       transactionId: body.historyTransactionId }, positions, stateProfile,
     redo ? 'before-redo' : 'before-undo');
@@ -904,7 +907,6 @@ export class CanvasV5 {
   }
   async #inspectPlacementRegion(body) {
     const { replayKey, prior, admission, connection } = await this.#bound('InspectPlacementRegion', body);
-    requireGeometryProfile(connection.capabilities.worldGeometry, body.footprint.geometryProfile);
     const state = this.store.snapshot;
     if (state.sessions[body.sessionRef]?.activeWorldRef !== body.worldRef ||
         !same(state.sessions[body.sessionRef]?.localContext, body.localContext))
@@ -924,13 +926,15 @@ export class CanvasV5 {
       if (revision !== state.worldRevisions[body.worldRef]) throw fail('STALE_REVISION');
       return prior.response;
     }
+    validatePlacementRegionRequest(body, connection);
     const worldRevision = state.worldRevisions[body.worldRef];
     const inspectionId = rev('inspection');
     const result = await this.#adapter('InspectRegion', {
       contractVersion: ADAPTER, sessionRef: body.sessionRef,
       requestId: `${body.requestId}:region`, worldRef: body.worldRef,
       expectedWorldRevision: worldRevision, inspectionId,
-      anchor: body.anchor, footprint: body.footprint,
+      anchor: body.anchor, footprint: { widthCells: body.footprint.widthCells,
+        depthCells: body.footprint.depthCells, heightCells: body.footprint.heightCells },
       placementSettings: settings, localContext: body.localContext });
     if (result.outcome === 'REGION_INSPECTED') {
       const inspection = validateRegionInspection(result.inspection);
@@ -948,8 +952,8 @@ export class CanvasV5 {
           !same(result.choice.placementSettings, settings))
         throw fail('INSPECTION_FAILED', 'REQUIRED_FACT_UNKNOWN');
     } else throw fail('INSPECTION_FAILED', 'REQUIRED_FACT_UNKNOWN');
-    const response = respond('InspectPlacementRegion',
-      { ...answer(body, result), unavailableSettings: null });
+    const response = validatePlacementRegionResponse(body, respond('InspectPlacementRegion',
+      { ...answer(body, result), unavailableSettings: null }), connection);
     await this.store.commit(next => {
       if (!same(next.sessions[body.sessionRef]?.localContext, body.localContext) ||
           next.worldRevisions[body.worldRef] !== worldRevision ||

@@ -21,7 +21,7 @@ import { guardSlot } from '../scripts/fixture-engine-guards.mjs';
  */
 // Store values are null-prototype objects; compare canonical JSON.
 // canvas/v7 (Contracts 1.x) always carries the session-world seam.
-const SEAM = contractProtocols.find(row => row.protocol === 'canvas').major === 6;
+const SEAM = contractProtocols.find(row => row.protocol === 'canvas').major === 7;
 const same = (a, b, message) => assert.equal(canonicalJSON(a), canonicalJSON(b), message);
 const stateProfile = { profileVersion: 'state-profile/v3', derivedFields: ['light'], preservedFields: ['inventory', 'metadata', 'timer'], clearedFields: [] };
 const readback = (connectionRef, worldRef, incarnation) => ({ connectionRef,

@@ -1,4 +1,4 @@
-HanaWorlds Canvas 0.2.0 component candidate.
+HanaWorlds Canvas 0.13.2 component candidate.
 
 Owner-authored source is MIT; see LICENSE and LICENSE_AUDIT.md. The 0.1.0
 AGPL-3.0-only source remains available at public revision
@@ -12,9 +12,9 @@ are separate origins and are not bundled or relicensed by Canvas.
 
 hanaworlds-contracts (MIT, HanaWorlds-owned) is a separately installed
 dependency from https://github.com/yzsnstotz/hanaworlds-contracts
-(git range #semver:^0.5.6); no Contracts bytes are copied into this repository.
+(exact public git tag v2.2.1); no Contracts bytes are copied into this repository.
 
-Canvas 0.6.0 display bundle includes Zod 4.6.5 (MIT) from the official DSH runtime,
+Canvas display bundle includes Zod 4.6.5 (MIT) from the official DSH runtime,
 https://github.com/colinhacks/zod, for the public Remote schemas. Host peers:
 @deepseek-ai/cordis 4.0.4 and @deepseek-ai/dsh-typert-protocol 0.2.0-rc.2 (MIT),
 from the official deepseek-ai/deepseek-harness runtime. React 18.3.1 (MIT),
@@ -22,7 +22,6 @@ https://github.com/facebook/react, is a development/render dependency; the
 browser uses DSH's shared React seed. esbuild 0.25.10 (MIT),
 https://github.com/evanw/esbuild, builds the client bundle and is not a runtime.
 
-Independent objects/history web entry: React18.3.1 and ReactDOM18.3.1,
-MIT; installed npm sources; browser runtime/UI only. Complete licenses:
-LICENSES/REACT-MIT.txt and LICENSES/REACT-DOM-MIT.txt. esbuild0.25.10 (MIT)
-is a development build tool; no third-party CDN or new SDK runtime dependency.
+ReactDOM 18.3.1 (MIT) renders isolated tests only; the independent fixture pages
+are archived outside the shipped package. DSH registry/gateway/util-crypto
+0.2.0-rc.2 (MIT) are development dependencies for the official remote test path.

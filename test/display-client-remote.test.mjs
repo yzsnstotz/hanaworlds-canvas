@@ -208,7 +208,7 @@ test('external world edit after the build: panel Undo is refused whole, nothing 
   } finally { await close(); }
 });
 
-test('client view offers Undo only on the published latest row, and never in sample mode', async () => {
+test('client view offers Undo only on the published latest row with an action handler', async () => {
   const React = (await import('react')).default;
   const { renderToStaticMarkup } = await import('react-dom/server');
   const { ObjectsHistoryView } = await import('../src/display-view.mjs');
@@ -220,12 +220,12 @@ test('client view offers Undo only on the published latest row, and never in sam
     { objectRef: 'a', mode: 'CELL', applied: true, undo: { available: true, reason: null, historyTransactionId: 'a-1' } },
     { objectRef: 'b', mode: 'CELL', applied: true, undo: { available: false, reason: 'WORLD_CHANGED_SINCE', historyTransactionId: null } }] };
   const undo = { confirming: null, busy: false, message: null, error: null, request() {}, cancel() {}, confirm() {} };
-  const render = props => renderToStaticMarkup(React.createElement(ObjectsHistoryView, { view, sample: false, ...props }));
+  const render = props => renderToStaticMarkup(React.createElement(ObjectsHistoryView, { view, ...props }));
   const live = render({ actions, undo });
   assert.equal(live.split('撤回这笔').length - 1, 1);
   assert.match(live, /只撤回世界最近一次改动/);
   assert.match(render({ actions, undo: { ...undo, confirming: 'a-1' } }), /确认撤回/);
   assert.doesNotMatch(render({}), /撤回这笔/);
   assert.match(render({}), /当前世界 · 只读/);
-  assert.doesNotMatch(render({ actions, undo, sample: true }), /撤回这笔/);
+  assert.doesNotMatch(render({ actions }), /撤回这笔/);
 });

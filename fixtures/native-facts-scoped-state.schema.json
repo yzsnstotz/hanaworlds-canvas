@@ -25,24 +25,14 @@
       "pattern": "^[0-9a-f]{64}$",
       "x-typeName": "Digest"
     },
-    "NodeFields": {
+    "FieldNames": {
       "type": "array",
-      "items": [
-        {
-          "const": "nodeName"
-        },
-        {
-          "const": "param1"
-        },
-        {
-          "const": "param2"
-        }
-      ],
-      "minItems": 3,
-      "maxItems": 3,
-      "additionalItems": false,
-      "x-typeName": "NodeFields",
-      "x-order": "fixed explicit complete node fields"
+      "items": {
+        "$ref": "#/definitions/Ref"
+      },
+      "uniqueItems": true,
+      "x-typeName": "FieldNames",
+      "x-order": "UTF16 ascending"
     },
     "Position": {
       "type": "array",
@@ -125,34 +115,27 @@
       "type": "object",
       "properties": {
         "profileVersion": {
-          "const": "state-profile/v2"
+          "const": "state-profile/v3"
         },
-        "nodeFields": {
-          "$ref": "#/definitions/NodeFields"
+        "derivedFields": {
+          "$ref": "#/definitions/FieldNames"
         },
-        "metadataMode": {
-          "const": "exact"
+        "preservedFields": {
+          "$ref": "#/definitions/FieldNames"
         },
-        "inventoryMode": {
-          "const": "exact"
-        },
-        "timerMode": {
-          "const": "exact"
-        },
-        "derivedLightMode": {
-          "const": "recompute-with-readback"
+        "clearedFields": {
+          "$ref": "#/definitions/FieldNames"
         }
       },
       "required": [
         "profileVersion",
-        "nodeFields",
-        "metadataMode",
-        "inventoryMode",
-        "timerMode",
-        "derivedLightMode"
+        "derivedFields",
+        "preservedFields",
+        "clearedFields"
       ],
       "additionalProperties": false,
-      "x-typeName": "StateProfile"
+      "x-typeName": "StateProfile",
+      "x-meaning": "Declared by the world source for the state map of a Record. derivedFields are recomputed by the engine after a write and are never compared: the expected value is the readback value. preservedFields keep the before value when a cell is written. clearedFields are absent after a cell is written. The three sets are disjoint; a field in none of them is not expected to exist after a write."
     }
   }
 }

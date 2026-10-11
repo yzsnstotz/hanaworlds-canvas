@@ -24,7 +24,7 @@ const PACKAGE_VERSION = '0.13.2';
 export const CANVAS_REGION_CAPABILITIES = Object.freeze(regionCapabilities
   .filter(c => c.owner === 'hanaworlds-canvas').map(c => c.id).sort());
 // A capability id is scoped by its wire ("<wire>:<name>"). Each Adapter requirement takes
-// only its own wire's ids, at the minor the Contracts declare for that protocol, and is
+// only its own wire's ids at minimum minor 0 (the operations consumed here), and is
 // checked against the handshake of that port (G3: world-adapter/v8:* on the per-cell port,
 // world-adapter-region/v3:* on the region port).
 const ADAPTER_CAPABILITIES = regionCapabilities
@@ -33,7 +33,7 @@ const adapterRequirement = wire => {
   const declared = contractProtocols.find(p => `${p.protocol}/v${p.major}` === wire);
   if (!declared) throw new Error(`CANVAS_ADAPTER_PROTOCOL_UNDECLARED:${wire}`);
   return protocolRequirement(wire, ADAPTER_CAPABILITIES.filter(id => id.startsWith(`${wire}:`)),
-    declared.minor);
+    0);
 };
 export const ADAPTER_REGION_REQUIREMENT = adapterRequirement(REGION_ADAPTER);
 export const ADAPTER_CELL_REQUIREMENT = adapterRequirement(ADAPTER);
@@ -101,7 +101,7 @@ const inFlight = (state, worldRef) => Object.values(state.pending)
 
 export const canvasProtocolHandshake = Object.freeze(validateType('ProtocolHandshake', {
   profileVersion: 'protocol-handshake/v1', component: 'hanaworlds-canvas',
-  protocols: [{ protocol: 'canvas-region', major: 3, minor: 0 }],
+  protocols: [{ protocol: 'canvas-region', major: 3, minor: 1 }],
   capabilities: [...CANVAS_REGION_CAPABILITIES],
   provenance: { packageName: 'hanaworlds-canvas', packageVersion: PACKAGE_VERSION,
     sourceRevision: null, artifactDigest: null } }));
@@ -313,7 +313,7 @@ export class CanvasRegionV1 {
    */
   async #read(body, box, purpose, suffix, layout) {
     const request = { contractVersion: REGION_ADAPTER, sessionRef: body.sessionRef,
-      requestId: `${body.requestId}:${suffix}`, worldRef: body.worldRef, box, purpose, partition: this.#geometry(body).partition,
+      requestId: `${body.requestId}:${suffix}`, worldRef: body.worldRef, box, purpose, partition: (await this.#geometry(body)).partition,
       localContext: body.localContext };
     const response = validateRegionRead(request, await this.regionAdapter.call('ReadRegion', request));
     if (response.error) throw Object.assign(new Error(response.error.code),
@@ -331,17 +331,18 @@ export class CanvasRegionV1 {
   async #write(body, transactionId, purpose, writes, suffix) {
     const request = { contractVersion: REGION_ADAPTER, sessionRef: body.sessionRef,
       requestId: `${body.requestId}:${suffix}`, worldRef: body.worldRef, transactionId,
-      purpose, writes, partition: this.#geometry(body).partition, localContext: body.localContext };
+      purpose, writes, partition: (await this.#geometry(body)).partition, localContext: body.localContext };
     const written = validateRegionWrite(request, await this.regionAdapter.call('WriteRegion', request));
     // A refused write keeps the Adapter's public Error and its GuardRefusal (if any) as the cause.
     if (written.response.error) throw Object.assign(new Error(written.response.error.code),
       { publicError: written.response.error, guardRefusal: written.response.guardRefusal ?? null });
-    if (written.response.result.postWriteLighting !== this.#geometry(body).postWriteLighting)
+    if (written.response.result.postWriteLighting !== (await this.#geometry(body)).postWriteLighting)
       throw fail('CAPABILITY_GAP', 'GEOMETRY_PROFILE_UNSUPPORTED');
     return written;
   }
-  #geometry(body) {
-    return requireGeometryProfile(this.store.snapshot.connections[body.sessionRef]?.capabilities.worldGeometry ?? null, 'voxel-grid/v1');
+  async #geometry(body) {
+    const connection = await this.#current(body);
+    return requireGeometryProfile(connection.capabilities.worldGeometry, 'voxel-grid/v1');
   }
   #summary(worldRef, read) {
     return summarizeRegionStates(worldRef, read.partition, read.chunks.map(c => ({ chunkPos: c.chunkPos,
@@ -395,7 +396,7 @@ export class CanvasRegionV1 {
     const box = unionBox(layout.map(([, b]) => b));
     const before = await this.#read(body, box, 'BEFORE_IMAGE', 'before', layout);
     const content = validateType('RegionSnapshotContent', {
-      profileVersion: 'region-snapshot-content/v2', worldRef: body.worldRef, partition: this.#geometry(body).partition,
+      profileVersion: 'region-snapshot-content/v2', worldRef: body.worldRef, partition: (await this.#geometry(body)).partition,
       chunks: before.chunks.map(c => ({ chunkPos: c.chunkPos, state: c.state,
         stateDigest: c.stateDigest })) });
     const beforeSummary = this.#summary(body.worldRef, before);
@@ -457,7 +458,7 @@ export class CanvasRegionV1 {
     const worldRevision = rev('world');
     const result = { transactionId: body.transactionId, worldRef: body.worldRef,
       status: 'VERIFIED', operationDigest: body.operationDigest, beforeSummary,
-      expectedAfterSummary, actualSummary, snapshot, historyRevision, postWriteLighting: this.#geometry(body).postWriteLighting, lighting,
+      expectedAfterSummary, actualSummary, snapshot, historyRevision, postWriteLighting: (await this.#geometry(body)).postWriteLighting, lighting,
       affectedObjectRefs: [], localContext: body.localContext };
     const response = this.#answer(body, 'ApplyRegionCommit', result);
     validateRegionCommit(body, response);
@@ -537,12 +538,12 @@ export class CanvasRegionV1 {
       pending.publicError.causeCode = restoreCode;
       throw pending;
     }
-    const lighting = this.#geometry(body).postWriteLighting === 'NONE' ? null :
+    const lighting = (await this.#geometry(body)).postWriteLighting === 'NONE' ? null :
       restored.lighting ?? facts.lighting ?? { status: 'NOT_COMPLETE', box, method: 'canvas:no-write-observed' };
     const result = { transactionId: body.transactionId, worldRef: body.worldRef,
       status: 'ROLLED_BACK', operationDigest: body.operationDigest, beforeSummary,
       expectedAfterSummary, actualSummary: restored.actual, snapshot,
-      historyRevision: rev('history-none'), postWriteLighting: this.#geometry(body).postWriteLighting, lighting, affectedObjectRefs: [],
+      historyRevision: rev('history-none'), postWriteLighting: (await this.#geometry(body)).postWriteLighting, lighting, affectedObjectRefs: [],
       localContext: body.localContext };
     const rollbackCause = observedRollbackCause(cause, body.transactionId);
     if (rollbackCause) result.rollbackCause = rollbackCause;
@@ -588,7 +589,7 @@ export class CanvasRegionV1 {
       origin.result.snapshot, origin.result.beforeSummary);
     // The pre-Undo image is snapshotted too, so a failed Undo can restore it after reopen.
     const preUndoContent = validateType('RegionSnapshotContent', {
-      profileVersion: 'region-snapshot-content/v2', worldRef: body.worldRef, partition: this.#geometry(body).partition,
+      profileVersion: 'region-snapshot-content/v2', worldRef: body.worldRef, partition: (await this.#geometry(body)).partition,
       chunks: current.chunks.map(c => ({ chunkPos: c.chunkPos, state: c.state,
         stateDigest: c.stateDigest })) });
     const preUndoSnapshot = await encodeSnapshot(preUndoContent, preUndoSummary);
@@ -651,7 +652,7 @@ export class CanvasRegionV1 {
         pending.publicError.causeCode = cause?.publicError?.code ?? 'RESTORE_FAILED';
         throw pending;
       }
-      const result = this.#undoResult(body, origin, 'ROLLED_BACK', preUndoSummary, back.actual,
+      const result = await this.#undoResult(body, origin, 'ROLLED_BACK', preUndoSummary, back.actual,
         rev('history-none'), back.lighting ?? { status: 'NOT_COMPLETE', box: origin.box,
           method: 'canvas:no-write-observed' });
       const response = this.#answer(body, 'UndoRegionCommit', result);
@@ -666,7 +667,7 @@ export class CanvasRegionV1 {
       return response;
     }
     const historyRevision = rev('history');
-    const result = this.#undoResult(body, origin, 'VERIFIED', preUndoSummary, restored.actual,
+    const result = await this.#undoResult(body, origin, 'VERIFIED', preUndoSummary, restored.actual,
       historyRevision, restored.lighting);
     const response = this.#answer(body, 'UndoRegionCommit', result);
     validateRegionUndo(body, response, origin.result);
@@ -693,12 +694,14 @@ export class CanvasRegionV1 {
     });
     return response;
   }
-  #undoResult(body, origin, status, preUndoSummary, actualSummary, historyRevision, lighting) {
+  async #undoResult(body, origin, status, preUndoSummary, actualSummary, historyRevision, lighting) {
+    const { postWriteLighting } = await this.#geometry(body);
     return { originTransactionId: body.originTransactionId,
       undoTransactionId: body.undoTransactionId, worldRef: body.worldRef, status,
       originBeforeSummaryDigest: D('region-summary', origin.result.beforeSummary),
       originAfterSummaryDigest: D('region-summary', origin.result.actualSummary),
-      preUndoSummary, actualSummary, historyRevision, postWriteLighting: this.#geometry(body).postWriteLighting, lighting,
+      preUndoSummary, actualSummary, historyRevision, postWriteLighting,
+      lighting: postWriteLighting === 'NONE' ? null : lighting,
       localContext: body.localContext };
   }
 

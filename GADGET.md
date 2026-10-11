@@ -1,380 +1,43 @@
-# HanaWorlds Canvas 0.6.15 local world component
+# HanaWorlds Canvas 0.13.2
 
-The package exposes `hanaworldsCanvasV5` and consumes the public
-`hanaworldsWorldAdapterV6` port. It uses the root export of Contracts, referenced
-from the contracts source as `git+https://github.com/yzsnstotz/hanaworlds-contracts.git#semver:^0.5.6`
-(lower bound: first release carrying `ConfigEngineFacts`; the lockfile resolves
-`v0.5.6` commit `f84974eb07e30b683f4c1b1712145b756d5671ed`). The contracts
-package handshake is decided by the Contracts same-major predicate. There is no
-account, grant, epoch, authorization, or protected region dependency in this
-local MVP protocol.
+Canvas owns local world selection, registered object footprints and transaction history.
+The single Cordis entry is `src/index.mjs`; the DSH panel is `lib/client.js`.
 
-For per-cell peer admission read `ctx.get('hanaworldsCanvasV5').protocolHandshake`
-(property, not method). It is Canvas's real `ProtocolHandshake`: canvas 5 at the
-minor the installed Contracts declare (5.0 on 0.5.3, 5.1 on 0.5.4),
-capabilities=[] because Contracts publishes no per-cell Canvas token. Check it
-with `protocolRequirement('canvas/v5', [])` / `checkProtocolCompatibility`.
+Contracts is pinned to the formal release
+`git+https://github.com/yzsnstotz/hanaworlds-contracts.git#v2.2.1`,
+commit `ee53aed37117bc859d9cbb2aedee9ea7d8dfc8b1`.
+Run `npm ci`, `npm run build`, `npm run verify:contracts`, `npm run typecheck`, and `npm test`.
+The test command runs every retained test file, including Gateway/Remote, host storage,
+selection, per-cell apply/history and region rollback/recovery.
 
-Stage 1 validation configuration supply (v1 batch; earlier 0.6.11–0.6.15 notes below are history):
-- Canvas provides `hanaworldsCompilerConfig.read(worldRef)` → `{compilationConfig, compilerRevision}`
-  and its own readback `hanaworldsCanvasConfigSupply.read(worldRef)` (`canvas-stage1-config-supply/v2`).
-- Canvas declares and supplies **no SafetyProfile**: the record `canvas-stage1-policy-declaration/v1`,
-  the Safety part of the supply and the `hanaworldsSafetyProfile` service are gone. The only
-  SafetyProfile source is the player's confirmed intent through the Contracts pure function.
-- Domain: the World's bound connection in Canvas's own selection table (connectionRef,
-  connectionIncarnationRef, payloadVersion, capabilityRevision). Unbound → `WORLD_NOT_BOUND`;
-  two different bound connections → `CURRENT_WORLD_MISMATCH`; a domain change during the
-  fact read → `STALE_REVISION`.
-- Every field names its source: `CONTRACT_SCHEMA` (schema `const`) or `ENGINE_FACT`
-  (`worldeditRevision` = bound World's `NativeFacts.readCatalogue(worldRef).modRevisions.worldedit`,
-  `backendProfileId` = the loaded payload declaration). A field without a source is refused
-  `CAPABILITY_UNAVAILABLE` with `missingSources`. No default, fixture value or hand-written
-  revision is ever used; there is no editing path.
-- Revisions are Canvas-generated from value + provenance + domain (`compiler-config-…` =
-  `compilerRevision`). Each change of observation is recorded durably in Canvas's store with
-  `invalidationReasons`; reads are otherwise read-only (no Adapter call, no World write).
-- Store: the 1.x store lives in `<dsh home>/data/hanaworlds-canvas-v1/canvas-v6.json`
-  (schemaVersion 6). A 0.x store is never read, migrated or accepted.
-- Contracts `#semver:^1.2.0` (0.13.2; rollback-cause release 1.2.0): canvas/v6, world-adapter/v7, session/v4,
-  canvas-region/v2, world-adapter-region/v2; the session-world seam is unconditional. Host
-  service keys are unchanged (`hanaworldsCanvasV5`, `hanaworldsCanvasRegionV1`,
-  `hanaworldsWorldAdapterV6`, `hanaworldsWorldAdapterRegionV1`, `hanaworldsWorkshopV3`, ...).
-- Engine guards (Contracts engine-guards/v1): each write re-reads the current connection and
-  requires guard x stage coverage from its `PublicCapabilities.engineGuards` before any
-  reservation or write (Canvas's choice of stages):
-  BUILD = all three guards at PREPARE_RECOVERABLE/APPLY_COMPILED + BODY_CLEARANCE and
-  CELL_PROTECTION at RESTORE; Undo/Redo = all three at PREPARE_HISTORY/APPLY_HISTORY + the two at
-  RESTORE; ApplyRegionCommit = all three at REGION_APPLY + the two at REGION_RESTORE;
-  UndoRegionCommit = all three at REGION_RESTORE (a forward action); region recovery = the two at
-  REGION_RESTORE. CELL_PROTECTION accepts the declared principal (ANONYMOUS included). An
-  uncovered pair refuses with `guardRefusalError(GUARD_UNAVAILABLE, preflight)`
-  (`CAPABILITY_UNAVAILABLE/validate`); a region response also carries that `guardRefusal`.
-  `CanvasV5.readEngineSafety(sessionRef)` lists, per operation, the requirements and the uncovered
-  ones; the `/supply` page shows it.
-- Transaction role (G1): when the engine refuses a rollback (phase restore: the transaction form
-  `RESTORE_FAILED`, or rc.3's engine form = a `GuardRefusal` with no cause and nothing written), BUILD/Undo/Redo answer the canvas/v6 `RESTORE_FAILED`
-  receipt and region commit/undo the canvas-region/v2 response with `result: null`: error =
-  the restore failure with `causeCode` = the failure that made the restore necessary,
-  `guardRefusal` = the restore's own reason, `applyFailure` = that causing failure in full
-  (`AFTER_MANUAL_RECOVERY`). An unknown restore outcome (transport lost, Canvas's own unverified
-  restore) answers `RECOVERY_PENDING`. Either way the transaction stays a durable
-  `RESTORE_PENDING` row (restoreCode/causeCode/receiptStatus/guardRefusal), blocks the World,
-  replays exactly, and `readHistoryActions(sessionRef).recovery` lists it; it is never success.
-- Guard refusal relay (rc.4): the canvas/v6 envelopes of ApplyRecoverableCommit, Undo, Redo,
-  InspectPlacementRegion, RecoverPendingUndo and ReadPendingUndoResult carry `guardRefusal`
-  beside `error`: null normally; Canvas's pre-flight refusal = the first uncovered guard x stage
-  (GUARD_UNAVAILABLE) with `CAPABILITY_UNAVAILABLE/validate`; an Adapter refusal (Prepare,
-  InspectRegion, ...) is forwarded with its error unchanged; a rollback caused by an engine
-  refusal keeps that refusal and its error on the ROLLED_BACK receipt. A region APPLY write the
-  engine refused without writing (mutationState NONE) is forwarded unchanged once the region reads
-  back unchanged (`result: null`, nothing pending).
-- Region Undo refused by an engine guard (rc.3 engine form): once Canvas has read back that the
-  region is still the pre-Undo image, `UndoRegionCommit` returns that error and `guardRefusal`
-  unchanged with `applyFailure: null`; nothing is written, recorded as Undo or left pending, and
-  the call replays exactly.
-- Refusals are Contracts `ContractError`s (0.6.12), so a consumer that maps errors through
-  `publicError()` (Workshop) keeps the exact code/reason; `missingSources` is on the thrown
-  object and in `hanaworldsCanvasConfigSupply.read`, not in the public Error shape.
+Canvas provides `canvas/v7` minor 1 and `canvas-region/v3` minor 1.
+It consumes `world-adapter/v8` and `world-adapter-region/v3` at minimum minor 0
+with their published write-path capability tokens. Service keys remain
+`hanaworldsCanvasV5`, `hanaworldsCanvasRegionV1`, `hanaworldsWorldAdapterV6`,
+`hanaworldsWorldAdapterRegionV1`, and the `hanaworldsWorkshopV3` session port.
 
-Session-world seam (0.6.7, active only when the installed Contracts declare canvas/v5
-minor 1, i.e. the 0.5.4 candidate; on 0.5.3 nothing below applies):
-- G-S: before Select/Switch, and for an UNBOUND read, Canvas reads `ReadSessionIdentity`
-  on Workshop's public service `hanaworldsWorkshopV3` (the same WorkshopV3 instance Workshop
-  0.4.12 provides; read per call, so a disposed provider fails closed
-  `CAPABILITY_UNAVAILABLE`; no other key or alias is tried). `SESSION_NOT_FOUND` is refused. `sessionRevision`
-  (CurrentContext and UNBOUND) is Workshop's revision; an UNBOUND Select expects it.
-- G-U `UnselectWorldConnection`: CAS on `selectionRevision` and `expectedContext`; not the
-  current world → `WORLD_NOT_BOUND`; returns `activeWorldRef`/`localContext` null.
-- G-L `RetireSessionSelection`: called by Workshop only; clears the selection atomically,
-  irreversible, idempotent; the Session is then `SESSION_NOT_FOUND` to every Canvas
-  operation. Canvas never deletes a Session or reports one deleted. Refused while the
-  Session has an unfinished transaction.
-- G-D `ListWorldSelections` (derived from the one selection table), `ReserveWorldRetirement`
-  (`requireWorldRetirable`, CAS on `inventoryRevision`), `ReleaseWorldRetirement`
-  (`RETIRED` → `WORLD_NOT_FOUND`; `ABORTED` → selectable). Selecting a reserved world is
-  refused `TRANSACTION_CONFLICT`/`SCOPE_DENIED`, also re-checked inside the durable commit.
-- C1: a BOUND Session's read names its own current world even when `worldRef` differs.
+Placement requires an explicit `PlacementFootprint.geometryProfile`; missing facts
+refuse `CAPABILITY_UNAVAILABLE`, unsupported/undeclared geometry refuses `CAPABILITY_GAP`.
+Current `ReadLocalConnection.capabilities.worldGeometry` supplies geometry, partition
+and post-write lighting. No profile or partition is filled by Canvas. The minor-0
+Adapter InspectRegion request carries only its published footprint dimensions.
+The later named `ReadWorldSourceCapabilities` port is outside this card.
 
-Session↔World selection (0.6.6): Canvas alone decides it and alone generates
-`selectionRevision`. `SwitchWorldConnection` moves one bound Session to another
-connection/world (CAS on `selectionRevision` and `expectedContext`; target readback and
-inventory row must agree; refused while the Session has an unfinished transaction);
-`currentSession` is kept, a different world clears the object selection. Another
-Session's selection never changes. `ReadWorldSelectionContext.inventory` lists only the
-requested world's connections. An exact duplicate of a completed Select/Switch is refused
-by name (the contracts `validateCurrentRequest` checks `expectedContext` first) and never
-applies twice.
+Cell effects use opaque `materialRef` and neutral `orientation`, with explicit
+`geometryProfile`. Readback and restore obey the world source's StateProfile:
+engine-derived fields are excluded from comparisons; preserved fields keep their
+before value; cleared fields disappear on write. Region operations use the declared
+partition, compressed before snapshots, whole-transaction readback/rollback and Undo.
+Engine guards are checked before writes; refusals preserve the public error and cause.
+Uncertain outcomes stay pending for same-transaction query/recovery.
 
-G3 write-before guard (0.6.4): before a BUILD (`ApplyRecoverableCommit`), `Undo`
-or `Redo` reserves anything or calls a mutating Adapter operation, Canvas checks
-the per-cell Adapter port's `protocolHandshake` (Host service
-`hanaworldsWorldAdapterV6`, property) with `checkProtocolCompatibility` against
-`ADAPTER_CELL_REQUIREMENT`: `world-adapter` major 6 at the Contracts-declared
-minor with `world-adapter/v6:callback-free-write` and
-`world-adapter/v6:write-path-state-facts`. A missing handshake, another
-protocol or major, a lower minor or a missing id is refused with
-`UNSUPPORTED_VERSION` or `CAPABILITY_UNAVAILABLE` (`phase: decode`,
-`mutationState: NONE`); only Canvas's read-only current-world admission read
-(`ReadLocalConnection`) precedes it. An exact replay of a completed request
-still returns its stored result.
-The public types and implemented-operation list are in `types/index.d.ts` and
-README. Protocol declaration does not imply storage readiness or known world
-facts. Region handshake is unchanged and stays distinct; exact ContractHandshake
-and status text cannot establish per-cell protocol compatibility.
+The fresh store is `<DSH home>/data/hanaworlds-canvas-v2/canvas-v7.json`, schema 7.
+Older stores are not read or migrated. Compiler configuration contains an opaque
+`writeBackend {profileId, revision}` from public loaded-payload engine facts;
+missing, corrupt or stale facts refuse without defaults.
 
-The host provides `dshHomePath()` and one Canvas writer per profile. Canvas
-stores fresh schema 5 in `data/hanaworlds-canvas/canvas-v5.json` with fsynced
-atomic replacement. Previous Canvas files are left untouched; migration and
-mixed protocol compatibility are outside this component card.
-
-`ReadWorldSelectionContext` returns the public connection inventory stored at
-selection for a bound Session; an unbound read asks Adapter for inventory.
-`SelectWorldConnection` reads the actual local connection and records its
-connection incarnation, world and Canvas selection revision. Each bound call
-compares its local context with this durable selection and reads the current
-connection again. An old connection incarnation or wrong world fails before
-world mutation.
-
-`expectedRevision` of `SelectWorldConnection` is always a revision Canvas has
-published: for an unbound Session it is the `sessionRevision` of the UNBOUND
-`ReadWorldSelectionContext` result (`session-0`); for a bound Session it is the
-current `selectionRevision` read back from the BOUND context. A caller never
-needs a private constant. Any other value is `STALE_REVISION`, and a bound
-Session never accepts the unbound revision again.
-
-The DSH host receives three Canvas-owned read services from `apply(ctx)`:
-`hanaworldsCanvasFootprintRegistry.readFootprints`,
-`hanaworldsCanvasHistoryFacts.read`, and
-`hanaworldsWorldRevisionOracle.read`. They read one current durable Canvas
-snapshot and reject an unbound Session or mismatched local context. The
-Adapter can call them without a nested Adapter request. `ReadWorldSelectionContext`
-returns the current selection from durable Canvas state and the public
-connection inventory saved at selection, also without a nested Adapter call.
-The Host composes `hanaworldsLuantiInspectionContext` from Canvas's current
-selection/object list and logical revision together with Adapter-native
-inspection facts; Canvas does not provide that Host composition service.
-
-`InspectPlacementRegion` uses per-world durable placement defaults (2/16/8/4)
-and the current Canvas world revision to ask Adapter's public `InspectRegion`
-operation. Canvas validates and persists the returned inspection, then binds
-the inspection ID, target facts digest, frame, catalogue, world and local
-context to a later BUILD commit. `InspectObject` checks Canvas's current object
-revision and asks Adapter's public `InspectWorld`, rejecting a mismatched
-object, bounds or world revision. `Readback` checks the saved verified commit
-and re-reads its complete after image through Adapter before returning the
-same durable receipt.
-
-`AnalyzeAffectedObjects` uses Canvas's durable object footprints. A fresh
-build can commit only when the affected set is empty. When a BUILD document is
-bound, Canvas also checks its digest and exact compiled geometry before world
-readback or mutation. `ApplyRecoverableCommit`
-gets opaque cell digests from the public
-`hanaworldsLuantiNativeFacts.readScopedState` port. It reserves the transaction
-before Adapter prepare/apply, reads and saves the complete before state after
-Prepare, and compares the actual complete after state with the compiled
-effects and Adapter receipt. The verified receipt, object footprint and history row commit in one
-Canvas store update. Exact replay returns the stored result without another
-Adapter write. A mismatch invokes full Adapter restore and verifies a complete
-before state readback before reporting `ROLLED_BACK`. Unknown restore outcome
-stays reserved as `RECOVERY_PENDING`.
-
-`Undo` names the original history transaction and object. Canvas checks the
-current world, history head, object revision and actual current state before
-issuing one Adapter history transaction. The saved original before state is
-the expected Undo readback. Receipt, history move and footprint update commit
-together. `ListObjects` and `HistoryQuery` read the durable registry.
-
-The card's component gate uses an installed Canvas tarball and a public
-Adapter fixture. It does not prove a Luanti world or Desktop UI. Complex RPC
-uncertainty, restart recovery, concurrent writers, broad negative matrices,
-and older profile migration are deferred by CONTRACT 4.3.0. Old v4 source and
-tests remain in the repository for evidence, outside this package's runtime.
-
-## Region v1 transaction and whole-region Undo (0.5.0)
-
-`apply(ctx)` also provides `hanaworldsCanvasRegionV1`, implementing the public
-Contracts 0.5.0 `canvas-region/v1` wire (`ApplyRegionCommit`,
-`UndoRegionCommit`) over the same durable store, world revisions, footprints
-and history rows as cell BUILD. Canvas stays the only transaction decider. It
-consumes the Adapter's `world-adapter-region/v1` port (`ReadRegion`,
-`WriteRegion`) from the Host service `hanaworldsWorldAdapterRegionV1`; the
-Adapter only loads, reads and writes mapblock chunks and reports per-chunk facts.
-
-- Compatibility: before any read or write Canvas runs
-  `checkProtocolCompatibility` on both Adapter ports' `ProtocolHandshake`s:
-  the region port (`hanaworldsWorldAdapterRegionV1`) against
-  `ADAPTER_REGION_REQUIREMENT` and the per-cell port
-  (`hanaworldsWorldAdapterV6`) against `ADAPTER_CELL_REQUIREMENT`. Each
-  requirement holds only the Adapter capabilities of its own wire, at the
-  minor the Contracts declare for that protocol (with the G3 write-path scope:
-  `world-adapter-region/v1:callback-free-write` on the region port,
-  `world-adapter/v6:callback-free-write` and
-  `world-adapter/v6:write-path-state-facts` on the per-cell port). Another
-  major, a lower minor, a missing handshake on either port (for example the
-  exact-package 0.4.2 handshake) or a missing capability is rejected; a higher
-  minor, patch, source or artifact digest is accepted. Canvas advertises its own handshake (`canvas-region` 1.0,
-  four `canvas-region/v1:*` capabilities) as `protocolHandshake`.
-- `describe()` gives the skill the tool's purpose, typical scale and
-  prerequisites. There is no system threshold or setting.
-- Commit: the request carries Brush's `region-operations/v1` chunks and digest
-  (checked with `validateDigestBinding`). Canvas checks current world and
-  connection and registered footprints, reads the before image of every
-  compiled chunk (`requireKnownRegion`; still unknown rejects), and stores the
-  complete `RegionSnapshotContent` (node, param2, air and extras) as gzip
-  (RFC 1952, Node zlib) over its canonical JSON in a content-addressed 0600
-  file under `data/hanaworlds-canvas/region-snapshots/`, recorded as
-  `RegionSnapshotRef`, before a durable reservation and the single `APPLY`
-  `WriteRegion`. Success needs every chunk `WRITTEN`, lighting `COMPLETE` and a
-  full readback summary equal to `expectedRegionSummary`; then receipt, object,
-  footprint and history commit together. The result is checked with
-  `validateRegionCommit`.
-- Any failed, unknown or mismatching chunk restores the whole region: Canvas
-  reads the current state and writes `RESTORE` with the snapshot state for
-  every chunk that differs, then requires the before summary (`ROLLED_BACK`).
-  If that cannot be verified the reservation stays `RESTORE_PENDING`, and
-  `recoverPending()` after a normal reopen restores it from the snapshot file.
-- Undo: only the head history transaction of the same world, after current
-  world/connection, history revision and other footprints are checked, and only
-  while the current region summary still equals the verified after summary
-  (otherwise `UNDO_CONFLICT/EXTERNAL_EDIT_CONFLICT`, no write). The snapshot is
-  decompressed and checked with `validateRegionSnapshotContent`, the pre-Undo
-  image is snapshotted too, and `RESTORE` must read back the origin before
-  summary; a failed Undo restores the pre-Undo image. Cell `Undo` refuses a
-  region transaction; the cell BUILD/Undo path is unchanged.
-
-
-## NativeFacts method input (0.5.3 public supplement)
-
-The actual Host injection `hanaworldsLuantiNativeFacts.readScopedState` is called
-with `(connectionRef, positions)` only and returns the complete raw object
-`{ worldRef, stateProfile, cells }`. It is not a ScopedCells array or
-ScopedWorldBinding/request/response envelope. Constructor typing is
-`nativeFacts?: NativeFactsPort` with the same complete method/return definition.
-README's NativeFacts section lists every required field, current source/mapping,
-normal raw fixture/schema/provenance, and legal public Contracts subtype checks.
-The package exports the full fixed fixture and consumer example; both are
-explicit SOURCE/FIXTURE and must not supply facts for an actual Luanti world.
-Canvas's current world/profile/positions/KNOWN checks and transactions are
-unchanged; only this new public input is verified by gate-nativefacts-053.
-
-## Canvas objects/history display
-
-The single Canvas Loader entry binds its display service when Typert is present, registering
-`hanaworldsCanvasDisplay.read` through the public DSH Typert registry and Gateway.
-The client mounts the same strict descriptor through `ctx.remote.$mount`, then reads
-`remote.hanaworldsCanvasDisplay` only inside a fiber that injects it (0.6.1).
-The global sidebar/main slot id is `hanaworlds-canvas-objects-history`.
-No Desktop private transport or sibling plugin imports are used. All visible
-history metadata is owned by Canvas and is separate from Contracts wire rows.
-
-Since 0.6.2 the same namespace also has `actions(sessionRef)` and
-`undo(sessionRef, objectRef, historyTransactionId)` (strict descriptors, mounted
-together). `actions` is Canvas's `readHistoryActions` reduced to Undo: per object,
-whether its latest entry can be undone now, or Canvas's named reason. `undo` is one
-canvas/v5 `Undo` of exactly the clicked entry. The Host builds the request only from
-what Canvas published for the Session's stored binding (world, revisions, localContext);
-the renderer cannot supply a world, revision or context. Canvas re-validates the history
-head, revisions and actual world cells, then commits the whole transaction or rolls it
-back. The App panel shows 撤回这笔 → 确认撤回 only on that entry and re-reads afterwards.
-Sample mode and the 47601 `/objects` page stay read-only. Redo stays out of the panel.
-
-
-## 本机对象与历史网页
-
-试用入口：http://127.0.0.1:47601/objects。由本origin自起只读开发服务；不依赖App安装、GUI锁或私有profile。网页复用对象/历史纯展示视图与既有Canvas公开readObjectsHistory，持有自己run下的真实CanvasStore。没有连接世界的会话时明确为空；示例记录从显式隔离的耐久存储读取、醒目标注，不写入真实世界记录。真实世界连接/写入/撤回不从此页执行；App内组合留整合卡。
-
-启动：Node24.13.1下 `npm run build:objects` 生成本卡run两项资源，首次在全新隔离目录运行 `npm run prepare:objects-example`，再 `npm run dev:objects`。资源与本服务data位于本卡 `objects-web/`；停止服务使用正常SIGINT/SIGTERM，不清data。页面关闭/重开保留示例开关，服务重开重新读取本origin存储。API仅GET/HEAD，其他方法返回READ_ONLY；没有世界写入端点。
-
-本轮独立网页的示例不再使用客户端硬编码记录。`objects-web/isolated-example` 的记录经本插件公开会话选择、区域提交、逐格提交与区域Undo实际产生，环境/Adapter/输入为显式fixture，Canvas事务与耐久存储为真实运行时。准备命令仅允许全新目录，服务只读该目录且重开不重建记录。示例始终醒目标注，名称未保存时如实显示未命名；真实数据目录`objects-web/data`与其分离，不写真实世界。App面板及封存060tar不变。
-
-## Stage 1 configuration supply · 0.6.15 candidate
-
-The 0.6.15 candidate was supplied against `dcbe648576de5f666bed11a90d015cc30bdf2bc9`
-(`v0.5.5-rc.1` candidate pack 166226 bytes, SHA256
-`31ebd3c09f4cb2bfd2efdd3402a97ee198a29c705aea259386a631d46b6bac34`). Contracts is now
-referenced by the git range `#semver:^0.5.6`; `v0.5.6` releases the same
-config-engine-facts types (+0 types, +0 wire against 0.5.5-rc.1).
-This is SOURCE/FIXTURE consistency, not a live provider or product gate.
-
-(History, 0.6.15.) The public keys were then `hanaworldsCanvasConfigSupply.read(worldRef)`,
-`hanaworldsSafetyProfile.read(worldRef)` and `hanaworldsCompilerConfig.read(worldRef)`
-(the last returns `{compilationConfig, compilerRevision}`); the v1 batch removed the second. Canvas consumes the
-public `hanaworldsLuantiNativeFacts.readConfigEngineFacts(worldRef)` alongside
-`readCatalogue(worldRef)`. `validateConfigEngineFacts` checks the selected connection
-triple, fresh Catalogue digest and canonical sourceRevision. Only a KNOWN backend
-with `LOADED_PAYLOAD_DECLARATION` supplies backendProfileId; adapter identity,
-payload/package version and defaults are never sources. Provenance names the public
-port, actual sourceRevision and basis. A declaration change invalidates the compiler
-revision and is recorded in the existing durable observation history.
-
-Missing/unreadable backend facts are named in the supply report and refuse through
-ContractError with CAPABILITY_UNAVAILABLE/REQUIRED_FACT_UNKNOWN. Connection or
-Catalogue mismatch refuses STALE_REVISION/REVISION_CHANGED. Multiple missing fields
-keep legal public ErrorReason values; engine fact reason names are retained only as
-cause/factReason metadata. Avatar stays UNAVAILABLE/NO_PUBLIC_SOURCE with the
-INV-POSE-STAYS-IN-ENGINE cause; no geometry is read, supplied or persisted. The three
-undetermined Stage 1 policies remain undetermined. The independent tests use the
-public `hanaworlds-contracts/fixtures/config-engine-facts` input and explicitly prove
-only FIXTURE behavior. The older 47613 page still runs 0.6.14 and was not replaced.
-
-## 0.10.4 History outcome recovery
-
-Canvas queries the exact prepared History transaction after a failed/lost Apply reply.
-A prepared outcome is released only by the Adapter's public Abort NONE and the exact before
-readback; Abort request identity and confirmation survive reopening. A queried VERIFIED
-outcome is finalized after bound revision and target readback checks, without another Apply.
-RESTORE_FAILED retains the original receipt/guard/applyFailure and reservation. UNKNOWN
-stays pending. The plugin-owned `resolvePendingHistory({sessionRef,transactionId})` never
-forces Restore or changes bindings. The isolated real trial adds a same-transaction recovery
-button and per-object cell readback. Existing services require a supported runtime entry; this
-package does not rewrite or migrate their pending context.
-
-A valid ROLLED_BACK History reply is queried and read back as ROLLED_BACK; it is not decoded
-as a fabricated TRANSACTION_MISMATCH error and never leaves PREPARED stranded.
-
-### Pending History evidence (0.10.5)
-
-`readHistoryActions(sessionRef).recovery` retains the exact transaction's `originalFailure`
-(public error/guard), a later `queryFailure`, and its public `abortConfirmation`.
-`mutationState: NONE` after Abort does not claim that final readback succeeded: the row stays
-pending until the complete original before image is read back. A lost Abort reply is still
-`UNKNOWN`. The trial page shows this same projection. These are existing Canvas-owned
-evidence, not additional engine facts or a new transaction outcome.
-
-### Confirmed placement (0.12.1+ / Contracts1.1+)
-
-Public wires and capability IDs keep their v1 identifiers. New placement/binding fields are
-optional and cannot be null: leave them absent when no structured placement was confirmed.
-Workshop makes bindings with the public Contracts helper and checks omission at submission;
-Canvas does not create a second intent or human-confirmation source.
-
-Canvas cell apply checks its retained inspection and current world revision with
-`checkConfirmedPlacementApply` before scoped facts, reservation and writes. REGION admission
-uses `validateRegionCommitRequest`; a confirmed commit uses Canvas's own source inspection,
-Session/World/context and current revision with `checkConfirmedRegionPlacementCommit` before
-any snapshot, before-image ReadRegion or WriteRegion. Exact confirmed cells match in full;
-anchored extents remain within the confirmed bounds. Missing/foreign/stale source records fail
-closed. Existing guard, complete readback and whole-transaction restore paths remain in force.
-
-This supply is SOURCE/FIXTURE/PACK only. New target/source negative tests issue zero snapshots,
-before-image reads and writes. Original 47622 UNKNOWN transaction and accepted instances are
-preserved; these checks do not establish real World/product/owner acceptance.
-
-### Region rollback cause (0.13.2 / Contracts1.2 release)
-
-`canvas-region/v2:rollback-cause` reports the actual public failure Canvas observed before
-successful ApplyRegionCommit restoration in `result.rollbackCause` (FailureDetail).
-Adapter errors and explaining guard refusals are preserved; Canvas's own apply/readback
-conclusions are reported as observed. Missing or invalid details are omitted: the public
-`regionRollbackCauseOf(request, response)` reader returns UNKNOWN, without a guessed cause.
-The field is only present on ROLLED_BACK, never on VERIFIED, failed restoration or Undo.
-The terminal response is stored durably and exact replay, including after reopen, returns
-it unchanged without Adapter reads or writes. This reports no instrumentation identity,
-natural simulation attribution or cells outside operation boxes. Undo scope is unchanged.
-
-Canvas-generated incomplete APPLY/readback failures report the validated APPLY batch's
-pre-restore mutation facts: UNKNOWN for any unknown chunk outcome, PARTIAL when a
-WRITTEN readback digest differs from its requested before digest, NONE when every
-chunk is NOT_WRITTEN, otherwise UNKNOWN (a no-op write does not prove no writes).
-These failures bind the transaction id. Adapter Error/guard refusals remain unchanged;
-ROLLED_BACK separately records the verified restoration, and exact replay keeps the cause.
+The App panel reads the selected session's objects/history and performs the published
+latest-entry Undo. It has no display-fixture sample toggle. Test peer implementations
+and the public NativeFacts fixture are explicitly SOURCE/FIXTURE. Independent legacy
+pages, examples, probes and old evidence are archived in the canvas-01 run directory.
+These checks do not establish a real-world GUI result or owner ACCEPTED.

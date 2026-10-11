@@ -1,16 +1,16 @@
 {
   "worldRef": "fixture-world",
   "stateProfile": {
-    "profileVersion": "state-profile/v2",
-    "nodeFields": [
-      "nodeName",
-      "param1",
-      "param2"
+    "profileVersion": "state-profile/v3",
+    "derivedFields": [
+      "light"
     ],
-    "metadataMode": "exact",
-    "inventoryMode": "exact",
-    "timerMode": "exact",
-    "derivedLightMode": "recompute-with-readback"
+    "preservedFields": [
+      "inventory",
+      "metadata",
+      "timer"
+    ],
+    "clearedFields": []
   },
   "cells": [
     {
@@ -20,7 +20,7 @@
         3
       ],
       "availability": "KNOWN",
-      "stateDigest": "322555c1f2cabbaf00730bc0eddc0b5c25650ad1db5eee60a87b950621dc327b"
+      "stateDigest": "87924420f38b97ba342034999845ce575cff755ea4631417b0a9b10f19cd3fbe"
     }
   ]
 }

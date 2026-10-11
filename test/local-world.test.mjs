@@ -329,7 +329,7 @@ test('build commits only after complete readback and stores one durable history 
     const placement = await canvas.call('InspectPlacementRegion', {
       contractVersion: 'canvas/v7', sessionRef, requestId: 'inspect-placement', worldRef,
       anchor: { kind: 'CURRENT_VIEW', invocationId: 'confirmed-1' },
-      footprint: { widthCells: 1, depthCells: 1, heightCells: 1 }, localContext });
+      footprint: { geometryProfile: 'voxel-grid/v1', widthCells: 1, depthCells: 1, heightCells: 1 }, localContext });
     assert.equal(placement.error, null, JSON.stringify(placement));
     assert.equal(placement.result.inspection.targetFacts.worldRevision, initialWorldRevision);
     assert.deepEqual({ ...placement.result.inspection.placementSettings },
@@ -340,7 +340,7 @@ test('build commits only after complete readback and stores one durable history 
     const refusedInspection = await canvas.call('InspectPlacementRegion', {
       contractVersion: 'canvas/v7', sessionRef, requestId: 'inspect-refused', worldRef,
       anchor: { kind: 'CURRENT_VIEW', invocationId: 'confirmed-refused' },
-      footprint: { widthCells: 1, depthCells: 1, heightCells: 1 }, localContext });
+      footprint: { geometryProfile: 'voxel-grid/v1', widthCells: 1, depthCells: 1, heightCells: 1 }, localContext });
     inspectionRefusal = null;
     validateResponse('canvas/v7', 'InspectPlacementRegion', refusedInspection);
     assert.deepEqual({ ...refusedInspection.guardRefusal }, { guard: 'CELL_PROTECTION',
@@ -352,7 +352,7 @@ test('build commits only after complete readback and stores one durable history 
     const withBody = await canvas.call('InspectPlacementRegion', {
       contractVersion: 'canvas/v7', sessionRef, requestId: 'inspect-with-body', worldRef,
       anchor: { kind: 'CURRENT_VIEW', invocationId: 'confirmed-body' },
-      footprint: { widthCells: 1, depthCells: 1, heightCells: 1 }, localContext });
+      footprint: { geometryProfile: 'voxel-grid/v1', widthCells: 1, depthCells: 1, heightCells: 1 }, localContext });
     inspectionExtra = null;
     assert.notEqual(withBody.error, null);
     assert.equal(withBody.result, null);
@@ -583,7 +583,7 @@ test('build commits only after complete readback and stores one durable history 
     const secondPlacement = await canvas.call('InspectPlacementRegion', {
       contractVersion: 'canvas/v7', sessionRef, requestId: 'inspect-rebuild', worldRef,
       anchor: { kind: 'CURRENT_VIEW', invocationId: 'confirmed-2' },
-      footprint: { widthCells: 1, depthCells: 1, heightCells: 1 }, localContext });
+      footprint: { geometryProfile: 'voxel-grid/v1', widthCells: 1, depthCells: 1, heightCells: 1 }, localContext });
     assert.equal(secondPlacement.error, null);
     const secondInspection = secondPlacement.result.inspection;
     const secondBuild = structuredClone(build);
@@ -598,7 +598,7 @@ test('build commits only after complete readback and stores one durable history 
     const secondOperationDigest = D('operations', secondOperations);
     const secondBinding = { inspectionId: secondInspection.inspectionId,
       build: secondBuild };
-    const badOperations = { ...secondOperations, effects: [{ position: [0, 1, 4],
+    const badOperations = { ...secondOperations, effects: [{ position: [0, 1, 4], geometryProfile: 'voxel-grid/v1',
       materialRef: 'fixture:stone', orientation: 0 }] };
     const badOperationDigest = D('operations', badOperations);
     const badAnalysis = await canvas.call('AnalyzeAffectedObjects', {
@@ -664,7 +664,7 @@ test('build commits only after complete readback and stores one durable history 
       const placed = await canvas.call('InspectPlacementRegion', {
         contractVersion: 'canvas/v7', sessionRef, requestId: `inspect-${transactionId}`, worldRef,
         anchor: { kind: 'CURRENT_VIEW', invocationId },
-        footprint: { widthCells: 1, depthCells: 1, heightCells: 1 }, localContext: selectedContext });
+        footprint: { geometryProfile: 'voxel-grid/v1', widthCells: 1, depthCells: 1, heightCells: 1 }, localContext: selectedContext });
       assert.equal(placed.error, null, JSON.stringify(placed));
       const inspection = placed.result.inspection;
       const nextBuild = structuredClone(build);

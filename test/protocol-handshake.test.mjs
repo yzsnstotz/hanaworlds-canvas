@@ -29,7 +29,7 @@ test('real Cordis Canvas publicly advertises canvas/v7 and retains its region de
     assert.equal(checkProtocolCompatibility(advertised, [cellRequirement]).result,
       'PROTOCOL_COMPATIBLE');
     const region = runtime.ctx.get('hanaworldsCanvasRegionV1').protocolHandshake;
-    assert.deepEqual(region.protocols, [{ protocol: 'canvas-region', major: 3, minor: 0 }]);
+    assert.deepEqual(region.protocols, [{ protocol: 'canvas-region', major: 3, minor: 1 }]);
     assert.equal(checkProtocolCompatibility(region, [regionRequirement]).result,
       'PROTOCOL_COMPATIBLE');
     const original = structuredClone(advertised);

@@ -145,10 +145,10 @@ async function guardRefusedBeforeWrite(env, operation, request, declaration, sen
   } finally { delete env.world.engineGuards; }
 }
 
-test('per-cell requirement is world-adapter/v8 at the declared minor with the G3 write-path ids',
+test('per-cell requirement is world-adapter/v8 at the consumed minimum minor with the G3 write-path ids',
   () => {
     assert.equal(ADAPTER_CELL_REQUIREMENT.protocol, 'world-adapter');
-    assert.equal(ADAPTER_CELL_REQUIREMENT.major, 7);
+    assert.equal(ADAPTER_CELL_REQUIREMENT.major, 8);
     assert.deepEqual(ADAPTER_CELL_REQUIREMENT.capabilities.filter(c =>
       !c.startsWith('world-adapter/v8:')), []);
     if (g3) {
@@ -371,4 +371,46 @@ test('a NativeFacts read that throws a plain coded Error keeps its code (never S
     }
     env.canvas.nativeFacts.readScopedState = original;
   } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+
+test('missing current world geometry refuses analysis, apply and history before a write', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'canvas-cell-geometry-'));
+  try {
+    const env = await boot(directory);
+    const request = await buildRequest(env, 'geometry-first', [[1, 2, 1]]);
+    await env.ok('ApplyRecoverableCommit', request);
+    const history = await historyRequest(env, 'Undo', 'geometry-undo');
+    const second = await buildRequest(env, 'geometry-next', [[2, 2, 1]]);
+    const call = env.world.adapter.call.bind(env.world.adapter);
+    env.world.adapter.call = async (operation, body) => {
+      const response = await call(operation, body);
+      if (operation === 'ReadLocalConnection') {
+        response.result = structuredClone(response.result);
+        response.result.capabilities.worldGeometry = null;
+      }
+      return response;
+    };
+    const writes = env.world.calls.filter(row => MUTATING.has(row.operation)).length;
+    await assert.rejects(buildRequest(env, 'geometry-analysis', [[3, 2, 1]]), /CAPABILITY_GAP/);
+    for (const [operation, body] of [['ApplyRecoverableCommit', second], ['Undo', history]]) {
+      const response = await env.canvas.call(operation, body);
+      assert.equal(response.error?.code, 'CAPABILITY_GAP', JSON.stringify(response));
+      assert.equal(response.error.mutationState, 'NONE');
+    }
+    assert.equal(env.world.calls.filter(row => MUTATING.has(row.operation)).length, writes);
+    assert.deepEqual(env.canvas.store.snapshot.pending, {});
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test('affected-object analysis replays exactly without repeating connection reads', async () => {
+ const directory=await mkdtemp(join(tmpdir(),'canvas-analysis-replay-'));
+ try {
+  const env=await boot(directory);
+  const first=await buildRequest(env,'replay-analysis',[[3,2,1]]);
+  const reads=env.world.calls.length;
+  const second=await buildRequest(env,'replay-analysis',[[3,2,1]]);
+  assert.deepEqual(second,first);
+  assert.equal(env.world.calls.length,reads);
+ } finally {await rm(directory,{recursive:true,force:true});}
 });

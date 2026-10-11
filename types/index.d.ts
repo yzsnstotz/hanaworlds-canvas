@@ -3,7 +3,7 @@ import type { ContractHandshake, OperationMap, ProtocolHandshake, RegionSnapshot
 import type { NativeFactsPort } from './native-facts.js';
 export type { NativeFactsPort, NativeFactsScopedState } from './native-facts.js';
 
-/** Public declaration only: canvas major 5/minor 0, no published per-cell tokens.
+/** Public declaration only: canvas major 7/minor 1, no published per-cell tokens.
  * Read this property on the real hanaworldsCanvasV5 service supplied by apply(ctx).
  * It declares the protocol; it does not establish storage/world readiness.
  */
@@ -25,7 +25,7 @@ export class CanvasStore {
 }
 export class CanvasV5 implements CanvasV5ProtocolSource {
   constructor(options: { store: CanvasStore | null; adapter?: any;
-    nativeFacts?: NativeFactsPort; adapterId?: string });
+    nativeFacts?: NativeFactsPort; sessions?: any; adapterId?: string });
   store: CanvasStore | null;
   ready: Promise<void>;
   storageState: string;
@@ -84,7 +84,7 @@ export interface EngineSafetyReadback {
   operations: { operation: EngineGuardOperation; required: GuardRequirement[];
     unmet: import('hanaworlds-contracts').GuardRefusal[]; status: 'COVERED' | 'CAPABILITY_UNAVAILABLE' }[];
 }
-/** Data directory name under `<dsh home>/data` for the 1.x store; 0.x data is never read. */
+/** Data directory name under `<dsh home>/data` for the v2 store; older data is never read. */
 export const STORE_ROOT: 'hanaworlds-canvas-v2';
 export class CanvasRegionV1 {
   constructor(canvas: CanvasV5, regionAdapter: any);
@@ -94,7 +94,7 @@ export class CanvasRegionV1 {
     request: unknown): Promise<OperationMap['canvas-region/v3'][N]['response']>;
   recoverPending(): Promise<any>;
 }
-/** Region-only canvas-region major 1/minor 0; not the per-cell declaration. */
+/** Region-only canvas-region major 3/minor 1; not the per-cell declaration. */
 export const canvasProtocolHandshake: ProtocolHandshake;
 export const REGION_WIRE: 'canvas-region/v3';
 export const REGION_ADAPTER: 'world-adapter-region/v3';

@@ -22,6 +22,11 @@ test('a definitely pre-write History failure aborts its exact prepared transacti
    if(op==='QueryTransaction') return answer({contractVersion:'canvas/v7',transactionId:q.transactionId,operationDigest:prepared.historyOperationDigest,transactionPayloadDigest:prepared.transactionPayloadDigest,status:'REJECTED',previousWorldRevision:request.expectedWorldRevision,observedWorldRevision:null,readbackDigest:null,restoreStatus:'UNKNOWN',error:null,guardRefusal:null,applyFailure:null,localContext:q.localContext});
    if(op==='QueryPreparedHistoryTransaction') return answer(prepared);
    if(op==='AbortPreparedHistoryTransaction') {aborted++;return answer({transactionId:q.transactionId,status:'ABORTED_PREPARED',mutationState:'NONE'});}
+   if(op==='Readback' && aborted>0) {
+    const reply=await original(op,q),projection=structuredClone(reply.result.projection);
+    for(const record of projection.records) record.state.light=123;
+    return answer({...reply.result,projection,readbackDigest:digestValue('readback',projection).sha256});
+   }
    return original(op,q);
   };
   const history=structuredClone(host.canvas.store.snapshot.history[ref]);
@@ -218,4 +223,35 @@ test('a valid ROLLED_BACK History reply is queried and read back without leaking
   const result=await host.perform(ref,'redo');assert.equal(result.status,'ROLLED_BACK');assert.equal(result.error,null);assert.deepEqual(host.canvas.store.snapshot.pending,{});assert.equal(restores,0);
   assert.equal((await host.readView()).entries[1].state,'UNDONE');assert.equal((await host.canvas.call('Redo',result.request)).result.status,'ROLLED_BACK');
  }finally{await rm(dir,{recursive:true,force:true});}
+});
+
+test('lost History reply accepts declared derived-field changes through exact query/readback', async () => {
+ const dir=await mkdtemp(join(tmpdir(),'canvas-history-derived-'));
+ try {
+  await createUndoExample(dir);const host=await openUndoHost(dir),ref=(await host.readView()).entries[1].objectRef;
+  const port=host.canvas.adapter,original=port.call.bind(port);let relight=false,receipt,applies=0,restores=0;
+  const derived=result=>{
+   const projection=structuredClone(result.projection);
+   for(const record of projection.records)record.state.light=123;
+   return {...result,projection,readbackDigest:digestValue('readback',projection).sha256};
+  };
+  port.call=async(op,q)=>{
+   if(op==='Readback') {const response=await original(op,q);return relight?{...response,result:derived(response.result)}:response;}
+   if(op==='ApplyHistoryTransaction') {
+    applies++;const response=await original(op,q);relight=true;
+    const row=host.canvas.store.snapshot.pending[q.transactionId];
+    const read=derived((await original('Readback',{...q,coveredPositions:row.before.coveredPositions,stateProfile:row.before.stateProfile})).result);
+    receipt={...response.result,readbackDigest:read.readbackDigest};
+    return {...response,result:null,error:{code:'RECOVERY_PENDING',phase:'apply',retryability:'SAME_TRANSACTION_QUERY',mutationState:'UNKNOWN',transactionRef:q.transactionId,causeCode:null,reason:'TRANSPORT_OUTCOME_UNKNOWN'}};
+   }
+   if(op==='QueryTransaction')return {contractVersion:'world-adapter/v8',requestId:q.requestId,result:receipt,error:null};
+   if(op==='RestoreTransaction'){restores++;throw new Error('UNEXPECTED_RESTORE');}
+   return original(op,q);
+  };
+  const result=await host.perform(ref,'undo');
+  assert.equal(result.status,'VERIFIED',JSON.stringify(result));
+  assert.equal(applies,1);assert.equal(restores,0);
+  assert.deepEqual(host.canvas.store.snapshot.pending,{});
+  assert.equal(host.canvas.store.snapshot.transactions[result.transactionId].after.records[0].state.light,123);
+ } finally {await rm(dir,{recursive:true,force:true});}
 });
