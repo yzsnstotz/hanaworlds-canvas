@@ -1,6 +1,7 @@
 import type { ContractHandshake, OperationMap, ProtocolHandshake, RegionSnapshotContent,
   RegionSnapshotRef, RegionSummary } from 'hanaworlds-contracts';
 import type { NativeFactsPort } from './native-facts.js';
+import type Schema from '@deepseek-ai/schemastery';
 export type { NativeFactsPort, NativeFactsScopedState } from './native-facts.js';
 
 /** Public declaration only: canvas major 7/minor 1, no published per-cell tokens.
@@ -14,6 +15,14 @@ export interface CanvasHostContext {
   get?(name: string): any;
   provide?(name: string, service: any): unknown;
 }
+/** Canvas-owned placement policy; managed by the host plugin Config form. */
+export interface CanvasConfig {
+  placement?: Partial<{
+    frontGapCells: number; forwardSearchCells: number;
+    lateralSearchCells: number; verticalSearchCells: number;
+  }>;
+}
+export const Config: Schema<CanvasConfig>;
 export class CanvasStore {
   directory: string;
   snapshot: any;
@@ -25,7 +34,7 @@ export class CanvasStore {
 }
 export class CanvasV5 implements CanvasV5ProtocolSource {
   constructor(options: { store: CanvasStore | null; adapter?: any;
-    nativeFacts?: NativeFactsPort; sessions?: any; adapterId?: string });
+    nativeFacts?: NativeFactsPort; sessions?: any; adapterId?: string; config?: CanvasConfig });
   store: CanvasStore | null;
   ready: Promise<void>;
   storageState: string;
@@ -34,6 +43,8 @@ export class CanvasV5 implements CanvasV5ProtocolSource {
   status(): { component: string; version: string; canvasContract: string;
     adapterContract: string; storage: string; productReadiness: 'UNPROVEN' };
   current(sessionRef: string): any;
+  /** Apply saved placement policy to bound worlds before host startup completes. */
+  syncPlacementSettings(): Promise<void>;
   /** Exact pending History outcome; it never reapplies or forces Restore. */
   resolvePendingHistory(request: { sessionRef: string; transactionId: string }): Promise<{
     transactionId: string; status: string; recoveryPending?: boolean;
@@ -89,7 +100,8 @@ export const STORE_ROOT: 'hanaworlds-canvas-v2';
 export class CanvasRegionV1 {
   constructor(canvas: CanvasV5, regionAdapter: any);
   readonly protocolHandshake: ProtocolHandshake;
-  describe(): Record<string, unknown>;
+  /** Re-read the selected world's capabilities. No Session returns an unbound description. */
+  describe(sessionRef?: string | null): Promise<Record<string, unknown>>;
   call<N extends keyof OperationMap['canvas-region/v3']>(operation: N,
     request: unknown): Promise<OperationMap['canvas-region/v3'][N]['response']>;
   recoverPending(): Promise<any>;
@@ -102,7 +114,7 @@ export const CANVAS_REGION_CAPABILITIES: readonly string[];
 export const ADAPTER_REGION_REQUIREMENT: import('hanaworlds-contracts').ProtocolRequirement;
 export const ADAPTER_CELL_REQUIREMENT: import('hanaworlds-contracts').ProtocolRequirement;
 export const SNAPSHOT_COMPRESSION: 'gzip';
-export const regionToolDescription: Readonly<Record<string, unknown>>;
+export function regionToolDescription(capabilities?: any): Record<string, unknown>;
 export function encodeSnapshot(content: RegionSnapshotContent, before: RegionSummary):
   Promise<{ ref: RegionSnapshotRef; compressed: Uint8Array; rawByteLength: number }>;
 export function decodeSnapshot(compressed: Uint8Array, ref: RegionSnapshotRef,
@@ -156,8 +168,8 @@ export function boundDomain(snapshot: any, worldRef: string):
   { domain: ConfigDomain; sessionRefs: string[] }[];
 export const name: 'hanaworlds-canvas';
 export const inject: string[];
-export function apply(ctx: CanvasHostContext): CanvasV5;
-declare const plugin: { name: typeof name; inject: typeof inject; apply: typeof apply };
+export function apply(ctx: CanvasHostContext, config?: CanvasConfig): CanvasV5;
+declare const plugin: { name: typeof name; inject: typeof inject; Config: typeof Config; apply: typeof apply };
 export default plugin;
 
 /** Canvas-owned read-only display projection, not a BUILD wire protocol. */

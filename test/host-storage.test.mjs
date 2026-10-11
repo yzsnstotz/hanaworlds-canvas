@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { lstat, mkdtemp, mkdir, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { apply } from '../src/index.mjs';
+import { apply, Config } from '../src/index.mjs';
 
 async function profile(t) {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'canvas-native-home-')));
@@ -39,7 +39,7 @@ test('Canvas uses native DSH home path for durable schema-7 state across reload'
     assert.equal(first.store.directory, directory(root));
     await first.store.commit(state => {
       state.objects.world = { object: { objectRef: 'object' } };
-      state.placementSettings = { world: { settingsRevision: '7' } };
+      state.placementSettings = { world: { ...Config({}).placement, settingsRevision: '7' } };
       state.placementInspections = { inspect: { worldRef: 'world' } };
     });
     const restarted = await load(native(root));
