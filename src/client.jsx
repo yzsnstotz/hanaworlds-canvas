@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ObjectsHistoryView, undoFailureLabel } from './display-view.mjs';
+import { ObjectsHistoryView, undoFailureLabel, redoFailureLabel, readFailureLabel } from './display-view.mjs';
 import { displayClientContribution } from './display-remote.mjs';
 
 const PANEL_ID = 'hanaworlds-canvas-objects-history';
@@ -11,7 +11,7 @@ const css = `
 `;
 
 const failureCode = failure => failure?.details?.reason ?? failure?.code ?? failure?.message ?? String(failure);
-export function ObjectsHistoryPanel({ sessionRef, read, readActions, undo, changes }) {
+export function ObjectsHistoryPanel({ sessionRef, read, readActions, undo, redo, changes }) {
   const [view, setView] = useState(null);
   const [actions, setActions] = useState(null);
   const [pending, setPending] = useState(false);
@@ -27,7 +27,7 @@ export function ObjectsHistoryPanel({ sessionRef, read, readActions, undo, chang
     Promise.all([read(sessionRef), readActions ? readActions(sessionRef) : null]).then(([value, published]) => {
       if (active) { setView(value); setActions(published); }
     }, failure => {
-      if (active) setError(failureCode(failure));
+      if (active) setError(readFailureLabel(failure));
     }).finally(() => { if (active) setPending(false); });
     return () => { active = false; };
   }, [sessionRef, revision, read, readActions]);
@@ -46,22 +46,24 @@ export function ObjectsHistoryPanel({ sessionRef, read, readActions, undo, chang
     })().catch(failure => { if (active) setLiveError(failureCode(failure)); });
     return () => { active = false; handle.dispose(); };
   }, [sessionRef, changes]);
-  const undoControls = undo && {
-    confirming, busy, message: outcome.message, error: outcome.error,
-    request: entry => { setOutcome({ message: null, error: null }); setConfirming(entry.transactionId); },
+  const historyControls = (action, perform, label) => perform && {
+    confirming: confirming?.action === action ? confirming.transactionId : null,
+    busy, message: outcome.action === action ? outcome.message : null,
+    error: outcome.action === action ? outcome.error : null,
+    request: entry => { setOutcome({ message: null, error: null }); setConfirming({ action, transactionId: entry.transactionId }); },
     cancel: () => setConfirming(null),
     confirm: entry => {
       setBusy(true);
-      undo(sessionRef, entry.objectRef, entry.transactionId).then(result => {
+      perform(sessionRef, entry.objectRef, entry.transactionId).then(result => {
         setView(result.view);
-        setOutcome({ message: `已撤回「${entry.objectName ?? '未命名对象'}」这笔改动；Canvas 已校验并读回世界。`, error: null });
-      }, failure => setOutcome({ message: null,
-        error: undoFailureLabel(failureCode(failure), failure?.details?.worldRef ?? null) }))
+        setOutcome({ action, message: `已${label}「${entry.objectName ?? '未命名对象'}」这笔改动；Canvas 已校验并读回世界。`, error: null });
+      }, failure => setOutcome({ action, message: null,
+        error: (action === 'redo' ? redoFailureLabel : undoFailureLabel)(failureCode(failure), failure?.details?.worldRef ?? null) }))
         .finally(() => { setBusy(false); setConfirming(null); setRevision(value => value + 1); });
     },
   };
   return <ObjectsHistoryView view={view} pending={pending} error={error} liveError={liveError}
-    actions={actions} undo={undoControls} refresh={() => setRevision(value => value + 1)} />;
+    actions={actions} undo={historyControls('undo', undo, '撤回')} redo={historyControls('redo', redo, '重做')} refresh={() => setRevision(value => value + 1)} />;
 }
 function CanvasIcon() {
   return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="M4 5h16v14H4zM4 10h16M10 5v14M13 14h4M13 17h3" /></svg>;
@@ -107,14 +109,14 @@ function registerPanel(ctx) {
     if (!result.ok) throw result.error;
     return result.value;
   };
-  const read = remote('read'), readActions = remote('actions'), undo = remote('undo');
+  const read = remote('read'), readActions = remote('actions'), undo = remote('undo'), redo = remote('redo');
   // A stream method returns its RemoteStreamHandle directly (no result envelope).
   const changes = sessionRef => ctx.remote.hanaworldsCanvasDisplay.changes(sessionRef);
   registerStyle(ctx);
   function CanvasPanel({ useSessions }) {
     const sessionRef = useSessions(state => Object.values(state.byId)
       .find(session => (session.retainedBy.mainView ?? 0) > 0)?.id ?? null);
-    return <ObjectsHistoryPanel sessionRef={sessionRef} read={read} readActions={readActions} undo={undo} changes={changes} />;
+    return <ObjectsHistoryPanel sessionRef={sessionRef} read={read} readActions={readActions} undo={undo} redo={redo} changes={changes} />;
   }
   registerSlots(ctx, CanvasPanel);
 }

@@ -25,11 +25,11 @@ const ref = (name, typeSymbol, nullable = false) => ({ name, wire: name, source:
   codec: { mode: 'strict', typeSymbol, create: () => nullable ? z.string().min(1).nullable() : z.string().min(1) } });
 const undoStep = () => z.object({ available: z.boolean(), reason: z.string().nullable(),
   historyTransactionId: z.string().nullable() });
-// Per object: whether its latest committed entry can be undone now, and if not, Canvas's named reason.
+// Per object: whether its latest committed entry can be undone or redone now, and if not, Canvas's named reason.
 const actionsSchema = () => z.object({
   state: z.enum(['NO_SESSION', 'NO_WORLD', 'EMPTY', 'READY']), worldRef: z.string().nullable(),
   objects: z.array(z.object({ objectRef: z.string(), mode: z.enum(['CELL', 'REGION']),
-    applied: z.boolean(), undo: undoStep() })),
+    applied: z.boolean(), undo: undoStep(), redo: undoStep() })),
 });
 export const actionsDescriptor = {
   id: 'hanaworlds-canvas#hanaworldsCanvasDisplay/actions',
@@ -51,6 +51,9 @@ export const undoDescriptor = {
     status: z.string(), transactionId: z.string(), originTransactionId: z.string(),
     objectRef: z.string(), view: displaySchema() }) },
 };
+export const redoDescriptor = { ...undoDescriptor,
+  id: 'hanaworlds-canvas#hanaworldsCanvasDisplay/redo', method: 'redo',
+  result: { ...undoDescriptor.result, typeSymbol: 'hanaworlds-canvas#DisplayRedoResult' } };
 // Logical stream of change notices for one Session's panel; cancelled with the panel.
 export const changesDescriptor = {
   id: 'hanaworlds-canvas#hanaworldsCanvasDisplay/changes',
@@ -61,7 +64,7 @@ export const changesDescriptor = {
   result: { mode: 'strict', typeSymbol: 'hanaworlds-canvas#ObjectsHistoryChange', create: () => z.object({
     worldRef: z.string().nullable(), registryRevision: z.string().nullable() }) },
 };
-const descriptors = [displayDescriptor, actionsDescriptor, undoDescriptor, changesDescriptor];
+const descriptors = [displayDescriptor, actionsDescriptor, undoDescriptor, redoDescriptor, changesDescriptor];
 export const displayHostContribution = { package: 'hanaworlds-canvas-display', face: 'host',
   schemas: [], invocations: descriptors, model: {} };
 export const displayClientContribution = { package: 'hanaworlds-canvas-display', descriptors };

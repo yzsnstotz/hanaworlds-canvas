@@ -12,11 +12,11 @@ const D = (kind, value) => digestValue(kind, value).sha256;
  * Test fixture: an isolated durable Canvas store with two per-cell commits made through
  * Canvas's public operations against the FIXTURE world. Refuses an existing directory.
  */
-export async function createUndoExample(directory) {
+export async function createUndoExample(directory, { world: preparedWorld } = {}) {
   try { await readFile(join(directory, 'canvas-v7.json')); throw new Error('EXAMPLE_ALREADY_EXISTS'); }
   catch (error) { if (error.code !== 'ENOENT') throw error; }
   const store = await CanvasStore.open(directory);
-  const world = await openUndoFixtureWorld(undoWorldFile(directory), { create: true });
+  const world = preparedWorld ?? await openUndoFixtureWorld(undoWorldFile(directory), { create: true });
   const canvas = new CanvasV5({ store, adapter: world.adapter, nativeFacts: world.nativeFacts,
     sessions: fixtureSessions() });
   world.readWorldRevision = () => canvas.readWorldRevision(undoWorldRef);

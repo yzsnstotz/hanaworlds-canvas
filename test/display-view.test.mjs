@@ -37,3 +37,24 @@ test('a broken change feed is shown with its cause and keeps the manual refresh'
   const live = renderToStaticMarkup(React.createElement(ObjectsHistoryView, { view: displayFixture }));
   assert.ok(!live.includes('自动更新已中断'));
 });
+
+
+test('view offers redo on the published origin only and shows redo confirmation', () => {
+  const view = { ...displayFixture, history: [{ ...displayFixture.history[0], transactionId: 'origin', objectRef: 'object', status: 'UNDONE' }] };
+  const actions = { objects: [{ objectRef: 'object', undo: { available: false, reason: 'NOTHING_TO_UNDO' },
+    redo: { available: true, reason: null, historyTransactionId: 'origin' } }] };
+  const redo = { confirming: null, busy: false, request() {}, cancel() {}, confirm() {} };
+  const render = props => renderToStaticMarkup(React.createElement(ObjectsHistoryView, { view, actions, redo, ...props }));
+  assert.match(render({}), /重做这笔/);
+  assert.match(render({ redo: { ...redo, confirming: 'origin' } }), /确认重做/);
+  assert.doesNotMatch(render({ actions: { objects: [{ ...actions.objects[0], redo: { available: true, historyTransactionId: 'other' } }] } }), /重做这笔/);
+});
+
+test('startup cause reaches the visible read failure label', async () => {
+  const { readFailureLabel } = await import('../src/display-view.mjs');
+  const error = readFailureLabel({ code: 'canvas/storage-unavailable', details: {
+    storageFailure: { code: 'EACCES', message: 'fixture storage permission denied' } } });
+  const html = renderToStaticMarkup(React.createElement(ObjectsHistoryView, { error }));
+  assert.match(html, /EACCES/);
+  assert.match(html, /fixture storage permission denied/);
+});

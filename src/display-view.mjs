@@ -27,18 +27,39 @@ export const undoReasonLabel = code => undoReasons[code] ?? `未撤回（${code}
 // own public error carried; no display name is generated.
 export const undoFailureLabel = (code, worldRef = null) =>
   worldRef ? `${undoReasonLabel(code)} 需要的世界：${worldRef}` : undoReasonLabel(code);
+const redoReasons = {
+  NOTHING_TO_REDO: '没有可重做的改动。',
+  REGION_REDO_NOT_IN_PROTOCOL: '批量区域改动不提供重做。',
+  WORLD_CHANGED_SINCE: '之后世界又有新改动，不能重做这笔。',
+  TRANSACTION_PENDING: '有一笔改动仍在处理中，完成后才能重做。',
+  HISTORY_MOVED: '这笔已不是当前可重做的改动，请刷新后再看。',
+  REDO_CONFLICT: '世界里的方块已变化，未重做。',
+  REDO_UNAVAILABLE: '这笔改动现在不能重做。',
+  ROLLED_BACK: '重做没有通过校验，已整笔回滚。',
+  RECOVERY_PENDING: '重做结果未知，Canvas 已记为待恢复。请不要重复点击。',
+};
+export const redoFailureLabel = (code, worldRef = null) => {
+  const label = redoReasons[code] ?? `未重做（${code}）`;
+  return worldRef ? `${label} 需要的世界：${worldRef}` : label;
+};
+export const readFailureLabel = failure => {
+  const cause = failure?.details?.storageFailure;
+  return cause ? `Canvas 存储初始化失败（${cause.code}）：${cause.message}` :
+    failure?.details?.reason ?? failure?.code ?? failure?.message ?? String(failure);
+};
 function timeLabel(value) {
   if (value === null) return '未记录时间';
   return new Date(value).toLocaleString('zh-CN', { hour12: false });
 }
-export function ObjectsHistoryView({ view, refresh, pending = false, error = null, liveError = null, emptyReason, footer = '这里仅供查看。建造或撤回请使用对应面板。', actions = null, undo = null }) {
+export function ObjectsHistoryView({ view, refresh, pending = false, error = null, liveError = null, emptyReason, footer = '这里仅供查看。建造或撤回请使用对应面板。', actions = null, undo = null, redo = null }) {
   const objects = view?.objects ?? [];
   const history = view?.history ?? [];
-  // Undo controls appear only when the caller supplies Canvas's published actions (App panel, live data).
-  const steps = actions && undo ? new Map(actions.objects.map(object => [object.objectRef, object.undo])) : null;
+  // History controls appear only when the caller supplies Canvas's published actions (App panel, live data).
+  const steps = actions && (undo || redo) ? new Map(actions.objects.map(object => [object.objectRef, object.undo])) : null;
+  const redoSteps = actions && redo ? new Map(actions.objects.map(object => [object.objectRef, object.redo])) : null;
   const undoButtons = entry => {
     const step = steps?.get(entry.objectRef);
-    if (!step?.available || step.historyTransactionId !== entry.transactionId) return null;
+    if (!undo || !step?.available || step.historyTransactionId !== entry.transactionId) return null;
     if (undo.confirming === entry.transactionId) return h('div', { className: 'hw-canvas-undo' },
       h('span', null, `撤回这笔：Canvas 会把这 ${entry.affectedCells ?? '若干'} 格恢复到提交前。`),
       h('button', { type: 'button', className: 'hw-canvas-danger', disabled: undo.busy, onClick: () => undo.confirm(entry) }, undo.busy ? '正在撤回…' : '确认撤回'),
@@ -46,15 +67,27 @@ export function ObjectsHistoryView({ view, refresh, pending = false, error = nul
     return h('div', { className: 'hw-canvas-undo' },
       h('button', { type: 'button', disabled: undo.busy || pending, onClick: () => undo.request(entry) }, '撤回这笔'));
   };
+  const redoButtons = entry => {
+    const step = redoSteps?.get(entry.objectRef);
+    if (!step?.available || step.historyTransactionId !== entry.transactionId) return null;
+    if (redo.confirming === entry.transactionId) return h('div', { className: 'hw-canvas-undo' },
+      h('span', null, `重做这笔：Canvas 会重新应用这 ${entry.affectedCells ?? '若干'} 格的改动。`),
+      h('button', { type: 'button', disabled: redo.busy, onClick: () => redo.confirm(entry) }, redo.busy ? '正在重做…' : '确认重做'),
+      h('button', { type: 'button', disabled: redo.busy, onClick: redo.cancel }, '取消'));
+    return h('div', { className: 'hw-canvas-undo' },
+      h('button', { type: 'button', disabled: redo.busy || pending, onClick: () => redo.request(entry) }, '重做这笔'));
+  };
   return h('section', { className: 'hw-canvas-display', 'aria-label': '对象与历史（Canvas）' },
     h('header', { className: 'hw-canvas-header' },
       h('div', null, h('div', { className: 'hw-canvas-eyebrow' }, 'CANVAS · 世界记录'),
         h('h1', null, '对象与历史'), h('p', null, '看看世界里的作品，以及每一次已提交的改动。')),
       h('div', { className: 'hw-canvas-actions' },
         h('button', { type: 'button', onClick: refresh, disabled: pending }, pending ? '正在读取…' : '刷新'))),
-    h('div', { className: 'hw-canvas-source' }, steps ? '当前世界 · 可撤回每个对象的最近一笔' : '当前世界 · 只读'),
+    h('div', { className: 'hw-canvas-source' }, steps ? '当前世界 · 可撤回或重做最近改动' : '当前世界 · 只读'),
     steps && undo?.message && h('p', { role: 'status', className: 'hw-canvas-done' }, undo.message),
     steps && undo?.error && h('p', { role: 'alert', className: 'hw-canvas-error' }, '撤回失败：', undo.error),
+    redo?.message && h('p', { role: 'status', className: 'hw-canvas-done' }, redo.message),
+    redo?.error && h('p', { role: 'alert', className: 'hw-canvas-error' }, '重做失败：', redo.error),
     error && h('p', { role: 'alert', className: 'hw-canvas-error' }, '读取失败：', error),
     liveError && h('p', { role: 'alert', className: 'hw-canvas-error' },
       `自动更新已中断（${liveError}）：新的建造或撤回不会自动出现，请点「刷新」读取最新记录。`),
@@ -71,7 +104,9 @@ export function ObjectsHistoryView({ view, refresh, pending = false, error = nul
                 h('dt', null, '占地大小'), h('dd', null, object.bounds ? `${object.bounds.size.join(' × ')} 格` : '0 格'),
                 h('dt', null, '实际占用'), h('dd', null, `${object.occupiedCells} 格`),
                 steps?.get(object.objectRef) && !steps.get(object.objectRef).available && [
-                  h('dt', { key: 'undo-t' }, '撤回'), h('dd', { key: 'undo-d' }, undoReasonLabel(steps.get(object.objectRef).reason))]))))),
+                  h('dt', { key: 'undo-t' }, '撤回'), h('dd', { key: 'undo-d' }, undoReasonLabel(steps.get(object.objectRef).reason))],
+                redoSteps?.get(object.objectRef) && !redoSteps.get(object.objectRef).available && [
+                  h('dt', { key: 'redo-t' }, '重做'), h('dd', { key: 'redo-d' }, redoFailureLabel(redoSteps.get(object.objectRef).reason))]))))),
       h('section', { className: 'hw-canvas-card', 'aria-labelledby': 'hw-canvas-history-title' },
         h('div', { className: 'hw-canvas-sectionhead' }, h('h2', { id: 'hw-canvas-history-title' }, '改动时间线'), h('span', null, `${history.length} 笔记录`)),
         history.length === 0 ? h('p', { className: 'hw-canvas-muted' }, '暂无历史。只有完成提交的改动会出现在这里。') :
@@ -84,6 +119,6 @@ export function ObjectsHistoryView({ view, refresh, pending = false, error = nul
                 ' · ', entry.affectedCells === null ? '影响格数未记录' : `影响 ${entry.affectedCells} 格`),
               (entry.committedAt === null || entry.mode === null || entry.affectedCells === null) &&
                 h('small', { className: 'hw-canvas-muted' }, '这笔旧记录没有保存完整展示信息。'),
-              undoButtons(entry)))))),
-    h('footer', null, steps ? '撤回由 Canvas 校验当前世界后整笔执行；校验不过整笔回滚，不会只撤一部分。' : footer));
+              undoButtons(entry), redoButtons(entry)))))),
+    h('footer', null, steps ? '撤回和重做由 Canvas 校验当前世界后整笔执行；校验不过整笔回滚。' : footer));
 }

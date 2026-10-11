@@ -40,7 +40,7 @@ test('the single Canvas package entry automatically registers display in a real 
   } finally { await ctx.fiber.dispose(); await rm(profile, { recursive: true, force: true }); }
 });
 
-test('display namespace has exactly read/actions/undo, and undo accepts only the clicked row', async () => {
+test('display namespace exposes read/actions/undo/redo, and history accepts only the clicked row', async () => {
   const ctx = new Context();
   await ctx.plugin(TypertRegistry);
   const calls = [];
@@ -62,4 +62,19 @@ test('display namespace has exactly read/actions/undo, and undo accepts only the
   await assert.rejects(() => invoke('redo', { sessionRef: 's-1', objectRef: 'o', historyTransactionId: 't' }));
   assert.equal(calls.filter(([kind]) => kind === 'call').length, 0);
   await fiber.dispose(); await ctx.fiber.dispose();
+});
+
+
+test('storage startup failure is carried by the public display gateway', async () => {
+  const ctx = new Context();
+  await ctx.plugin(TypertRegistry);
+  const storageFailure = { code: 'EACCES', message: 'fixture storage permission denied' };
+  ctx.provide('hanaworldsCanvasV5', { ready: Promise.resolve(), storageState: 'UNAVAILABLE', storageFailure,
+    readObjectsHistory() { throw new Error('must refuse before reading'); } });
+  const fiber = ctx.plugin(displayPlugin); await fiber;
+  try {
+    const gateway = new TypertGatewayService(ctx, { websocketHeartbeatIntervalMs: 2000, streamInboxBytes: 262144 });
+    await assert.rejects(() => gateway.invoke({ namespace: 'hanaworldsCanvasDisplay', method: 'read', args: { sessionRef: 'session' } }),
+      error => error.code === 'canvas/storage-unavailable' && error.details.storageFailure.code === 'EACCES');
+  } finally { await fiber.dispose(); await ctx.fiber.dispose(); }
 });

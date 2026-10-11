@@ -30,8 +30,10 @@ The later named `ReadWorldSourceCapabilities` port is outside this card.
 
 Cell effects use opaque `materialRef` and neutral `orientation`, with explicit
 `geometryProfile`. Readback and restore obey the world source's StateProfile:
-engine-derived fields are excluded from comparisons; preserved fields keep their
-before value; cleared fields disappear on write. Region operations use the declared
+engine-derived fields are excluded from comparisons (including their disappearance); preserved fields keep their
+before value; cleared fields disappear on write. History preparation binds the expected-current digest to the original verified image,
+after comparing the live readback by StateProfile; exact live bytes remain the rollback image.
+Region operations use the declared
 partition, compressed before snapshots, whole-transaction readback/rollback and Undo.
 Engine guards are checked before writes; refusals preserve the public error and cause.
 Uncertain outcomes stay pending for same-transaction query/recovery.
@@ -59,7 +61,7 @@ the world source's `ReadWriteProfile.compilationConfig` (opaque `writeBackend
 facts refuse by name without defaults. No engine, mod or package name is read.
 
 The App panel reads the selected session's objects/history and performs the published
-latest-entry Undo. It follows `hanaworldsCanvasDisplay/changes`, a Typert stream that yields
+latest-entry Undo and the corresponding Redo. It follows `hanaworldsCanvasDisplay/changes`, a Typert stream that yields
 a data-free notice after every durable commit changing that Session's objects, history,
 footprints, pending rows or bound world (cell, region, Undo/Redo, recovery), and re-reads; a
 build made from Workshop or skills appears without a manual refresh. A broken stream is shown
@@ -67,3 +69,15 @@ with its cause and the manual refresh remains. It has no display-fixture sample 
 and the public NativeFacts fixture are explicitly SOURCE/FIXTURE. Independent legacy
 pages, examples, probes and old evidence are archived in the canvas-01 run directory.
 These checks do not establish a real-world GUI result or owner ACCEPTED.
+
+Storage startup failures are logged with the original error and exposed as
+`status().storageFailure = {code, message}` with `storage = UNAVAILABLE`.
+The display Gateway carries this cause in `canvas/storage-unavailable` details;
+the objects/history panel renders it as a read failure. No startup retry or
+fallback store is created. The display action descriptor now publishes both
+`undo` and `redo`, and both share one host queue. Redo uses Canvas's own published
+origin/revisions/context and refuses a stale clicked row before writing.
+
+`npm run test:undo` runs cell, region, history recovery, StateProfile and shipped
+client/Gateway regressions with explicit isolated contract peers. They are not
+real-world GUI acceptance evidence.

@@ -343,3 +343,29 @@ test('client view offers Undo only on the published latest row with an action ha
   assert.match(render({}), /当前世界 · 只读/);
   assert.doesNotMatch(render({ actions }), /撤回这笔/);
 });
+
+
+test('shipped client redoes the clicked origin through the public gateway and rejects stale clicks', async () => {
+  const { createUndoExample } = await import('./support/undo-example.mjs');
+  const { undoSessionRef } = await import('./support/undo-fixture-world.mjs');
+  const { registered, close, world, canvas } = await compose(directory => createUndoExample(directory), { fixtureWorld: true });
+  try {
+    const element = panel(registered, undoSessionRef);
+    let object = (await element.props.readActions(undoSessionRef)).objects[1];
+    const origin = object.undo.historyTransactionId;
+    await element.props.undo(undoSessionRef, object.objectRef, origin);
+    object = (await element.props.readActions(undoSessionRef)).objects[1];
+    assert.equal(object.redo.available, true);
+    assert.equal(object.redo.historyTransactionId, origin);
+    const writes = historyWrites(world);
+    assert.equal(await reasonOf(element.props.redo(undoSessionRef, object.objectRef, 'stale-origin')), 'HISTORY_MOVED');
+    assert.equal(historyWrites(world), writes);
+    const result = await element.props.redo(undoSessionRef, object.objectRef, origin);
+    assert.equal(result.status, 'VERIFIED');
+    assert.equal(result.originTransactionId, origin);
+    assert.equal(canvas.store.snapshot.transactions[result.transactionId].direction, 'REDO');
+    assert.deepEqual(world.readCells([[8, 2, 8], [9, 2, 8], [10, 2, 8]]).map(cell => cell.materialRef),
+      ['fixture:brick', 'fixture:brick', 'fixture:brick']);
+    assert.equal(await reasonOf(element.props.redo(undoSessionRef, object.objectRef, origin)), 'NOTHING_TO_REDO');
+  } finally { await close(); }
+});
