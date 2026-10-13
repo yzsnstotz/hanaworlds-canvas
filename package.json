@@ -26,7 +26,11 @@
     "./fixtures/native-facts-scoped-state.schema.json": "./fixtures/native-facts-scoped-state.schema.json",
     "./fixtures/native-facts-scoped-state.source.json": "./fixtures/native-facts-scoped-state.source.json",
     "./fixtures/world-error.json": "./fixtures/world-error.json",
-    "./display": "./lib/src/display-host.mjs",
+    "./display": {
+      "types": "./types/display.d.ts",
+      "import": "./lib/src/display-host.mjs",
+      "default": "./lib/src/display-host.mjs"
+    },
     "./client": "./lib/client.js",
     "./fixtures/affected-object-notification.json": "./fixtures/affected-object-notification.json"
   },

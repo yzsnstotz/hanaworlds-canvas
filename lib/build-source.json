@@ -193,6 +193,7 @@
     "lib/src/voxel-grid.mjs": "c8fb542a48b346d6732a9add9c854db04ac72fb557f4e052e7af84de0e18a8fa",
     "lib/src/world-error.mjs": "e7c19a6480cd25aed830c0d79ce302f4ea09d9e4feab90de973ad3780190977a",
     "lib/src/world-facts-reader.mjs": "c406ec3a8fbc03a195a5dc767d982b8fd886aab54a380254cad2ad28d8e968b2",
+    "types/display.d.ts": "794232525acb885e6c10dc59813e9e2a03313a617e48a37301e427d574436fc2",
     "types/index.d.ts": "824acafb1e0dfe28df30b615f28d2d8c34fd5a8d59fcb8fc4dd02197afcef23c",
     "types/native-facts-consumer.d.ts": "20fa35517b278ceab59882e2a2da29bbce6cef2681b2e315724dcd35a3fcf99a",
     "types/native-facts.d.ts": "fcf37800fc6365486f829f18566356a43ac0b384c39985d20f57ad63e72c583c",

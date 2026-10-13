@@ -107,6 +107,111 @@ It registers that same key in official `main` and `sidebar.panellist`. Navigatio
 the live registry and uses `layout.selectPanel`; consumers do not infer an internal id.
 Default registration and old calls stay unchanged. Layout rejects missing/stale targets.
 
+## 官方组合中的安装、配置与启动停机
+
+Canvas 的正式入口由官方 Loader 加载；Host 和客户端必须使用正常插件管理器
+安装的同一个 Canvas 制品。保持本包声明的官方 Cordis、Typert、React、Zod peers，
+不用另建 Context/Gateway 或直接导入源码代替实际安装。Desktop 的 `desktop`
+profile 由 Electron 应用管理，通用 `dsh --profile desktop` 启动会被官方 CLI
+拒绝；安装、重载及卸载均使用该应用的正常插件管理器。
+
+正式 Host 供应公开入口是其供应目录中的
+`node packaging/official-host-supply.mjs`。它生成收据和 `HOST-USAGE.md`，包含
+同根 manager 安装、Loader 启动、配置 dump、本地登录/Remote 和 SIGTERM 停机
+命令；使用生成文件的实际路径和隔离环境。Host 供应证明不替代完整 Desktop
+客户端、真实 ACTIVE 对端或世界/授权供应。Canvas 构建制品用正常 `npm pack`
+生成，随后由该正常 manager 安装，不修改官方 peer 或绕开 manager。
+
+在 Canvas 的公开插件配置表中保存下面的 `placement` 值，正常重载插件后生效：
+
+```json
+{
+  "placement": {
+    "frontGapCells": 0,
+    "forwardSearchCells": 3,
+    "lateralSearchCells": 0,
+    "verticalSearchCells": 0
+  }
+}
+```
+
+| 字段 | 默认值 | 0 的作用 |
+| --- | --- | --- |
+| `frontGapCells` | 2 | 不留前方间隔 |
+| `forwardSearchCells` | 16 | 不向前扩展搜索 |
+| `lateralSearchCells` | 8 | 不做侧向扩展搜索 |
+| `verticalSearchCells` | 4 | 不做竖向扩展搜索 |
+
+四项均接受非负整数；正值是对应间隔或搜索距离。设置作用于全部已绑定世界，
+不改变世界源事实或关闭保护/身体检查/事务恢复。保存重载保留对象与历史，
+旧放置检查失效，确认前须取得新检查。停止应用后保留该隔离账户自己的
+`data/hanaworlds-canvas-v2/canvas-v7.json`，再次启动读回历史，不导入个人旧数据。
+
+以下启动示例使用已声明的 `HANAWORLDS_DESKTOP` 准备结果；目录与端口由机制
+注入，用户无需填写应用路径、profile 或调试端口。它启动真实已准备的应用，
+不构造 Host。前台按 Ctrl+C，或向该 Node 进程发送 SIGTERM，会把 SIGTERM 转交
+给本次应用并等待退出；没有自动重试、强杀或默认端口。
+
+```sh
+node --input-type=module <<'JS'
+import assert from 'node:assert/strict';
+import { access, readFile, realpath } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { basename, join, sep } from 'node:path';
+import { execFileSync, spawn } from 'node:child_process';
+const env = process.env;
+assert.ok(env.SEGFLOW_ENV_DIR && env.SEGFLOW_PORT_HANAWORLDS_DESKTOP,
+  'CANVAS_VERIFY_ENV_MISSING: declared HANAWORLDS_DESKTOP environment required');
+const root = await realpath(env.SEGFLOW_ENV_DIR);
+const port = Number(env.SEGFLOW_PORT_HANAWORLDS_DESKTOP);
+assert.ok(Number.isInteger(port) && port > 0 && port <= 65535 && port !== 3080,
+  'CANVAS_VERIFY_PORT_INVALID');
+const product = JSON.parse(await readFile(join(root, 'product-environment.json'), 'utf8'));
+for (const key of ['app', 'dshHome', 'profile', 'electronUserData']) {
+  assert.equal(typeof product[key], 'string', `Missing product ${key}`);
+  assert.ok((await realpath(product[key])).startsWith(root + sep), `Outside run: ${key}`);
+}
+assert.equal(product.dshHome, join(root, 'dsh-home'));
+assert.equal(product.profile, join(product.dshHome, 'profiles/desktop'));
+assert.equal(product.electronUserData, join(root, 'electron-user-data'));
+await access(join(product.profile, 'package.json'));
+const executable = execFileSync('/usr/libexec/PlistBuddy',
+  ['-c', 'Print :CFBundleExecutable', join(product.app, 'Contents/Info.plist')],
+  { encoding: 'utf8' }).trim();
+assert.ok(executable && basename(executable) === executable);
+const command = join(product.app, 'Contents/MacOS', executable);
+await access(command, constants.X_OK);
+const child = spawn(command, [
+  `--user-data-dir=${product.electronUserData}`,
+  '--remote-debugging-address=127.0.0.1', `--remote-debugging-port=${port}`,
+], { cwd: root, stdio: 'inherit', env: { ...env, DSH_HOME: product.dshHome,
+  DSH_DESKTOP_DIAGNOSTIC_FILE: join(root, 'app-error.log') } });
+let stopping = false;
+const stop = () => { stopping = true; child.kill('SIGTERM'); };
+process.on('SIGINT', stop);
+process.on('SIGTERM', stop);
+try {
+  const [code, signal] = await new Promise((resolve, reject) => {
+    child.once('error', reject);
+    child.once('close', (code, signal) => resolve([code, signal]));
+  });
+  if (code !== 0 && !(stopping && signal === 'SIGTERM')) {
+    console.error('CANVAS_DESKTOP_EXIT', { code, signal });
+    process.exitCode = code ?? 1;
+  }
+} finally {
+  process.off('SIGINT', stop);
+  process.off('SIGTERM', stop);
+}
+JS
+```
+
+准备结果或真实服务缺失会具名失败。应用载入后，从实际侧栏登记的
+「对象与历史（Canvas）」进入面板；在正式 Session/世界流程中建立并读回对象，
+检查非空历史和撤回/重做。错误应显示在该面板，不能用「尚未接入」替代。
+正常 manager 卸载后，侧栏/main/remote 注册和旧导航目标均应清理。
+这些动作仍须在实际组合中验证；上述说明和 Host/组件测试不代表产品验收完成。
+
 ## Current world tool summary
 
 The registered `hanaworldsCanvasV5` service exposes
