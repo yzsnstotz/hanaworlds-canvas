@@ -1,0 +1,544 @@
+{
+  "evidence": "SOURCE/FIXTURE only: no real world, Canvas, Session store or Adapter was read.",
+  "trustedSessionWorlds": {
+    "fixture-session-S1": "fixture-world-A"
+  },
+  "exchanges": [
+    {
+      "title": "success is unchanged",
+      "wire": "canvas/v7",
+      "operation": "SelectWorldConnection",
+      "request": {
+        "contractVersion": "canvas/v7",
+        "sessionRef": "fixture-session-S1",
+        "requestId": "r2",
+        "worldRef": "fixture-world-A",
+        "connectionRef": "fixture-connection-A",
+        "expectedRevision": "fixture-selection-S1-0",
+        "expectedContext": null,
+        "connectionIncarnationRef": "fixture-incarnation-A-1"
+      },
+      "response": {
+        "contractVersion": "canvas/v7",
+        "requestId": "r2",
+        "result": {
+          "currentSession": "fixture-session-S1",
+          "activeWorldRef": "fixture-world-A",
+          "orderedSelectedObjectRefs": [],
+          "sessionRevision": "fixture-session-S1-rev-1",
+          "selectionRevision": "fixture-selection-S1-1",
+          "localContext": {
+            "connectionRef": "fixture-connection-A",
+            "connectionIncarnationRef": "fixture-incarnation-A-1",
+            "worldRef": "fixture-world-A",
+            "selectionRevision": "fixture-selection-S1-1"
+          }
+        },
+        "error": null
+      }
+    },
+    {
+      "title": "request worldRef names the target world",
+      "wire": "canvas/v7",
+      "operation": "SelectWorldConnection",
+      "request": {
+        "contractVersion": "canvas/v7",
+        "sessionRef": "fixture-session-S1",
+        "requestId": "r2",
+        "worldRef": "fixture-world-A",
+        "connectionRef": "fixture-connection-A",
+        "expectedRevision": "fixture-selection-S1-0",
+        "expectedContext": null,
+        "connectionIncarnationRef": "fixture-incarnation-A-1"
+      },
+      "response": {
+        "contractVersion": "canvas/v7",
+        "requestId": "r2",
+        "result": null,
+        "error": {
+          "code": "CAPABILITY_UNAVAILABLE",
+          "phase": "validate",
+          "retryability": "AFTER_NEW_FACTS",
+          "mutationState": "NONE",
+          "transactionRef": null,
+          "causeCode": null,
+          "reason": "REQUIRED_FACT_UNKNOWN",
+          "worldRef": "fixture-world-A"
+        }
+      }
+    },
+    {
+      "title": "host-injected current world names the tool target",
+      "wire": "session/v5",
+      "operation": "hanaworlds_context",
+      "request": {
+        "contractVersion": "session/v5",
+        "requestId": "hanaworlds_context-read",
+        "hostContext": {
+          "sessionRef": "fixture-session",
+          "turnRef": "turn-1",
+          "turnRevision": "fixture-turn-4",
+          "localContext": {
+            "connectionRef": "local-connection",
+            "connectionIncarnationRef": "socket-open-1",
+            "worldRef": "fixture-world",
+            "selectionRevision": "selection-1"
+          }
+        },
+        "input": {
+          "action": "read"
+        }
+      },
+      "response": {
+        "contractVersion": "session/v5",
+        "requestId": "hanaworlds_context-read",
+        "result": null,
+        "error": {
+          "code": "CAPABILITY_UNAVAILABLE",
+          "phase": "validate",
+          "retryability": "AFTER_NEW_FACTS",
+          "mutationState": "NONE",
+          "transactionRef": null,
+          "causeCode": null,
+          "reason": "REQUIRED_FACT_UNKNOWN",
+          "worldRef": "fixture-world"
+        }
+      }
+    },
+    {
+      "title": "no selector: provider resolves the trusted Session binding",
+      "wire": "session/v5",
+      "operation": "StartOrResumeSession",
+      "request": {
+        "contractVersion": "session/v5",
+        "sessionRef": "fixture-session-S1",
+        "requestId": "resume-bound",
+        "expectedRevision": null
+      },
+      "response": {
+        "contractVersion": "session/v5",
+        "requestId": "resume-bound",
+        "result": null,
+        "error": {
+          "code": "ADAPTER_UNAVAILABLE",
+          "phase": "validate",
+          "retryability": "AFTER_NEW_FACTS",
+          "mutationState": "NONE",
+          "transactionRef": null,
+          "causeCode": null,
+          "reason": "REQUIRED_FACT_UNKNOWN",
+          "worldRef": "fixture-world-A"
+        }
+      }
+    },
+    {
+      "title": "no selector and no binding: no world context",
+      "wire": "session/v5",
+      "operation": "StartOrResumeSession",
+      "request": {
+        "contractVersion": "session/v5",
+        "sessionRef": "fixture-session-unbound",
+        "requestId": "resume-unbound",
+        "expectedRevision": null
+      },
+      "response": {
+        "contractVersion": "session/v5",
+        "requestId": "resume-unbound",
+        "result": null,
+        "error": {
+          "code": "ADAPTER_UNAVAILABLE",
+          "phase": "validate",
+          "retryability": "AFTER_NEW_FACTS",
+          "mutationState": "NONE",
+          "transactionRef": null,
+          "causeCode": null,
+          "reason": "REQUIRED_FACT_UNKNOWN"
+        }
+      }
+    }
+  ],
+  "legacy": [
+    {
+      "title": "pre-2.7 error without worldRef stays valid",
+      "wire": "canvas/v7",
+      "operation": "SelectWorldConnection",
+      "request": {
+        "contractVersion": "canvas/v7",
+        "sessionRef": "fixture-session-S1",
+        "requestId": "r2",
+        "worldRef": "fixture-world-A",
+        "connectionRef": "fixture-connection-A",
+        "expectedRevision": "fixture-selection-S1-0",
+        "expectedContext": null,
+        "connectionIncarnationRef": "fixture-incarnation-A-1"
+      },
+      "response": {
+        "contractVersion": "canvas/v7",
+        "requestId": "r2",
+        "result": null,
+        "error": {
+          "code": "CAPABILITY_UNAVAILABLE",
+          "phase": "validate",
+          "retryability": "AFTER_NEW_FACTS",
+          "mutationState": "NONE",
+          "transactionRef": null,
+          "causeCode": null,
+          "reason": "REQUIRED_FACT_UNKNOWN"
+        }
+      }
+    },
+    {
+      "title": "mutationState and transactionRef are preserved beside worldRef",
+      "wire": "canvas/v7",
+      "operation": "SelectWorldConnection",
+      "request": {
+        "contractVersion": "canvas/v7",
+        "sessionRef": "fixture-session-S1",
+        "requestId": "r2",
+        "worldRef": "fixture-world-A",
+        "connectionRef": "fixture-connection-A",
+        "expectedRevision": "fixture-selection-S1-0",
+        "expectedContext": null,
+        "connectionIncarnationRef": "fixture-incarnation-A-1"
+      },
+      "response": {
+        "contractVersion": "canvas/v7",
+        "requestId": "r2",
+        "result": null,
+        "error": {
+          "code": "READBACK_FAILED",
+          "phase": "readback",
+          "retryability": "AFTER_NEW_FACTS",
+          "mutationState": "UNKNOWN",
+          "transactionRef": "fixture-transaction-1",
+          "causeCode": null,
+          "reason": "READBACK_ERROR",
+          "worldRef": "fixture-world-A"
+        }
+      }
+    }
+  ],
+  "reject": [
+    {
+      "title": "another world than the request selected",
+      "code": "CURRENT_WORLD_MISMATCH",
+      "wire": "canvas/v7",
+      "operation": "SelectWorldConnection",
+      "request": {
+        "contractVersion": "canvas/v7",
+        "sessionRef": "fixture-session-S1",
+        "requestId": "r2",
+        "worldRef": "fixture-world-A",
+        "connectionRef": "fixture-connection-A",
+        "expectedRevision": "fixture-selection-S1-0",
+        "expectedContext": null,
+        "connectionIncarnationRef": "fixture-incarnation-A-1"
+      },
+      "response": {
+        "contractVersion": "canvas/v7",
+        "requestId": "r2",
+        "result": null,
+        "error": {
+          "code": "CAPABILITY_UNAVAILABLE",
+          "phase": "validate",
+          "retryability": "AFTER_NEW_FACTS",
+          "mutationState": "NONE",
+          "transactionRef": null,
+          "causeCode": null,
+          "reason": "REQUIRED_FACT_UNKNOWN",
+          "worldRef": "fixture-world-B"
+        }
+      }
+    },
+    {
+      "title": "another world than the host-injected context",
+      "code": "CURRENT_WORLD_MISMATCH",
+      "wire": "session/v5",
+      "operation": "hanaworlds_context",
+      "request": {
+        "contractVersion": "session/v5",
+        "requestId": "hanaworlds_context-read",
+        "hostContext": {
+          "sessionRef": "fixture-session",
+          "turnRef": "turn-1",
+          "turnRevision": "fixture-turn-4",
+          "localContext": {
+            "connectionRef": "local-connection",
+            "connectionIncarnationRef": "socket-open-1",
+            "worldRef": "fixture-world",
+            "selectionRevision": "selection-1"
+          }
+        },
+        "input": {
+          "action": "read"
+        }
+      },
+      "response": {
+        "contractVersion": "session/v5",
+        "requestId": "hanaworlds_context-read",
+        "result": null,
+        "error": {
+          "code": "CAPABILITY_UNAVAILABLE",
+          "phase": "validate",
+          "retryability": "AFTER_NEW_FACTS",
+          "mutationState": "NONE",
+          "transactionRef": null,
+          "causeCode": null,
+          "reason": "REQUIRED_FACT_UNKNOWN",
+          "worldRef": "fixture-world-B"
+        }
+      }
+    },
+    {
+      "title": "empty reference",
+      "code": "SCHEMA_INVALID",
+      "wire": "canvas/v7",
+      "operation": "SelectWorldConnection",
+      "request": {
+        "contractVersion": "canvas/v7",
+        "sessionRef": "fixture-session-S1",
+        "requestId": "r2",
+        "worldRef": "fixture-world-A",
+        "connectionRef": "fixture-connection-A",
+        "expectedRevision": "fixture-selection-S1-0",
+        "expectedContext": null,
+        "connectionIncarnationRef": "fixture-incarnation-A-1"
+      },
+      "response": {
+        "contractVersion": "canvas/v7",
+        "requestId": "r2",
+        "result": null,
+        "error": {
+          "code": "CAPABILITY_UNAVAILABLE",
+          "phase": "validate",
+          "retryability": "AFTER_NEW_FACTS",
+          "mutationState": "NONE",
+          "transactionRef": null,
+          "causeCode": null,
+          "reason": "REQUIRED_FACT_UNKNOWN",
+          "worldRef": ""
+        }
+      }
+    },
+    {
+      "title": "null is not a form of absence",
+      "code": "SCHEMA_INVALID",
+      "wire": "canvas/v7",
+      "operation": "SelectWorldConnection",
+      "request": {
+        "contractVersion": "canvas/v7",
+        "sessionRef": "fixture-session-S1",
+        "requestId": "r2",
+        "worldRef": "fixture-world-A",
+        "connectionRef": "fixture-connection-A",
+        "expectedRevision": "fixture-selection-S1-0",
+        "expectedContext": null,
+        "connectionIncarnationRef": "fixture-incarnation-A-1"
+      },
+      "response": {
+        "contractVersion": "canvas/v7",
+        "requestId": "r2",
+        "result": null,
+        "error": {
+          "code": "CAPABILITY_UNAVAILABLE",
+          "phase": "validate",
+          "retryability": "AFTER_NEW_FACTS",
+          "mutationState": "NONE",
+          "transactionRef": null,
+          "causeCode": null,
+          "reason": "REQUIRED_FACT_UNKNOWN",
+          "worldRef": null
+        }
+      }
+    },
+    {
+      "title": "non-string reference",
+      "code": "SCHEMA_INVALID",
+      "wire": "canvas/v7",
+      "operation": "SelectWorldConnection",
+      "request": {
+        "contractVersion": "canvas/v7",
+        "sessionRef": "fixture-session-S1",
+        "requestId": "r2",
+        "worldRef": "fixture-world-A",
+        "connectionRef": "fixture-connection-A",
+        "expectedRevision": "fixture-selection-S1-0",
+        "expectedContext": null,
+        "connectionIncarnationRef": "fixture-incarnation-A-1"
+      },
+      "response": {
+        "contractVersion": "canvas/v7",
+        "requestId": "r2",
+        "result": null,
+        "error": {
+          "code": "CAPABILITY_UNAVAILABLE",
+          "phase": "validate",
+          "retryability": "AFTER_NEW_FACTS",
+          "mutationState": "NONE",
+          "transactionRef": null,
+          "causeCode": null,
+          "reason": "REQUIRED_FACT_UNKNOWN",
+          "worldRef": 7
+        }
+      }
+    },
+    {
+      "title": "world reference smuggled into reason",
+      "code": "SCHEMA_INVALID",
+      "wire": "canvas/v7",
+      "operation": "SelectWorldConnection",
+      "request": {
+        "contractVersion": "canvas/v7",
+        "sessionRef": "fixture-session-S1",
+        "requestId": "r2",
+        "worldRef": "fixture-world-A",
+        "connectionRef": "fixture-connection-A",
+        "expectedRevision": "fixture-selection-S1-0",
+        "expectedContext": null,
+        "connectionIncarnationRef": "fixture-incarnation-A-1"
+      },
+      "response": {
+        "contractVersion": "canvas/v7",
+        "requestId": "r2",
+        "result": null,
+        "error": {
+          "code": "CAPABILITY_UNAVAILABLE",
+          "phase": "validate",
+          "retryability": "AFTER_NEW_FACTS",
+          "mutationState": "NONE",
+          "transactionRef": null,
+          "causeCode": null,
+          "reason": "fixture-world-A"
+        }
+      }
+    },
+    {
+      "title": "free message",
+      "code": "UNKNOWN_REQUIRED_FIELD",
+      "wire": "canvas/v7",
+      "operation": "SelectWorldConnection",
+      "request": {
+        "contractVersion": "canvas/v7",
+        "sessionRef": "fixture-session-S1",
+        "requestId": "r2",
+        "worldRef": "fixture-world-A",
+        "connectionRef": "fixture-connection-A",
+        "expectedRevision": "fixture-selection-S1-0",
+        "expectedContext": null,
+        "connectionIncarnationRef": "fixture-incarnation-A-1"
+      },
+      "response": {
+        "contractVersion": "canvas/v7",
+        "requestId": "r2",
+        "result": null,
+        "error": {
+          "code": "CAPABILITY_UNAVAILABLE",
+          "phase": "validate",
+          "retryability": "AFTER_NEW_FACTS",
+          "mutationState": "NONE",
+          "transactionRef": null,
+          "causeCode": null,
+          "reason": "REQUIRED_FACT_UNKNOWN",
+          "worldRef": "fixture-world-A",
+          "message": "world fixture-world-A is unavailable"
+        }
+      }
+    },
+    {
+      "title": "file path",
+      "code": "UNKNOWN_REQUIRED_FIELD",
+      "wire": "canvas/v7",
+      "operation": "SelectWorldConnection",
+      "request": {
+        "contractVersion": "canvas/v7",
+        "sessionRef": "fixture-session-S1",
+        "requestId": "r2",
+        "worldRef": "fixture-world-A",
+        "connectionRef": "fixture-connection-A",
+        "expectedRevision": "fixture-selection-S1-0",
+        "expectedContext": null,
+        "connectionIncarnationRef": "fixture-incarnation-A-1"
+      },
+      "response": {
+        "contractVersion": "canvas/v7",
+        "requestId": "r2",
+        "result": null,
+        "error": {
+          "code": "CAPABILITY_UNAVAILABLE",
+          "phase": "validate",
+          "retryability": "AFTER_NEW_FACTS",
+          "mutationState": "NONE",
+          "transactionRef": null,
+          "causeCode": null,
+          "reason": "REQUIRED_FACT_UNKNOWN",
+          "worldRef": "fixture-world-A",
+          "worldPath": "/worlds/fixture-world-A"
+        }
+      }
+    },
+    {
+      "title": "stack",
+      "code": "UNKNOWN_REQUIRED_FIELD",
+      "wire": "canvas/v7",
+      "operation": "SelectWorldConnection",
+      "request": {
+        "contractVersion": "canvas/v7",
+        "sessionRef": "fixture-session-S1",
+        "requestId": "r2",
+        "worldRef": "fixture-world-A",
+        "connectionRef": "fixture-connection-A",
+        "expectedRevision": "fixture-selection-S1-0",
+        "expectedContext": null,
+        "connectionIncarnationRef": "fixture-incarnation-A-1"
+      },
+      "response": {
+        "contractVersion": "canvas/v7",
+        "requestId": "r2",
+        "result": null,
+        "error": {
+          "code": "CAPABILITY_UNAVAILABLE",
+          "phase": "validate",
+          "retryability": "AFTER_NEW_FACTS",
+          "mutationState": "NONE",
+          "transactionRef": null,
+          "causeCode": null,
+          "reason": "REQUIRED_FACT_UNKNOWN",
+          "worldRef": "fixture-world-A",
+          "stack": "Error: at x"
+        }
+      }
+    },
+    {
+      "title": "credential",
+      "code": "UNKNOWN_REQUIRED_FIELD",
+      "wire": "canvas/v7",
+      "operation": "SelectWorldConnection",
+      "request": {
+        "contractVersion": "canvas/v7",
+        "sessionRef": "fixture-session-S1",
+        "requestId": "r2",
+        "worldRef": "fixture-world-A",
+        "connectionRef": "fixture-connection-A",
+        "expectedRevision": "fixture-selection-S1-0",
+        "expectedContext": null,
+        "connectionIncarnationRef": "fixture-incarnation-A-1"
+      },
+      "response": {
+        "contractVersion": "canvas/v7",
+        "requestId": "r2",
+        "result": null,
+        "error": {
+          "code": "CAPABILITY_UNAVAILABLE",
+          "phase": "validate",
+          "retryability": "AFTER_NEW_FACTS",
+          "mutationState": "NONE",
+          "transactionRef": null,
+          "causeCode": null,
+          "reason": "REQUIRED_FACT_UNKNOWN",
+          "worldRef": "fixture-world-A",
+          "credential": "secret"
+        }
+      }
+    }
+  ]
+}

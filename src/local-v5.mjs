@@ -9,10 +9,10 @@ import { admitRequest, validateRequest, validateResponse, validateBoundResponse,
   projectScopedPreparedTransaction, checkContractHandshake, contractHandshake,
   digestValue, requestDigest, publicError, validateExactEffects,
   validateRegionInspection, checkConfirmedPlacementApply,
-  validatePlacementRegionRequest, validatePlacementRegionResponse } from 'hanaworlds-contracts';
+  validatePlacementRegionRequest, validatePlacementRegionResponse } from './protocol/local/index.mjs';
 import { checkProtocolCompatibility, contractProtocols, protocolRequirement,
-  validateType, requireGeometryProfile } from 'hanaworlds-contracts';
-import * as contractsSdk from 'hanaworlds-contracts';
+  validateType, requireGeometryProfile } from './protocol/local/index.mjs';
+import * as contractsSdk from './protocol/local/index.mjs';
 import { CanvasRegionV1, ADAPTER_CELL_REQUIREMENT, ENGINE_GUARD_REQUIREMENTS, requireGuards,
   unmetGuards, failureDetail, restoreFailure } from './region-v1.mjs';
 import { CanvasConfigSupply } from './config-supply.mjs';
@@ -22,13 +22,19 @@ import { Config } from './placement-config.mjs';
 import { nameTargetWorld, refOrUndefined, trustedSessionWorld, withTargetWorld } from './world-error.mjs';
 import { VOXEL_GRID, requireVoxelGrid, positionKey as key, cellPositions, affectedObjectRefs,
   boxCells, footprintBounds } from './voxel-grid.mjs';
+import { validateScopedState } from './scoped-state.mjs';
 import packageJson from '../package.json' with { type: 'json' };
+import { worldFactsReader } from './world-facts-reader.mjs';
+import { summaryRequest, summarySource, summaryError, scopeKeys } from './tool-summary.mjs';
 
 export { CanvasStore, CanvasRegionV1, CanvasConfigSupply };
 export { Config };
 const WIRE = 'canvas/v7';
 const ADAPTER = 'world-adapter/v8';
 const SESSION = 'session/v5';
+// Identity-bearing Host readers are private to the real registered instance, never
+// inherited or passed in request JSON. Offline constructors keep their existing API.
+const HOST_FACTS = new WeakMap();
 // canvas/v7 (Contracts 1.x) carries the session-world seam operations at minor 0; there is no
 // pre-seam canvas behaviour left to switch to.
 const canvasProtocol = contractProtocols.find(row => row.protocol === 'canvas');
@@ -96,7 +102,7 @@ export class CanvasV5 {
     this.historyRecoveryRuns = new Map();
   }
   get contractHandshake() { return structuredClone(contractHandshake); }
-  /** @returns {import('hanaworlds-contracts').ProtocolHandshake} */
+  /** @returns {import('./protocol/local/index.mjs').ProtocolHandshake} */
   get protocolHandshake() { return structuredClone(cellProtocolHandshake); }
   status() { return { component: 'hanaworlds-canvas', version: PACKAGE_VERSION,
     canvasContract: WIRE, adapterContract: ADAPTER, storage: this.storageState,
@@ -279,6 +285,40 @@ export class CanvasV5 {
     // Old entries retain their durable order after timestamped rows; no invented time.
     return structuredClone({ state: registered.length ? 'READY' : 'EMPTY',
       worldRef, objects, history });
+  }
+  /** C-canvas additive local Host summary; no transaction or observation is persisted. */
+  async readToolSummary(raw) {
+    const host = HOST_FACTS.get(this);
+    if (!host) throw summaryError('CAPABILITY_UNAVAILABLE');
+    const request = summaryRequest(raw);
+    await this.#durable();
+    await this.store.busy;
+    const selection = this.current(request.sessionRef);
+    if (!selection?.localContext || !selection.activeWorldRef) throw summaryError('WORLD_NOT_BOUND');
+    const scope = Object.fromEntries(scopeKeys.map(key => [key,selection.localContext[key]]));
+    const unchanged = () => {
+      if (!same(this.current(request.sessionRef),selection)) throw summaryError('CURRENT_WORLD_MISMATCH');
+    };
+    if (request.expectedConnection && !same(request.expectedConnection,scope))
+      throw summaryError('CURRENT_WORLD_MISMATCH');
+    const reader = host.capture('readCanvasFacts');
+    const connection = await this.#adapter('ReadLocalConnection',{contractVersion:ADAPTER,
+      sessionRef:request.sessionRef,requestId:`canvas-summary:${randomUUID()}`,
+      connectionRef:scope.connectionRef});
+    reader.live(); unchanged();
+    if (scope.worldRef !== selection.activeWorldRef ||
+        scopeKeys.some(key => connection[key] !== scope[key])) throw summaryError('CURRENT_WORLD_MISMATCH');
+    const rawSource = await reader.read(scope);
+    reader.live(); unchanged();
+    const source = summarySource(rawSource);
+    if (!same(source.connection,scope) ||
+        request.expectedProvider && !same(request.expectedProvider,source.provider))
+      throw summaryError('CURRENT_WORLD_MISMATCH');
+    const objectsHistory = await this.readObjectsHistory(request.sessionRef);
+    reader.live(); unchanged();
+    if (objectsHistory.worldRef !== scope.worldRef) throw summaryError('CURRENT_WORLD_MISMATCH');
+    return structuredClone({profileVersion:'canvas-tool-summary/v1',sessionRef:request.sessionRef,
+      source,objectsHistory});
   }
   /**
    * The objects/history panel's change feed for one Session. Yields `{ worldRef,
@@ -1526,7 +1566,7 @@ async function nativeDirectory(ctx) {
       join(homedir(), configured.slice(2)) : configured;
     if (root !== resolve(expanded)) throw new Error('CANVAS_STORAGE_UNAVAILABLE');
   }
-  // New root for the 1.x store; the 0.x root (data/hanaworlds-canvas) is left untouched.
+  // Canvas-owned current data layout.
   const directory = join(root, 'data', STORE_ROOT);
   if (homePath('data', STORE_ROOT) !== directory)
     throw new Error('CANVAS_STORAGE_UNAVAILABLE');
@@ -1542,6 +1582,8 @@ async function nativeDirectory(ctx) {
   return directory;
 }
 export function apply(ctx, config) {
+  let hostRuntime;
+  let facts;
   const service = new CanvasV5({ store: null, config,
     // Cordis parallel dispatch settles every consumer (including async listeners), and its
     // fiber-owned ctx.on subscriptions are removed on disposal. No private bridge import.
@@ -1563,11 +1605,15 @@ export function apply(ctx, config) {
       if (typeof port?.call !== 'function') throw fail('CAPABILITY_UNAVAILABLE', 'REQUIRED_FACT_UNKNOWN');
       return port.call(...args);
     } },
-    nativeFacts: { readScopedState: (...args) => {
-      const current = ctx.get?.('hanaworldsLuantiNativeFacts');
-      if (typeof current?.readScopedState !== 'function')
-        throw fail('CAPABILITY_UNAVAILABLE', 'REQUIRED_FACT_UNKNOWN');
-      return current.readScopedState(...args);
+    nativeFacts: { readScopedState: (connectionRef, positions) => {
+      const reader = facts.capture('readScopedState');
+      validateType('Ref', connectionRef);
+      validateType('Positions', positions);
+      if (!positions.length) throw new contractsSdk.ContractError('SCHEMA_INVALID', 'decode', 'INVALID_SHAPE');
+      return Promise.resolve(reader.read(connectionRef, positions)).then(raw => {
+        reader.live();
+        return validateScopedState(raw, positions);
+      });
     } },
     // C-world-facts (world-facts/v1) of the bound World's source, under the Host key the world
     // source publishes (the same neutral key the desktop bridge reads). Read on every call; no
@@ -1580,6 +1626,9 @@ export function apply(ctx, config) {
         return typeof current?.call === 'function' ? (...args) => current.call(...args) : undefined;
       } } });
   ctx.provide?.('hanaworldsCanvasV5', service);
+  facts = worldFactsReader(ctx, service, () => hostRuntime,
+    () => fail('CAPABILITY_UNAVAILABLE','REQUIRED_FACT_UNKNOWN'));
+  HOST_FACTS.set(service,facts);
   // Host service names are Canvas's choice; the wire shapes are Contracts canvas-/world-adapter-region/v3.
   ctx.provide?.('hanaworldsCanvasRegionV1', new CanvasRegionV1(service, {
     get protocolHandshake() {
@@ -1603,7 +1652,10 @@ export function apply(ctx, config) {
   });
   service.storageState = 'INITIALIZING';
   service.ready = (async () => {
-    try { service.store = await CanvasStore.open(await nativeDirectory(ctx));
+    try {
+      // The declared optional Host peer stays lazy for offline Canvas construction.
+      hostRuntime = await import('@deepseek-ai/cordis');
+      service.store = await CanvasStore.open(await nativeDirectory(ctx));
       await service.syncPlacementSettings();
       service.storageState = 'READY'; }
     catch (error) {

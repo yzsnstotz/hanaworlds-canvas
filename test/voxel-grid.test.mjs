@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { digestValue, validateCanvasEvent } from 'hanaworlds-contracts';
+import { digestValue, validateCanvasEvent } from '../src/protocol/local/index.mjs';
 import { createUndoExample } from './support/undo-example.mjs';
 import { openUndoHost } from './support/undo-host.mjs';
 import { undoSessionRef, undoWorldRef } from './support/undo-fixture-world.mjs';
@@ -159,7 +159,7 @@ test('notification consumer failure keeps the durable analysis and block decisio
 });
 
 test('voxel footprints preserve negative coordinates, closed boxes and unspecified region cells', async () => {
-  const { encodeRegionBlock } = await import('hanaworlds-contracts');
+  const { encodeRegionBlock } = await import('../src/protocol/local/index.mjs');
   const grid = await import('../src/voxel-grid.mjs');
   const block = encodeRegionBlock({ origin: [-2, -1, -3], size: [2, 1, 1],
     palette: [{ materialRef: 'opaque:material', orientation: 1 }], indices: [-1, 0] });

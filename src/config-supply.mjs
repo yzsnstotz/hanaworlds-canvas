@@ -3,7 +3,7 @@ import canonicalize from 'canonicalize';
 import { randomUUID } from 'node:crypto';
 import { ContractError, checkContractHandshake, checkProtocolCompatibility, contractHandshake,
   digestValue, protocolRequirement, schemaBundle, validateBoundResponse, validateCatalogueFacts,
-  validateRequest, validateType, validateWriteProfile } from 'hanaworlds-contracts';
+  validateRequest, validateType, validateWriteProfile } from './protocol/local/index.mjs';
 
 /*
  * Stage 1 validation configuration supply: CompilationConfig for one World.

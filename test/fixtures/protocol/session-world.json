@@ -1,0 +1,640 @@
+{
+  "evidence": "FIXTURE · session-world-seam/v1 public contract fixture; fixture Sessions/worlds, not a Canvas/Workshop/Adapter implementation or real runtime",
+  "sessionDirectory": {
+    "list": {
+      "request": {
+        "contractVersion": "session/v5",
+        "requestId": "d1"
+      },
+      "response": {
+        "contractVersion": "session/v5",
+        "requestId": "d1",
+        "result": {
+          "directoryRevision": "fixture-directory-1",
+          "sessions": [
+            {
+              "sessionRef": "fixture-session-S1",
+              "sessionRevision": "fixture-session-S1-rev-1"
+            },
+            {
+              "sessionRef": "fixture-session-S2",
+              "sessionRevision": "fixture-session-S2-rev-1"
+            }
+          ]
+        },
+        "error": null
+      }
+    },
+    "read": {
+      "request": {
+        "contractVersion": "session/v5",
+        "requestId": "d2",
+        "sessionRef": "fixture-session-S1"
+      },
+      "response": {
+        "contractVersion": "session/v5",
+        "requestId": "d2",
+        "result": {
+          "sessionRef": "fixture-session-S1",
+          "sessionRevision": "fixture-session-S1-rev-1"
+        },
+        "error": null
+      }
+    },
+    "unknown": {
+      "request": {
+        "contractVersion": "session/v5",
+        "requestId": "d3",
+        "sessionRef": "fixture-session-unknown"
+      },
+      "response": {
+        "contractVersion": "session/v5",
+        "requestId": "d3",
+        "result": null,
+        "error": {
+          "code": "SESSION_NOT_FOUND",
+          "phase": "validate",
+          "retryability": "AFTER_NEW_FACTS",
+          "mutationState": "NONE",
+          "transactionRef": null,
+          "causeCode": null,
+          "reason": "IDENTITY_UNVERIFIED"
+        }
+      }
+    }
+  },
+  "adapterInventory": {
+    "A": {
+      "capabilityRevision": "fixture-cap-1",
+      "connections": [
+        {
+          "adapterId": "fixture-adapter",
+          "connectionRef": "fixture-connection-A",
+          "worldRef": "fixture-world-A",
+          "displayName": "FIXTURE world A",
+          "capabilityRevision": "fixture-cap-1",
+          "payloadVersion": "local-world/v1",
+          "readiness": "READY",
+          "connectionIncarnationRef": "fixture-incarnation-A-1"
+        }
+      ]
+    },
+    "B": {
+      "capabilityRevision": "fixture-cap-1",
+      "connections": [
+        {
+          "adapterId": "fixture-adapter",
+          "connectionRef": "fixture-connection-B",
+          "worldRef": "fixture-world-B",
+          "displayName": "FIXTURE world B",
+          "capabilityRevision": "fixture-cap-1",
+          "payloadVersion": "local-world/v1",
+          "readiness": "READY",
+          "connectionIncarnationRef": "fixture-incarnation-B-1"
+        }
+      ]
+    },
+    "AReopened": {
+      "capabilityRevision": "fixture-cap-2",
+      "connections": [
+        {
+          "adapterId": "fixture-adapter",
+          "connectionRef": "fixture-connection-A",
+          "worldRef": "fixture-world-A",
+          "displayName": "FIXTURE world A",
+          "capabilityRevision": "fixture-cap-1",
+          "payloadVersion": "local-world/v1",
+          "readiness": "READY",
+          "connectionIncarnationRef": "fixture-incarnation-A-2"
+        }
+      ]
+    },
+    "AStopped": {
+      "capabilityRevision": "fixture-cap-3",
+      "connections": []
+    }
+  },
+  "ownerAScenario": [
+    {
+      "title": "1 known Session S1 without a world reads UNBOUND",
+      "wire": "canvas/v7",
+      "operation": "ReadWorldSelectionContext",
+      "request": {
+        "contractVersion": "canvas/v7",
+        "sessionRef": "fixture-session-S1",
+        "requestId": "r1",
+        "worldRef": "fixture-world-A"
+      },
+      "response": {
+        "contractVersion": "canvas/v7",
+        "requestId": "r1",
+        "result": {
+          "sessionRef": "fixture-session-S1",
+          "worldRef": "fixture-world-A",
+          "inventory": {
+            "capabilityRevision": "fixture-cap-1",
+            "connections": [
+              {
+                "adapterId": "fixture-adapter",
+                "connectionRef": "fixture-connection-A",
+                "worldRef": "fixture-world-A",
+                "displayName": "FIXTURE world A",
+                "capabilityRevision": "fixture-cap-1",
+                "payloadVersion": "local-world/v1",
+                "readiness": "READY",
+                "connectionIncarnationRef": "fixture-incarnation-A-1"
+              }
+            ]
+          },
+          "selection": {
+            "sessionRef": "fixture-session-S1",
+            "sessionRevision": "fixture-session-S1-rev-1",
+            "status": "UNBOUND"
+          }
+        },
+        "error": null
+      }
+    },
+    {
+      "title": "2 S1 selects A",
+      "wire": "canvas/v7",
+      "operation": "SelectWorldConnection",
+      "request": {
+        "contractVersion": "canvas/v7",
+        "sessionRef": "fixture-session-S1",
+        "requestId": "r2",
+        "worldRef": "fixture-world-A",
+        "connectionRef": "fixture-connection-A",
+        "expectedRevision": "fixture-selection-S1-0",
+        "expectedContext": null,
+        "connectionIncarnationRef": "fixture-incarnation-A-1"
+      },
+      "response": {
+        "contractVersion": "canvas/v7",
+        "requestId": "r2",
+        "result": {
+          "currentSession": "fixture-session-S1",
+          "activeWorldRef": "fixture-world-A",
+          "orderedSelectedObjectRefs": [],
+          "sessionRevision": "fixture-session-S1-rev-1",
+          "selectionRevision": "fixture-selection-S1-1",
+          "localContext": {
+            "connectionRef": "fixture-connection-A",
+            "connectionIncarnationRef": "fixture-incarnation-A-1",
+            "worldRef": "fixture-world-A",
+            "selectionRevision": "fixture-selection-S1-1"
+          }
+        },
+        "error": null
+      }
+    },
+    {
+      "title": "3 S2 selects the same A",
+      "wire": "canvas/v7",
+      "operation": "SelectWorldConnection",
+      "request": {
+        "contractVersion": "canvas/v7",
+        "sessionRef": "fixture-session-S2",
+        "requestId": "r3",
+        "worldRef": "fixture-world-A",
+        "connectionRef": "fixture-connection-A",
+        "expectedRevision": "fixture-selection-S2-0",
+        "expectedContext": null,
+        "connectionIncarnationRef": "fixture-incarnation-A-1"
+      },
+      "response": {
+        "contractVersion": "canvas/v7",
+        "requestId": "r3",
+        "result": {
+          "currentSession": "fixture-session-S2",
+          "activeWorldRef": "fixture-world-A",
+          "orderedSelectedObjectRefs": [],
+          "sessionRevision": "fixture-session-S2-rev-1",
+          "selectionRevision": "fixture-selection-S2-1",
+          "localContext": {
+            "connectionRef": "fixture-connection-A",
+            "connectionIncarnationRef": "fixture-incarnation-A-1",
+            "worldRef": "fixture-world-A",
+            "selectionRevision": "fixture-selection-S2-1"
+          }
+        },
+        "error": null
+      }
+    },
+    {
+      "title": "4 Canvas inventory of A lists S1 and S2",
+      "wire": "canvas/v7",
+      "operation": "ListWorldSelections",
+      "request": {
+        "contractVersion": "canvas/v7",
+        "requestId": "r4",
+        "worldRef": "fixture-world-A"
+      },
+      "response": {
+        "contractVersion": "canvas/v7",
+        "requestId": "r4",
+        "result": {
+          "worldRef": "fixture-world-A",
+          "inventoryRevision": "fixture-inventory-A-2",
+          "sessionRefs": [
+            "fixture-session-S1",
+            "fixture-session-S2"
+          ],
+          "retirementReservationRef": null
+        },
+        "error": null
+      }
+    },
+    {
+      "title": "5 S1 switches A to B",
+      "wire": "canvas/v7",
+      "operation": "SwitchWorldConnection",
+      "request": {
+        "contractVersion": "canvas/v7",
+        "sessionRef": "fixture-session-S1",
+        "requestId": "r5",
+        "worldRef": "fixture-world-A",
+        "fromWorldRef": "fixture-world-A",
+        "toConnectionRef": "fixture-connection-B",
+        "toWorldRef": "fixture-world-B",
+        "expectedRevision": "fixture-selection-S1-1",
+        "expectedContext": {
+          "connectionRef": "fixture-connection-A",
+          "connectionIncarnationRef": "fixture-incarnation-A-1",
+          "worldRef": "fixture-world-A",
+          "selectionRevision": "fixture-selection-S1-1"
+        }
+      },
+      "response": {
+        "contractVersion": "canvas/v7",
+        "requestId": "r5",
+        "result": {
+          "currentSession": "fixture-session-S1",
+          "activeWorldRef": "fixture-world-B",
+          "orderedSelectedObjectRefs": [],
+          "sessionRevision": "fixture-session-S1-rev-1",
+          "selectionRevision": "fixture-selection-S1-2",
+          "localContext": {
+            "connectionRef": "fixture-connection-B",
+            "connectionIncarnationRef": "fixture-incarnation-B-1",
+            "worldRef": "fixture-world-B",
+            "selectionRevision": "fixture-selection-S1-2"
+          }
+        },
+        "error": null
+      }
+    },
+    {
+      "title": "6 A is still selected by S2 only",
+      "wire": "canvas/v7",
+      "operation": "ListWorldSelections",
+      "request": {
+        "contractVersion": "canvas/v7",
+        "requestId": "r6",
+        "worldRef": "fixture-world-A"
+      },
+      "response": {
+        "contractVersion": "canvas/v7",
+        "requestId": "r6",
+        "result": {
+          "worldRef": "fixture-world-A",
+          "inventoryRevision": "fixture-inventory-A-3",
+          "sessionRefs": [
+            "fixture-session-S2"
+          ],
+          "retirementReservationRef": null
+        },
+        "error": null
+      }
+    },
+    {
+      "title": "7 S1 switches B back to A",
+      "wire": "canvas/v7",
+      "operation": "SwitchWorldConnection",
+      "request": {
+        "contractVersion": "canvas/v7",
+        "sessionRef": "fixture-session-S1",
+        "requestId": "r7",
+        "worldRef": "fixture-world-B",
+        "fromWorldRef": "fixture-world-B",
+        "toConnectionRef": "fixture-connection-A",
+        "toWorldRef": "fixture-world-A",
+        "expectedRevision": "fixture-selection-S1-2",
+        "expectedContext": {
+          "connectionRef": "fixture-connection-B",
+          "connectionIncarnationRef": "fixture-incarnation-B-1",
+          "worldRef": "fixture-world-B",
+          "selectionRevision": "fixture-selection-S1-2"
+        }
+      },
+      "response": {
+        "contractVersion": "canvas/v7",
+        "requestId": "r7",
+        "result": {
+          "currentSession": "fixture-session-S1",
+          "activeWorldRef": "fixture-world-A",
+          "orderedSelectedObjectRefs": [],
+          "sessionRevision": "fixture-session-S1-rev-1",
+          "selectionRevision": "fixture-selection-S1-3",
+          "localContext": {
+            "connectionRef": "fixture-connection-A",
+            "connectionIncarnationRef": "fixture-incarnation-A-1",
+            "worldRef": "fixture-world-A",
+            "selectionRevision": "fixture-selection-S1-3"
+          }
+        },
+        "error": null
+      }
+    },
+    {
+      "title": "8 retiring A while selected is refused",
+      "wire": "canvas/v7",
+      "operation": "ReserveWorldRetirement",
+      "request": {
+        "contractVersion": "canvas/v7",
+        "requestId": "r8",
+        "worldRef": "fixture-world-A",
+        "expectedInventoryRevision": "fixture-inventory-A-4"
+      },
+      "response": {
+        "contractVersion": "canvas/v7",
+        "requestId": "r8",
+        "result": null,
+        "error": {
+          "code": "TRANSACTION_CONFLICT",
+          "phase": "validate",
+          "retryability": "AFTER_NEW_FACTS",
+          "mutationState": "NONE",
+          "transactionRef": null,
+          "causeCode": null,
+          "reason": "SCOPE_DENIED"
+        }
+      }
+    },
+    {
+      "title": "9 S1 unbinds A",
+      "wire": "canvas/v7",
+      "operation": "UnselectWorldConnection",
+      "request": {
+        "contractVersion": "canvas/v7",
+        "sessionRef": "fixture-session-S1",
+        "requestId": "r9",
+        "worldRef": "fixture-world-A",
+        "expectedRevision": "fixture-selection-S1-3",
+        "expectedContext": {
+          "connectionRef": "fixture-connection-A",
+          "connectionIncarnationRef": "fixture-incarnation-A-1",
+          "worldRef": "fixture-world-A",
+          "selectionRevision": "fixture-selection-S1-3"
+        }
+      },
+      "response": {
+        "contractVersion": "canvas/v7",
+        "requestId": "r9",
+        "result": {
+          "currentSession": "fixture-session-S1",
+          "activeWorldRef": null,
+          "orderedSelectedObjectRefs": [],
+          "sessionRevision": "fixture-session-S1-rev-1",
+          "selectionRevision": "fixture-selection-S1-4",
+          "localContext": null
+        },
+        "error": null
+      }
+    },
+    {
+      "title": "10 Workshop retires S2 before deleting it",
+      "wire": "canvas/v7",
+      "operation": "RetireSessionSelection",
+      "request": {
+        "contractVersion": "canvas/v7",
+        "sessionRef": "fixture-session-S2",
+        "requestId": "r10"
+      },
+      "response": {
+        "contractVersion": "canvas/v7",
+        "requestId": "r10",
+        "result": {
+          "sessionRef": "fixture-session-S2",
+          "releasedWorldRef": "fixture-world-A",
+          "selectionRevision": "fixture-selection-S2-2"
+        },
+        "error": null
+      }
+    },
+    {
+      "title": "11 A has no selecting Session",
+      "wire": "canvas/v7",
+      "operation": "ListWorldSelections",
+      "request": {
+        "contractVersion": "canvas/v7",
+        "requestId": "r11",
+        "worldRef": "fixture-world-A"
+      },
+      "response": {
+        "contractVersion": "canvas/v7",
+        "requestId": "r11",
+        "result": {
+          "worldRef": "fixture-world-A",
+          "inventoryRevision": "fixture-inventory-A-6",
+          "sessionRefs": [],
+          "retirementReservationRef": null
+        },
+        "error": null
+      }
+    },
+    {
+      "title": "12 Adapter reserves A for deletion",
+      "wire": "canvas/v7",
+      "operation": "ReserveWorldRetirement",
+      "request": {
+        "contractVersion": "canvas/v7",
+        "requestId": "r12",
+        "worldRef": "fixture-world-A",
+        "expectedInventoryRevision": "fixture-inventory-A-6"
+      },
+      "response": {
+        "contractVersion": "canvas/v7",
+        "requestId": "r12",
+        "result": {
+          "worldRef": "fixture-world-A",
+          "reservationRef": "fixture-reservation-A-1",
+          "inventoryRevision": "fixture-inventory-A-6"
+        },
+        "error": null
+      }
+    },
+    {
+      "title": "13 selecting A under reservation is refused",
+      "wire": "canvas/v7",
+      "operation": "SelectWorldConnection",
+      "request": {
+        "contractVersion": "canvas/v7",
+        "sessionRef": "fixture-session-S1",
+        "requestId": "r13",
+        "worldRef": "fixture-world-A",
+        "connectionRef": "fixture-connection-A",
+        "expectedRevision": "fixture-selection-S1-4",
+        "expectedContext": null,
+        "connectionIncarnationRef": "fixture-incarnation-A-1"
+      },
+      "response": {
+        "contractVersion": "canvas/v7",
+        "requestId": "r13",
+        "result": null,
+        "error": {
+          "code": "TRANSACTION_CONFLICT",
+          "phase": "validate",
+          "retryability": "AFTER_NEW_FACTS",
+          "mutationState": "NONE",
+          "transactionRef": null,
+          "causeCode": null,
+          "reason": "SCOPE_DENIED"
+        }
+      }
+    },
+    {
+      "title": "14 Adapter deleted A and releases RETIRED",
+      "wire": "canvas/v7",
+      "operation": "ReleaseWorldRetirement",
+      "request": {
+        "contractVersion": "canvas/v7",
+        "requestId": "r14",
+        "worldRef": "fixture-world-A",
+        "reservationRef": "fixture-reservation-A-1",
+        "outcome": "RETIRED"
+      },
+      "response": {
+        "contractVersion": "canvas/v7",
+        "requestId": "r14",
+        "result": {
+          "worldRef": "fixture-world-A",
+          "reservationRef": "fixture-reservation-A-1",
+          "outcome": "RETIRED",
+          "inventoryRevision": "fixture-inventory-A-7"
+        },
+        "error": null
+      }
+    },
+    {
+      "title": "15 retired S2 is no longer a known Session",
+      "wire": "session/v5",
+      "operation": "ReadSessionIdentity",
+      "request": {
+        "contractVersion": "session/v5",
+        "requestId": "r15",
+        "sessionRef": "fixture-session-S2"
+      },
+      "response": {
+        "contractVersion": "session/v5",
+        "requestId": "r15",
+        "result": null,
+        "error": {
+          "code": "SESSION_NOT_FOUND",
+          "phase": "validate",
+          "retryability": "AFTER_NEW_FACTS",
+          "mutationState": "NONE",
+          "transactionRef": null,
+          "causeCode": null,
+          "reason": "IDENTITY_UNVERIFIED"
+        }
+      }
+    }
+  ],
+  "sessionDeletion": {
+    "unsupportedCapabilities": {
+      "providerRef": "fixture-workshop",
+      "capabilityRevision": "fixture-ws-cap-1",
+      "worldRef": null,
+      "engineBounds": null,
+      "worldGeometry": null,
+      "limits": [],
+      "recoveryGuarantee": null,
+      "stateProfile": null,
+      "sessionDeleteSupported": false,
+      "imageMediaTypes": [],
+      "model": null,
+      "engineGuards": null
+    },
+    "supportedCapabilities": {
+      "providerRef": "fixture-workshop",
+      "capabilityRevision": "fixture-ws-cap-2",
+      "worldRef": null,
+      "engineBounds": null,
+      "worldGeometry": null,
+      "limits": [],
+      "recoveryGuarantee": null,
+      "stateProfile": null,
+      "sessionDeleteSupported": true,
+      "imageMediaTypes": [],
+      "model": null,
+      "engineGuards": null
+    },
+    "unsupported": {
+      "request": {
+        "contractVersion": "session/v5",
+        "sessionRef": "fixture-session-S1",
+        "requestId": "x1",
+        "expectedRevision": "fixture-session-S1-rev-1"
+      },
+      "response": {
+        "contractVersion": "session/v5",
+        "requestId": "x1",
+        "result": null,
+        "error": {
+          "code": "SESSION_DELETE_UNSUPPORTED",
+          "phase": "validate",
+          "retryability": "AFTER_NEW_FACTS",
+          "mutationState": "NONE",
+          "transactionRef": null,
+          "causeCode": null,
+          "reason": "DELETE_SEAM_ABSENT"
+        }
+      },
+      "retireCalled": false
+    },
+    "deleted": {
+      "request": {
+        "contractVersion": "session/v5",
+        "sessionRef": "fixture-session-S2",
+        "requestId": "x2",
+        "expectedRevision": "fixture-session-S2-rev-1"
+      },
+      "response": {
+        "contractVersion": "session/v5",
+        "requestId": "x2",
+        "result": {
+          "sessionRef": "fixture-session-S2",
+          "deleted": true,
+          "remainingArtifactRefs": []
+        },
+        "error": null
+      },
+      "afterRetireStep": "10"
+    }
+  },
+  "connectionState": {
+    "boundS2A": {
+      "context": {
+        "currentSession": "fixture-session-S2",
+        "activeWorldRef": "fixture-world-A",
+        "orderedSelectedObjectRefs": [],
+        "sessionRevision": "fixture-session-S2-rev-1",
+        "selectionRevision": "fixture-selection-S2-1",
+        "localContext": {
+          "connectionRef": "fixture-connection-A",
+          "connectionIncarnationRef": "fixture-incarnation-A-1",
+          "worldRef": "fixture-world-A",
+          "selectionRevision": "fixture-selection-S2-1"
+        }
+      },
+      "connectionRef": "fixture-connection-A",
+      "status": "BOUND"
+    },
+    "unboundS1": {
+      "sessionRef": "fixture-session-S1",
+      "sessionRevision": "fixture-session-S1-rev-1",
+      "status": "UNBOUND"
+    }
+  }
+}

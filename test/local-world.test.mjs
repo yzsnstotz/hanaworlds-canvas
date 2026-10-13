@@ -6,11 +6,11 @@ import { join } from 'node:path';
 const { CanvasV5, CanvasStore, apply: applyCanvas } = await import(process.env.CANVAS_ENTRY ??
   new URL('../src/index.mjs', import.meta.url).href);
 import { openRuntime } from './support/cordis-runtime.mjs';
-const consumer = await import(process.env.CANVAS_CONSUMER_ENTRY ?? 'hanaworlds-contracts');
+const consumer = await import(process.env.CANVAS_CONSUMER_ENTRY ?? '../src/protocol/local/index.mjs');
 import { readFile, writeFile } from 'node:fs/promises';
 import { digestValue, checkContractHandshake, contractHandshake, guardRefusalError,
-  validateResponse, createPlacementProposal, confirmedPlacementBinding, confirmedPlacement } from 'hanaworlds-contracts';
-import majorCompat from 'hanaworlds-contracts/fixtures/contracts-major-compat' with { type: 'json' };
+  validateResponse, createPlacementProposal, confirmedPlacementBinding, confirmedPlacement } from '../src/protocol/local/index.mjs';
+import majorCompat from './fixtures/protocol/contracts-major-compat.json' with { type: 'json' };
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import canonicalize from 'canonicalize';
@@ -113,7 +113,7 @@ test('actual connection readback binds the current local world durably', async (
 
 test('build commits only after complete readback and stores one durable history row', async () => {
   const fixture = JSON.parse(await readFile(new URL(import.meta.resolve(
-    'hanaworlds-contracts/fixtures/main'))));
+    './fixtures/protocol/main.json'))));
   const D = (kind, value) => digestValue(kind, value).sha256;
   const profile = await mkdtemp(join(tmpdir(), 'canvas-build-'));
   const directory = join(profile, 'data', 'hanaworlds-canvas-v2');
@@ -800,12 +800,9 @@ test('host exposes durable Canvas facts as separate public ports', async () => {
     assert.equal(typeof ports.get('hanaworldsWorldRevisionOracle')?.read, 'function');
     assert.equal(ports.has('hanaworldsLuantiInspectionContext'), false);
     const advertised = ports.get('hanaworldsCanvasV5').contractHandshake;
-    // Canvas advertises the identity of the Contracts package it runs on (the resolved
-    // commit is the lockfile's job). Consumers decide it with the Contracts same-major
-    // predicate only; its cell admission uses ProtocolHandshake.
-    const entry = process.env.CANVAS_ENTRY ?? new URL('../src/index.mjs', import.meta.url).href;
-    const running = createRequire(entry)('hanaworlds-contracts/package.json');
-    assert.equal(advertised.contracts, `hanaworlds-contracts@${running.version}`);
+    // Compatibility is a documented wire protocol; no shared SDK identity is required.
+    assert.deepEqual(advertised.wireVersions, contractHandshake.wireVersions);
+    assert.equal(advertised.profileVersion, contractHandshake.profileVersion);
     assert.equal(ports.get('hanaworldsCanvasV5').status().version, '0.16.0');
     assert.doesNotThrow(() => checkContractHandshake(advertised));
     // Public Contracts conformance cases, each patched over Canvas's advertised handshake.

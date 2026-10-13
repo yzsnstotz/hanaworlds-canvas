@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { join, dirname, resolve, relative, isAbsolute } from 'node:path';
@@ -6,8 +7,9 @@ import { parse } from 'acorn';
 
 export async function inspectPackage(root) {
   const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
-  for (const section of ['dependencies', 'peerDependencies', 'optionalDependencies']) {
+  for (const section of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {
     for (const [name, specifier] of Object.entries(manifest[section] ?? {})) {
+      assert.ok(name !== 'cordis', `unscoped Cordis dependency in ${section}`);
       assert.ok(name !== 'hanaworlds-contracts', `production contracts dependency in ${section}`);
       assert.ok(!/^(git|file:|link:|https?:|github:)/.test(specifier), `exotic production dependency: ${name}`);
     }
@@ -51,6 +53,7 @@ export async function inspectPackage(root) {
   const edges = {};
   async function load(specifier, from) {
     assert.equal(typeof specifier, 'string', `dynamic module/resource load in ${from}`);
+    assert.ok(specifier !== 'cordis' && !specifier.startsWith('cordis/'), `unscoped Cordis runtime in ${from}`);
     assert.ok(!specifier.includes('hanaworlds-contracts') && !specifier.startsWith('#contracts'), `contracts runtime load in ${from}`);
     if (isBuiltin(specifier)) return;
     if (specifier.startsWith('#')) {
@@ -195,9 +198,33 @@ export async function inspectPackage(root) {
       for (const child of Object.values(value)) visitJSON(child);
     }
   }
+  // Declarations form a separate public resolution graph: .js type references resolve to .d.ts.
+  for (const file of files.filter(p => p.endsWith('.d.ts'))) {
+    const text = await readFile(join(root, file), 'utf8');
+    for (const match of text.matchAll(/(?:from\s*|import\s*\()(['"])([^'"]+)\1/g)) {
+      const specifier = match[2];
+      assert.ok(specifier !== 'cordis' && !specifier.startsWith('cordis/'), `unscoped Cordis type in ${file}`);
+      assert.ok(!specifier.includes('hanaworlds-contracts'), `contracts type load in ${file}`);
+      if (specifier.startsWith('.')) {
+        const target = join(dirname(file), specifier).replace(/\.js$/, '.d.ts');
+        await local(target);
+      } else {
+        const name = specifier.startsWith('@') ? specifier.split('/').slice(0, 2).join('/') : specifier.split('/')[0];
+        assert.ok(declared.has(name), `undeclared type dependency in ${file}: ${name}`);
+      }
+    }
+  }
   const source = JSON.parse(await readFile(join(root, 'lib/build-source.json')));
-  assert.equal(source.supplier.tag, 'git+https://github.com/yzsnstotz/hanaworlds-contracts.git#v2.12.0');
-  assert.equal(source.supplier.revision, '33c34372fd5092a83b6f3cc81c086470fa76d794');
+  assert.equal(source.format, 'canvas-build-source/v2');
+  assert.equal(source.supplier.name, manifest.name);
+  assert.deepEqual(source.supplier.documents, ['C-canvas@2', 'C-world-adapter@2', 'C-world-facts@2']);
+  assert.equal(source.supplier.protocolSourceSHA256, createHash('sha256').update(await readFile(new URL('./protocol-source.json', import.meta.url))).digest('hex'));
+  for (const [file, digest] of Object.entries(source.artifacts)) {
+    const target = await local(file);
+    assert.equal(createHash('sha256').update(await readFile(join(root, target))).digest('hex'), digest, `packed build drift: ${file}`);
+  }
+  assert.ok(files.filter(p => /\.(?:mjs|js|d\.ts)$/.test(p)).every(p => Object.hasOwn(source.artifacts, p)), 'artifact missing provenance');
+  assert.ok(!Object.keys(source.inputs).some(p => p.includes('node_modules/hanaworlds-contracts/') || p.includes('node_modules/cordis/')), 'retired input provenance');
   assert.ok(!files.some(p => p.startsWith('node_modules/') || p.startsWith('src/') || p.startsWith('test/')), 'development package shipped');
   return { entries: [...new Set(entries)], files, edges, source };
 }

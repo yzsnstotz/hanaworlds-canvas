@@ -1,0 +1,2814 @@
+{
+  "evidence": "FIXTURE · world-source-facts/v1 example exchanges for every named operation and the named refusals of both sides. Catalogue/connection/session come from fixtures/main request; backend, colours, sizes and revisions are fixture inputs, never a real world source declaration.",
+  "catalogueRef": "fixtures/local/main.json#/request/catalogue",
+  "connection": {
+    "worldRef": "fixture-world",
+    "connectionRef": "local-connection",
+    "connectionIncarnationRef": "socket-open-1"
+  },
+  "exchanges": [
+    {
+      "title": "ReadCatalogue: vocabulary, names, colours and orientation index",
+      "wire": "world-facts/v1",
+      "operation": "ReadCatalogue",
+      "request": {
+        "contractVersion": "world-facts/v1",
+        "requestId": "read-catalogue-1",
+        "worldRef": "fixture-world"
+      },
+      "response": {
+        "contractVersion": "world-facts/v1",
+        "requestId": "read-catalogue-1",
+        "result": {
+          "profileVersion": "catalogue-facts/v1",
+          "connection": {
+            "worldRef": "fixture-world",
+            "connectionRef": "local-connection",
+            "connectionIncarnationRef": "socket-open-1"
+          },
+          "catalogue": {
+            "profileVersion": "catalogue/v3",
+            "engineRevisions": {
+              "fixture-game": "fixture-game-1",
+              "fixture-mod": "fixture-mod-1"
+            },
+            "emptyMaterialRef": "air",
+            "materials": {
+              "air": {
+                "passable": true,
+                "liquid": false,
+                "hazardPerSecond": 0,
+                "emitsLight": false,
+                "placeable": true,
+                "orientations": [
+                  0
+                ],
+                "definitionRevision": "fixture-def-1",
+                "unknownFields": [],
+                "extension": {
+                  "collisionBoxes": [],
+                  "param2Type": "none"
+                }
+              },
+              "fixture:stone": {
+                "passable": false,
+                "liquid": false,
+                "hazardPerSecond": 0,
+                "emitsLight": false,
+                "placeable": true,
+                "orientations": [
+                  0
+                ],
+                "definitionRevision": "fixture-def-1",
+                "unknownFields": [],
+                "extension": {
+                  "collisionBoxes": [
+                    [
+                      -0.5,
+                      -0.5,
+                      -0.5,
+                      0.5,
+                      0.5,
+                      0.5
+                    ]
+                  ],
+                  "param2Type": "none"
+                }
+              }
+            }
+          },
+          "catalogueDigest": "8429d43abbf2e574c8db6ce4045583924f9973ab615c86da0c876191ce745574",
+          "presentation": {
+            "air": {
+              "displayName": null,
+              "color": null
+            },
+            "fixture:stone": {
+              "displayName": "Fixture stone",
+              "color": "#7f7f7f"
+            }
+          },
+          "orientationIndex": [
+            {
+              "orientation": 0,
+              "quarterTurnsAboutUp": 0,
+              "upsideDown": false
+            }
+          ]
+        },
+        "error": null
+      }
+    },
+    {
+      "title": "ReadCatalogue: no world bound is a named error",
+      "wire": "world-facts/v1",
+      "operation": "ReadCatalogue",
+      "request": {
+        "contractVersion": "world-facts/v1",
+        "requestId": "read-catalogue-1",
+        "worldRef": "fixture-world"
+      },
+      "response": {
+        "contractVersion": "world-facts/v1",
+        "requestId": "read-catalogue-1",
+        "result": null,
+        "error": {
+          "code": "WORLD_NOT_BOUND",
+          "phase": "validate",
+          "retryability": "AFTER_NEW_FACTS",
+          "mutationState": "NONE",
+          "transactionRef": null,
+          "causeCode": null,
+          "reason": "REQUIRED_FACT_UNKNOWN"
+        }
+      }
+    },
+    {
+      "title": "ReadMaterialSources: sources and colours, no texture bytes on the wire",
+      "wire": "world-facts/v1",
+      "operation": "ReadMaterialSources",
+      "request": {
+        "contractVersion": "world-facts/v1",
+        "requestId": "read-material-sources-1",
+        "worldRef": "fixture-world"
+      },
+      "response": {
+        "contractVersion": "world-facts/v1",
+        "requestId": "read-material-sources-1",
+        "result": {
+          "profileVersion": "material-source-facts/v1",
+          "snapshot": {
+            "profileVersion": "material-sources/v2",
+            "connection": {
+              "worldRef": "fixture-world",
+              "connectionRef": "local-connection",
+              "connectionIncarnationRef": "socket-open-1"
+            },
+            "catalogueDigest": "8429d43abbf2e574c8db6ce4045583924f9973ab615c86da0c876191ce745574",
+            "engineRevisions": {
+              "fixture-game": "fixture-game-1",
+              "fixture-mod": "fixture-mod-1"
+            },
+            "sourceBasis": "WORLD_SOURCE_ASSET_ONLY",
+            "materials": [
+              {
+                "availability": "UNKNOWN",
+                "materialRef": "air",
+                "orientation": 0,
+                "definitionRevision": "fixture-def-1",
+                "texture": null,
+                "reason": "UNSUPPORTED_APPEARANCE"
+              },
+              {
+                "availability": "KNOWN",
+                "materialRef": "fixture:stone",
+                "orientation": 0,
+                "definitionRevision": "fixture-def-1",
+                "texture": {
+                  "textureName": "fixture_stone.png",
+                  "sourceKind": "MOD",
+                  "sourceRef": "fixture-mod/textures/fixture_stone.png",
+                  "interpretation": "SIMPLE_UNIFORM_NODE_TILES",
+                  "mediaType": "image/png",
+                  "bytesDigest": "5555555555555555555555555555555555555555555555555555555555555555",
+                  "byteLength": 96
+                }
+              }
+            ],
+            "sourceRevision": "ba12d6196a5c2becba11de6bbf439fb9648da89ce79818d49ac4ac6e5b600f68"
+          },
+          "presentation": {
+            "air": {
+              "displayName": null,
+              "color": null
+            },
+            "fixture:stone": {
+              "displayName": "Fixture stone",
+              "color": "#7f7f7f"
+            }
+          }
+        },
+        "error": null
+      }
+    },
+    {
+      "title": "ReadEngineFacts: geometry, partition, bounds, frame, lighting, write methods, backend",
+      "wire": "world-facts/v1",
+      "operation": "ReadEngineFacts",
+      "request": {
+        "contractVersion": "world-facts/v1",
+        "requestId": "read-engine-facts-1",
+        "worldRef": "fixture-world"
+      },
+      "response": {
+        "contractVersion": "world-facts/v1",
+        "requestId": "read-engine-facts-1",
+        "result": {
+          "profileVersion": "engine-facts/v1",
+          "connection": {
+            "worldRef": "fixture-world",
+            "connectionRef": "local-connection",
+            "connectionIncarnationRef": "socket-open-1"
+          },
+          "worldGeometry": {
+            "profileVersion": "world-geometry/v1",
+            "geometryProfiles": [
+              "voxel-grid/v1"
+            ],
+            "partition": {
+              "edge": [
+                16,
+                16,
+                16
+              ]
+            },
+            "postWriteLighting": "REQUIRED"
+          },
+          "engineBounds": {
+            "min": [
+              -30912,
+              -30912,
+              -30912
+            ],
+            "max": [
+              30927,
+              30927,
+              30927
+            ]
+          },
+          "frame": {
+            "axes": [
+              "+X",
+              "+Y",
+              "+Z"
+            ],
+            "handedness": "left",
+            "gridUnit": {
+              "name": "cell",
+              "metersPerGridUnit": 1
+            }
+          },
+          "writeMethods": [
+            "PER_CELL",
+            "REGION"
+          ],
+          "writeBackend": {
+            "availability": "KNOWN",
+            "basis": "LOADED_PAYLOAD_DECLARATION",
+            "writeBackend": {
+              "profileId": "fixture-world-source-cell-write/v1",
+              "revision": "fixture-world-source-rev-7"
+            }
+          }
+        },
+        "error": null
+      }
+    },
+    {
+      "title": "ReadWriteProfile: backend, complete configuration, write methods and declared body envelope",
+      "wire": "world-facts/v1",
+      "operation": "ReadWriteProfile",
+      "request": {
+        "contractVersion": "world-facts/v1",
+        "requestId": "read-write-profile-1",
+        "worldRef": "fixture-world"
+      },
+      "response": {
+        "contractVersion": "world-facts/v1",
+        "requestId": "read-write-profile-1",
+        "result": {
+          "profileVersion": "write-profile/v1",
+          "connection": {
+            "worldRef": "fixture-world",
+            "connectionRef": "local-connection",
+            "connectionIncarnationRef": "socket-open-1"
+          },
+          "catalogueDigest": "8429d43abbf2e574c8db6ce4045583924f9973ab615c86da0c876191ce745574",
+          "writeBackend": {
+            "availability": "KNOWN",
+            "basis": "LOADED_PAYLOAD_DECLARATION",
+            "writeBackend": {
+              "profileId": "fixture-world-source-cell-write/v1",
+              "revision": "fixture-world-source-rev-7"
+            }
+          },
+          "compilationConfig": {
+            "profileVersion": "compilation-config/v3",
+            "writeBackend": {
+              "profileId": "fixture-world-source-cell-write/v1",
+              "revision": "fixture-world-source-rev-7"
+            },
+            "overlapRule": "last-writer-wins",
+            "effectOrder": "numeric-x-y-z",
+            "compressionRule": "exact-final-effects-only"
+          },
+          "writeMethods": [
+            "PER_CELL",
+            "REGION"
+          ],
+          "avatarEnvelope": {
+            "availability": "KNOWN",
+            "basis": "WORLD_SOURCE_DECLARATION",
+            "size": {
+              "width": 0.6,
+              "height": 1.77,
+              "depth": 0.6
+            }
+          }
+        },
+        "error": null
+      }
+    },
+    {
+      "title": "ReadWriteProfile: nothing declared is UNAVAILABLE and null, never a default",
+      "wire": "world-facts/v1",
+      "operation": "ReadWriteProfile",
+      "request": {
+        "contractVersion": "world-facts/v1",
+        "requestId": "read-write-profile-1",
+        "worldRef": "fixture-world"
+      },
+      "response": {
+        "contractVersion": "world-facts/v1",
+        "requestId": "read-write-profile-1",
+        "result": {
+          "profileVersion": "write-profile/v1",
+          "connection": {
+            "worldRef": "fixture-world",
+            "connectionRef": "local-connection",
+            "connectionIncarnationRef": "socket-open-1"
+          },
+          "catalogueDigest": "8429d43abbf2e574c8db6ce4045583924f9973ab615c86da0c876191ce745574",
+          "writeBackend": {
+            "availability": "UNAVAILABLE",
+            "reason": "NOT_DECLARED_BY_PAYLOAD"
+          },
+          "compilationConfig": null,
+          "writeMethods": [],
+          "avatarEnvelope": {
+            "availability": "UNAVAILABLE",
+            "reason": "NO_PUBLIC_SOURCE"
+          }
+        },
+        "error": null
+      }
+    },
+    {
+      "title": "ReadWorldSourceCapabilities: one read of every world source declaration",
+      "wire": "world-adapter/v8",
+      "operation": "ReadWorldSourceCapabilities",
+      "request": {
+        "contractVersion": "world-adapter/v8",
+        "sessionRef": "fixture-session",
+        "requestId": "read-capabilities-1",
+        "worldRef": "fixture-world"
+      },
+      "response": {
+        "contractVersion": "world-adapter/v8",
+        "requestId": "read-capabilities-1",
+        "result": {
+          "profileVersion": "world-source-capabilities/v1",
+          "owner": "world-source",
+          "connection": {
+            "worldRef": "fixture-world",
+            "connectionRef": "local-connection",
+            "connectionIncarnationRef": "socket-open-1"
+          },
+          "capabilityRevision": "fixture-capability-1",
+          "catalogueDigest": "8429d43abbf2e574c8db6ce4045583924f9973ab615c86da0c876191ce745574",
+          "worldGeometry": {
+            "profileVersion": "world-geometry/v1",
+            "geometryProfiles": [
+              "voxel-grid/v1"
+            ],
+            "partition": {
+              "edge": [
+                16,
+                16,
+                16
+              ]
+            },
+            "postWriteLighting": "REQUIRED"
+          },
+          "engineBounds": {
+            "min": [
+              -30912,
+              -30912,
+              -30912
+            ],
+            "max": [
+              30927,
+              30927,
+              30927
+            ]
+          },
+          "stateProfile": {
+            "profileVersion": "state-profile/v3",
+            "derivedFields": [
+              "light"
+            ],
+            "preservedFields": [],
+            "clearedFields": [
+              "inventory",
+              "metadata",
+              "timer"
+            ]
+          },
+          "writeBackend": {
+            "availability": "KNOWN",
+            "basis": "LOADED_PAYLOAD_DECLARATION",
+            "writeBackend": {
+              "profileId": "fixture-world-source-cell-write/v1",
+              "revision": "fixture-world-source-rev-7"
+            }
+          },
+          "compilationConfig": {
+            "profileVersion": "compilation-config/v3",
+            "writeBackend": {
+              "profileId": "fixture-world-source-cell-write/v1",
+              "revision": "fixture-world-source-rev-7"
+            },
+            "overlapRule": "last-writer-wins",
+            "effectOrder": "numeric-x-y-z",
+            "compressionRule": "exact-final-effects-only"
+          },
+          "writeMethods": [
+            "PER_CELL",
+            "REGION"
+          ],
+          "writePath": {
+            "profileVersion": "write-path-conclusions/v1",
+            "catalogueDigest": "8429d43abbf2e574c8db6ce4045583924f9973ab615c86da0c876191ce745574",
+            "path": {
+              "hasSideEffects": false,
+              "hasPersistentState": false
+            },
+            "materials": {
+              "air": {
+                "hasSideEffects": false,
+                "hasPersistentState": false
+              },
+              "fixture:stone": {
+                "hasSideEffects": false,
+                "hasPersistentState": false
+              }
+            }
+          },
+          "engineGuards": {
+            "profileVersion": "engine-guards/v1",
+            "coverage": [
+              {
+                "guard": "BODY_CLEARANCE",
+                "stages": [
+                  "INSPECT_REGION",
+                  "PREPARE_RECOVERABLE",
+                  "APPLY_COMPILED",
+                  "RESTORE"
+                ],
+                "protectionPrincipal": null
+              },
+              {
+                "guard": "CELL_PROTECTION",
+                "stages": [
+                  "PREPARE_RECOVERABLE",
+                  "APPLY_COMPILED"
+                ],
+                "protectionPrincipal": "ANONYMOUS"
+              },
+              {
+                "guard": "PLAYER_ENCLOSURE",
+                "stages": [
+                  "APPLY_COMPILED"
+                ],
+                "protectionPrincipal": null
+              }
+            ]
+          },
+          "avatarEnvelope": {
+            "availability": "KNOWN",
+            "basis": "WORLD_SOURCE_DECLARATION",
+            "size": {
+              "width": 0.6,
+              "height": 1.77,
+              "depth": 0.6
+            }
+          }
+        },
+        "error": null
+      }
+    },
+    {
+      "title": "ReadWorldSourceCapabilities: adapter not reachable",
+      "wire": "world-adapter/v8",
+      "operation": "ReadWorldSourceCapabilities",
+      "request": {
+        "contractVersion": "world-adapter/v8",
+        "sessionRef": "fixture-session",
+        "requestId": "read-capabilities-1",
+        "worldRef": "fixture-world"
+      },
+      "response": {
+        "contractVersion": "world-adapter/v8",
+        "requestId": "read-capabilities-1",
+        "result": null,
+        "error": {
+          "code": "ADAPTER_UNAVAILABLE",
+          "phase": "validate",
+          "retryability": "AFTER_NEW_FACTS",
+          "mutationState": "NONE",
+          "transactionRef": null,
+          "causeCode": null,
+          "reason": "REQUIRED_FACT_UNKNOWN"
+        }
+      }
+    },
+    {
+      "title": "ReadInspectionContext: the bound world and the ordered selection",
+      "wire": "world-inspection/v1",
+      "operation": "ReadInspectionContext",
+      "request": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "read-inspection-1",
+        "sessionRef": "fixture-session",
+        "worldRef": "fixture-world"
+      },
+      "response": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "read-inspection-1",
+        "result": {
+          "sessionRef": "fixture-session",
+          "worldRef": "fixture-world",
+          "localContext": {
+            "connectionRef": "local-connection",
+            "connectionIncarnationRef": "socket-open-1",
+            "worldRef": "fixture-world",
+            "selectionRevision": "selection-1"
+          },
+          "orderedSelectedObjectRefs": [
+            "object-2",
+            "object-1"
+          ]
+        },
+        "error": null
+      }
+    },
+    {
+      "title": "ReadInspectionContext: unknown session",
+      "wire": "world-inspection/v1",
+      "operation": "ReadInspectionContext",
+      "request": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "read-inspection-1",
+        "sessionRef": "fixture-session",
+        "worldRef": "fixture-world"
+      },
+      "response": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "read-inspection-1",
+        "result": null,
+        "error": {
+          "code": "SESSION_NOT_FOUND",
+          "phase": "validate",
+          "retryability": "AFTER_NEW_FACTS",
+          "mutationState": "NONE",
+          "transactionRef": null,
+          "causeCode": null,
+          "reason": "SCOPE_DENIED"
+        }
+      }
+    }
+  ],
+  "provider": {
+    "invalid": [
+      {
+        "title": "compilation configuration without a known backend",
+        "type": "WriteProfile",
+        "value": {
+          "profileVersion": "write-profile/v1",
+          "connection": {
+            "worldRef": "fixture-world",
+            "connectionRef": "local-connection",
+            "connectionIncarnationRef": "socket-open-1"
+          },
+          "catalogueDigest": "8429d43abbf2e574c8db6ce4045583924f9973ab615c86da0c876191ce745574",
+          "writeBackend": {
+            "availability": "UNAVAILABLE",
+            "reason": "NOT_DECLARED_BY_PAYLOAD"
+          },
+          "compilationConfig": {
+            "profileVersion": "compilation-config/v3",
+            "writeBackend": {
+              "profileId": "fixture-world-source-cell-write/v1",
+              "revision": "fixture-world-source-rev-7"
+            },
+            "overlapRule": "last-writer-wins",
+            "effectOrder": "numeric-x-y-z",
+            "compressionRule": "exact-final-effects-only"
+          },
+          "writeMethods": [],
+          "avatarEnvelope": {
+            "availability": "UNAVAILABLE",
+            "reason": "NO_PUBLIC_SOURCE"
+          }
+        },
+        "expect": {
+          "code": "SCHEMA_INVALID",
+          "reason": "INVALID_SHAPE"
+        }
+      },
+      {
+        "title": "known backend without its configuration",
+        "type": "WriteProfile",
+        "value": {
+          "profileVersion": "write-profile/v1",
+          "connection": {
+            "worldRef": "fixture-world",
+            "connectionRef": "local-connection",
+            "connectionIncarnationRef": "socket-open-1"
+          },
+          "catalogueDigest": "8429d43abbf2e574c8db6ce4045583924f9973ab615c86da0c876191ce745574",
+          "writeBackend": {
+            "availability": "KNOWN",
+            "basis": "LOADED_PAYLOAD_DECLARATION",
+            "writeBackend": {
+              "profileId": "fixture-world-source-cell-write/v1",
+              "revision": "fixture-world-source-rev-7"
+            }
+          },
+          "compilationConfig": null,
+          "writeMethods": [
+            "PER_CELL",
+            "REGION"
+          ],
+          "avatarEnvelope": {
+            "availability": "KNOWN",
+            "basis": "WORLD_SOURCE_DECLARATION",
+            "size": {
+              "width": 0.6,
+              "height": 1.77,
+              "depth": 0.6
+            }
+          }
+        },
+        "expect": {
+          "code": "SCHEMA_INVALID",
+          "reason": "INVALID_SHAPE"
+        }
+      },
+      {
+        "title": "configuration with another backend than the declared one",
+        "type": "WriteProfile",
+        "value": {
+          "profileVersion": "write-profile/v1",
+          "connection": {
+            "worldRef": "fixture-world",
+            "connectionRef": "local-connection",
+            "connectionIncarnationRef": "socket-open-1"
+          },
+          "catalogueDigest": "8429d43abbf2e574c8db6ce4045583924f9973ab615c86da0c876191ce745574",
+          "writeBackend": {
+            "availability": "KNOWN",
+            "basis": "LOADED_PAYLOAD_DECLARATION",
+            "writeBackend": {
+              "profileId": "fixture-world-source-cell-write/v1",
+              "revision": "fixture-world-source-rev-7"
+            }
+          },
+          "compilationConfig": {
+            "profileVersion": "compilation-config/v3",
+            "writeBackend": {
+              "profileId": "fixture-world-source-cell-write/v1",
+              "revision": "fixture-other"
+            },
+            "overlapRule": "last-writer-wins",
+            "effectOrder": "numeric-x-y-z",
+            "compressionRule": "exact-final-effects-only"
+          },
+          "writeMethods": [
+            "PER_CELL",
+            "REGION"
+          ],
+          "avatarEnvelope": {
+            "availability": "KNOWN",
+            "basis": "WORLD_SOURCE_DECLARATION",
+            "size": {
+              "width": 0.6,
+              "height": 1.77,
+              "depth": 0.6
+            }
+          }
+        },
+        "expect": {
+          "code": "SCHEMA_INVALID",
+          "reason": "INVALID_SHAPE"
+        }
+      },
+      {
+        "title": "body envelope with a live position is not representable",
+        "type": "WriteProfile",
+        "value": {
+          "profileVersion": "write-profile/v1",
+          "connection": {
+            "worldRef": "fixture-world",
+            "connectionRef": "local-connection",
+            "connectionIncarnationRef": "socket-open-1"
+          },
+          "catalogueDigest": "8429d43abbf2e574c8db6ce4045583924f9973ab615c86da0c876191ce745574",
+          "writeBackend": {
+            "availability": "KNOWN",
+            "basis": "LOADED_PAYLOAD_DECLARATION",
+            "writeBackend": {
+              "profileId": "fixture-world-source-cell-write/v1",
+              "revision": "fixture-world-source-rev-7"
+            }
+          },
+          "compilationConfig": {
+            "profileVersion": "compilation-config/v3",
+            "writeBackend": {
+              "profileId": "fixture-world-source-cell-write/v1",
+              "revision": "fixture-world-source-rev-7"
+            },
+            "overlapRule": "last-writer-wins",
+            "effectOrder": "numeric-x-y-z",
+            "compressionRule": "exact-final-effects-only"
+          },
+          "writeMethods": [
+            "PER_CELL",
+            "REGION"
+          ],
+          "avatarEnvelope": {
+            "availability": "KNOWN",
+            "basis": "WORLD_SOURCE_DECLARATION",
+            "size": {
+              "width": 0.6,
+              "height": 1.77,
+              "depth": 0.6
+            },
+            "position": [
+              1,
+              2,
+              3
+            ]
+          }
+        },
+        "expect": {
+          "code": "UNKNOWN_REQUIRED_FIELD",
+          "reason": "UNKNOWN_FIELD"
+        }
+      },
+      {
+        "title": "body envelope with a player identity is not representable",
+        "type": "WriteProfile",
+        "value": {
+          "profileVersion": "write-profile/v1",
+          "connection": {
+            "worldRef": "fixture-world",
+            "connectionRef": "local-connection",
+            "connectionIncarnationRef": "socket-open-1"
+          },
+          "catalogueDigest": "8429d43abbf2e574c8db6ce4045583924f9973ab615c86da0c876191ce745574",
+          "writeBackend": {
+            "availability": "KNOWN",
+            "basis": "LOADED_PAYLOAD_DECLARATION",
+            "writeBackend": {
+              "profileId": "fixture-world-source-cell-write/v1",
+              "revision": "fixture-world-source-rev-7"
+            }
+          },
+          "compilationConfig": {
+            "profileVersion": "compilation-config/v3",
+            "writeBackend": {
+              "profileId": "fixture-world-source-cell-write/v1",
+              "revision": "fixture-world-source-rev-7"
+            },
+            "overlapRule": "last-writer-wins",
+            "effectOrder": "numeric-x-y-z",
+            "compressionRule": "exact-final-effects-only"
+          },
+          "writeMethods": [
+            "PER_CELL",
+            "REGION"
+          ],
+          "avatarEnvelope": {
+            "availability": "KNOWN",
+            "basis": "WORLD_SOURCE_DECLARATION",
+            "size": {
+              "width": 0.6,
+              "height": 1.77,
+              "depth": 0.6
+            },
+            "playerName": "fixture-player"
+          }
+        },
+        "expect": {
+          "code": "UNKNOWN_REQUIRED_FIELD",
+          "reason": "UNKNOWN_FIELD"
+        }
+      },
+      {
+        "title": "UNAVAILABLE body envelope carrying a size",
+        "type": "WriteProfile",
+        "value": {
+          "profileVersion": "write-profile/v1",
+          "connection": {
+            "worldRef": "fixture-world",
+            "connectionRef": "local-connection",
+            "connectionIncarnationRef": "socket-open-1"
+          },
+          "catalogueDigest": "8429d43abbf2e574c8db6ce4045583924f9973ab615c86da0c876191ce745574",
+          "writeBackend": {
+            "availability": "UNAVAILABLE",
+            "reason": "NOT_DECLARED_BY_PAYLOAD"
+          },
+          "compilationConfig": null,
+          "writeMethods": [],
+          "avatarEnvelope": {
+            "availability": "UNAVAILABLE",
+            "reason": "NO_PUBLIC_SOURCE",
+            "size": {
+              "width": 1,
+              "height": 2,
+              "depth": 1
+            }
+          }
+        },
+        "expect": {
+          "code": "UNKNOWN_REQUIRED_FIELD",
+          "reason": "UNKNOWN_FIELD"
+        }
+      },
+      {
+        "title": "zero body height",
+        "type": "WriteProfile",
+        "value": {
+          "profileVersion": "write-profile/v1",
+          "connection": {
+            "worldRef": "fixture-world",
+            "connectionRef": "local-connection",
+            "connectionIncarnationRef": "socket-open-1"
+          },
+          "catalogueDigest": "8429d43abbf2e574c8db6ce4045583924f9973ab615c86da0c876191ce745574",
+          "writeBackend": {
+            "availability": "KNOWN",
+            "basis": "LOADED_PAYLOAD_DECLARATION",
+            "writeBackend": {
+              "profileId": "fixture-world-source-cell-write/v1",
+              "revision": "fixture-world-source-rev-7"
+            }
+          },
+          "compilationConfig": {
+            "profileVersion": "compilation-config/v3",
+            "writeBackend": {
+              "profileId": "fixture-world-source-cell-write/v1",
+              "revision": "fixture-world-source-rev-7"
+            },
+            "overlapRule": "last-writer-wins",
+            "effectOrder": "numeric-x-y-z",
+            "compressionRule": "exact-final-effects-only"
+          },
+          "writeMethods": [
+            "PER_CELL",
+            "REGION"
+          ],
+          "avatarEnvelope": {
+            "availability": "KNOWN",
+            "basis": "WORLD_SOURCE_DECLARATION",
+            "size": {
+              "width": 0.6,
+              "height": 0,
+              "depth": 0.6
+            }
+          }
+        },
+        "expect": {
+          "code": "SCHEMA_INVALID",
+          "reason": "INVALID_SHAPE"
+        }
+      },
+      {
+        "title": "duplicate write method",
+        "type": "EngineFacts",
+        "value": {
+          "profileVersion": "engine-facts/v1",
+          "connection": {
+            "worldRef": "fixture-world",
+            "connectionRef": "local-connection",
+            "connectionIncarnationRef": "socket-open-1"
+          },
+          "worldGeometry": {
+            "profileVersion": "world-geometry/v1",
+            "geometryProfiles": [
+              "voxel-grid/v1"
+            ],
+            "partition": {
+              "edge": [
+                16,
+                16,
+                16
+              ]
+            },
+            "postWriteLighting": "REQUIRED"
+          },
+          "engineBounds": {
+            "min": [
+              -30912,
+              -30912,
+              -30912
+            ],
+            "max": [
+              30927,
+              30927,
+              30927
+            ]
+          },
+          "frame": {
+            "axes": [
+              "+X",
+              "+Y",
+              "+Z"
+            ],
+            "handedness": "left",
+            "gridUnit": {
+              "name": "cell",
+              "metersPerGridUnit": 1
+            }
+          },
+          "writeMethods": [
+            "PER_CELL",
+            "PER_CELL"
+          ],
+          "writeBackend": {
+            "availability": "KNOWN",
+            "basis": "LOADED_PAYLOAD_DECLARATION",
+            "writeBackend": {
+              "profileId": "fixture-world-source-cell-write/v1",
+              "revision": "fixture-world-source-rev-7"
+            }
+          }
+        },
+        "expect": {
+          "code": "SCHEMA_INVALID",
+          "reason": "INVALID_SHAPE"
+        }
+      },
+      {
+        "title": "write methods out of order",
+        "type": "EngineFacts",
+        "value": {
+          "profileVersion": "engine-facts/v1",
+          "connection": {
+            "worldRef": "fixture-world",
+            "connectionRef": "local-connection",
+            "connectionIncarnationRef": "socket-open-1"
+          },
+          "worldGeometry": {
+            "profileVersion": "world-geometry/v1",
+            "geometryProfiles": [
+              "voxel-grid/v1"
+            ],
+            "partition": {
+              "edge": [
+                16,
+                16,
+                16
+              ]
+            },
+            "postWriteLighting": "REQUIRED"
+          },
+          "engineBounds": {
+            "min": [
+              -30912,
+              -30912,
+              -30912
+            ],
+            "max": [
+              30927,
+              30927,
+              30927
+            ]
+          },
+          "frame": {
+            "axes": [
+              "+X",
+              "+Y",
+              "+Z"
+            ],
+            "handedness": "left",
+            "gridUnit": {
+              "name": "cell",
+              "metersPerGridUnit": 1
+            }
+          },
+          "writeMethods": [
+            "REGION",
+            "PER_CELL"
+          ],
+          "writeBackend": {
+            "availability": "KNOWN",
+            "basis": "LOADED_PAYLOAD_DECLARATION",
+            "writeBackend": {
+              "profileId": "fixture-world-source-cell-write/v1",
+              "revision": "fixture-world-source-rev-7"
+            }
+          }
+        },
+        "expect": {
+          "code": "SCHEMA_INVALID",
+          "reason": "INVALID_SHAPE"
+        }
+      },
+      {
+        "title": "unknown write method",
+        "type": "EngineFacts",
+        "value": {
+          "profileVersion": "engine-facts/v1",
+          "connection": {
+            "worldRef": "fixture-world",
+            "connectionRef": "local-connection",
+            "connectionIncarnationRef": "socket-open-1"
+          },
+          "worldGeometry": {
+            "profileVersion": "world-geometry/v1",
+            "geometryProfiles": [
+              "voxel-grid/v1"
+            ],
+            "partition": {
+              "edge": [
+                16,
+                16,
+                16
+              ]
+            },
+            "postWriteLighting": "REQUIRED"
+          },
+          "engineBounds": {
+            "min": [
+              -30912,
+              -30912,
+              -30912
+            ],
+            "max": [
+              30927,
+              30927,
+              30927
+            ]
+          },
+          "frame": {
+            "axes": [
+              "+X",
+              "+Y",
+              "+Z"
+            ],
+            "handedness": "left",
+            "gridUnit": {
+              "name": "cell",
+              "metersPerGridUnit": 1
+            }
+          },
+          "writeMethods": [
+            "BULK"
+          ],
+          "writeBackend": {
+            "availability": "KNOWN",
+            "basis": "LOADED_PAYLOAD_DECLARATION",
+            "writeBackend": {
+              "profileId": "fixture-world-source-cell-write/v1",
+              "revision": "fixture-world-source-rev-7"
+            }
+          }
+        },
+        "expect": {
+          "code": "SCHEMA_INVALID",
+          "reason": "INVALID_SHAPE"
+        }
+      },
+      {
+        "title": "presentation misses a Catalogue material",
+        "type": "CatalogueFacts",
+        "value": {
+          "profileVersion": "catalogue-facts/v1",
+          "connection": {
+            "worldRef": "fixture-world",
+            "connectionRef": "local-connection",
+            "connectionIncarnationRef": "socket-open-1"
+          },
+          "catalogue": {
+            "profileVersion": "catalogue/v3",
+            "engineRevisions": {
+              "fixture-game": "fixture-game-1",
+              "fixture-mod": "fixture-mod-1"
+            },
+            "emptyMaterialRef": "air",
+            "materials": {
+              "air": {
+                "passable": true,
+                "liquid": false,
+                "hazardPerSecond": 0,
+                "emitsLight": false,
+                "placeable": true,
+                "orientations": [
+                  0
+                ],
+                "definitionRevision": "fixture-def-1",
+                "unknownFields": [],
+                "extension": {
+                  "collisionBoxes": [],
+                  "param2Type": "none"
+                }
+              },
+              "fixture:stone": {
+                "passable": false,
+                "liquid": false,
+                "hazardPerSecond": 0,
+                "emitsLight": false,
+                "placeable": true,
+                "orientations": [
+                  0
+                ],
+                "definitionRevision": "fixture-def-1",
+                "unknownFields": [],
+                "extension": {
+                  "collisionBoxes": [
+                    [
+                      -0.5,
+                      -0.5,
+                      -0.5,
+                      0.5,
+                      0.5,
+                      0.5
+                    ]
+                  ],
+                  "param2Type": "none"
+                }
+              }
+            }
+          },
+          "catalogueDigest": "8429d43abbf2e574c8db6ce4045583924f9973ab615c86da0c876191ce745574",
+          "presentation": {
+            "fixture:stone": {
+              "displayName": "Fixture stone",
+              "color": "#7f7f7f"
+            }
+          },
+          "orientationIndex": [
+            {
+              "orientation": 0,
+              "quarterTurnsAboutUp": 0,
+              "upsideDown": false
+            }
+          ]
+        },
+        "expect": {
+          "code": "SCHEMA_INVALID",
+          "reason": "INVALID_SHAPE"
+        }
+      },
+      {
+        "title": "orientation used by a material is not described",
+        "type": "CatalogueFacts",
+        "value": {
+          "profileVersion": "catalogue-facts/v1",
+          "connection": {
+            "worldRef": "fixture-world",
+            "connectionRef": "local-connection",
+            "connectionIncarnationRef": "socket-open-1"
+          },
+          "catalogue": {
+            "profileVersion": "catalogue/v3",
+            "engineRevisions": {
+              "fixture-game": "fixture-game-1",
+              "fixture-mod": "fixture-mod-1"
+            },
+            "emptyMaterialRef": "air",
+            "materials": {
+              "air": {
+                "passable": true,
+                "liquid": false,
+                "hazardPerSecond": 0,
+                "emitsLight": false,
+                "placeable": true,
+                "orientations": [
+                  0
+                ],
+                "definitionRevision": "fixture-def-1",
+                "unknownFields": [],
+                "extension": {
+                  "collisionBoxes": [],
+                  "param2Type": "none"
+                }
+              },
+              "fixture:stone": {
+                "passable": false,
+                "liquid": false,
+                "hazardPerSecond": 0,
+                "emitsLight": false,
+                "placeable": true,
+                "orientations": [
+                  0
+                ],
+                "definitionRevision": "fixture-def-1",
+                "unknownFields": [],
+                "extension": {
+                  "collisionBoxes": [
+                    [
+                      -0.5,
+                      -0.5,
+                      -0.5,
+                      0.5,
+                      0.5,
+                      0.5
+                    ]
+                  ],
+                  "param2Type": "none"
+                }
+              }
+            }
+          },
+          "catalogueDigest": "8429d43abbf2e574c8db6ce4045583924f9973ab615c86da0c876191ce745574",
+          "presentation": {
+            "air": {
+              "displayName": null,
+              "color": null
+            },
+            "fixture:stone": {
+              "displayName": "Fixture stone",
+              "color": "#7f7f7f"
+            }
+          },
+          "orientationIndex": []
+        },
+        "expect": {
+          "code": "SCHEMA_INVALID",
+          "reason": "INVALID_SHAPE"
+        }
+      },
+      {
+        "title": "colour that is not #rrggbb",
+        "type": "CatalogueFacts",
+        "value": {
+          "profileVersion": "catalogue-facts/v1",
+          "connection": {
+            "worldRef": "fixture-world",
+            "connectionRef": "local-connection",
+            "connectionIncarnationRef": "socket-open-1"
+          },
+          "catalogue": {
+            "profileVersion": "catalogue/v3",
+            "engineRevisions": {
+              "fixture-game": "fixture-game-1",
+              "fixture-mod": "fixture-mod-1"
+            },
+            "emptyMaterialRef": "air",
+            "materials": {
+              "air": {
+                "passable": true,
+                "liquid": false,
+                "hazardPerSecond": 0,
+                "emitsLight": false,
+                "placeable": true,
+                "orientations": [
+                  0
+                ],
+                "definitionRevision": "fixture-def-1",
+                "unknownFields": [],
+                "extension": {
+                  "collisionBoxes": [],
+                  "param2Type": "none"
+                }
+              },
+              "fixture:stone": {
+                "passable": false,
+                "liquid": false,
+                "hazardPerSecond": 0,
+                "emitsLight": false,
+                "placeable": true,
+                "orientations": [
+                  0
+                ],
+                "definitionRevision": "fixture-def-1",
+                "unknownFields": [],
+                "extension": {
+                  "collisionBoxes": [
+                    [
+                      -0.5,
+                      -0.5,
+                      -0.5,
+                      0.5,
+                      0.5,
+                      0.5
+                    ]
+                  ],
+                  "param2Type": "none"
+                }
+              }
+            }
+          },
+          "catalogueDigest": "8429d43abbf2e574c8db6ce4045583924f9973ab615c86da0c876191ce745574",
+          "presentation": {
+            "air": {
+              "displayName": null,
+              "color": null
+            },
+            "fixture:stone": {
+              "displayName": "Fixture stone",
+              "color": "grey"
+            }
+          },
+          "orientationIndex": [
+            {
+              "orientation": 0,
+              "quarterTurnsAboutUp": 0,
+              "upsideDown": false
+            }
+          ]
+        },
+        "expect": {
+          "code": "SCHEMA_INVALID",
+          "reason": "INVALID_SHAPE"
+        }
+      },
+      {
+        "title": "presentation names a material the snapshot does not carry",
+        "type": "MaterialSourceFacts",
+        "value": {
+          "profileVersion": "material-source-facts/v1",
+          "snapshot": {
+            "profileVersion": "material-sources/v2",
+            "connection": {
+              "worldRef": "fixture-world",
+              "connectionRef": "local-connection",
+              "connectionIncarnationRef": "socket-open-1"
+            },
+            "catalogueDigest": "8429d43abbf2e574c8db6ce4045583924f9973ab615c86da0c876191ce745574",
+            "engineRevisions": {
+              "fixture-game": "fixture-game-1",
+              "fixture-mod": "fixture-mod-1"
+            },
+            "sourceBasis": "WORLD_SOURCE_ASSET_ONLY",
+            "materials": [
+              {
+                "availability": "UNKNOWN",
+                "materialRef": "air",
+                "orientation": 0,
+                "definitionRevision": "fixture-def-1",
+                "texture": null,
+                "reason": "UNSUPPORTED_APPEARANCE"
+              },
+              {
+                "availability": "KNOWN",
+                "materialRef": "fixture:stone",
+                "orientation": 0,
+                "definitionRevision": "fixture-def-1",
+                "texture": {
+                  "textureName": "fixture_stone.png",
+                  "sourceKind": "MOD",
+                  "sourceRef": "fixture-mod/textures/fixture_stone.png",
+                  "interpretation": "SIMPLE_UNIFORM_NODE_TILES",
+                  "mediaType": "image/png",
+                  "bytesDigest": "5555555555555555555555555555555555555555555555555555555555555555",
+                  "byteLength": 96
+                }
+              }
+            ],
+            "sourceRevision": "ba12d6196a5c2becba11de6bbf439fb9648da89ce79818d49ac4ac6e5b600f68"
+          },
+          "presentation": {
+            "air": {
+              "displayName": null,
+              "color": null
+            },
+            "fixture:stone": {
+              "displayName": "Fixture stone",
+              "color": "#7f7f7f"
+            },
+            "fixture:wood": {
+              "displayName": null,
+              "color": null
+            }
+          }
+        },
+        "expect": {
+          "code": "SCHEMA_INVALID",
+          "reason": "INVALID_SHAPE"
+        }
+      },
+      {
+        "title": "capability owner is a package, not the role",
+        "type": "WorldSourceCapabilities",
+        "value": {
+          "profileVersion": "world-source-capabilities/v1",
+          "owner": "fixture-adapter-package",
+          "connection": {
+            "worldRef": "fixture-world",
+            "connectionRef": "local-connection",
+            "connectionIncarnationRef": "socket-open-1"
+          },
+          "capabilityRevision": "fixture-capability-1",
+          "catalogueDigest": "8429d43abbf2e574c8db6ce4045583924f9973ab615c86da0c876191ce745574",
+          "worldGeometry": {
+            "profileVersion": "world-geometry/v1",
+            "geometryProfiles": [
+              "voxel-grid/v1"
+            ],
+            "partition": {
+              "edge": [
+                16,
+                16,
+                16
+              ]
+            },
+            "postWriteLighting": "REQUIRED"
+          },
+          "engineBounds": {
+            "min": [
+              -30912,
+              -30912,
+              -30912
+            ],
+            "max": [
+              30927,
+              30927,
+              30927
+            ]
+          },
+          "stateProfile": {
+            "profileVersion": "state-profile/v3",
+            "derivedFields": [
+              "light"
+            ],
+            "preservedFields": [],
+            "clearedFields": [
+              "inventory",
+              "metadata",
+              "timer"
+            ]
+          },
+          "writeBackend": {
+            "availability": "KNOWN",
+            "basis": "LOADED_PAYLOAD_DECLARATION",
+            "writeBackend": {
+              "profileId": "fixture-world-source-cell-write/v1",
+              "revision": "fixture-world-source-rev-7"
+            }
+          },
+          "compilationConfig": {
+            "profileVersion": "compilation-config/v3",
+            "writeBackend": {
+              "profileId": "fixture-world-source-cell-write/v1",
+              "revision": "fixture-world-source-rev-7"
+            },
+            "overlapRule": "last-writer-wins",
+            "effectOrder": "numeric-x-y-z",
+            "compressionRule": "exact-final-effects-only"
+          },
+          "writeMethods": [
+            "PER_CELL",
+            "REGION"
+          ],
+          "writePath": {
+            "profileVersion": "write-path-conclusions/v1",
+            "catalogueDigest": "8429d43abbf2e574c8db6ce4045583924f9973ab615c86da0c876191ce745574",
+            "path": {
+              "hasSideEffects": false,
+              "hasPersistentState": false
+            },
+            "materials": {
+              "air": {
+                "hasSideEffects": false,
+                "hasPersistentState": false
+              },
+              "fixture:stone": {
+                "hasSideEffects": false,
+                "hasPersistentState": false
+              }
+            }
+          },
+          "engineGuards": {
+            "profileVersion": "engine-guards/v1",
+            "coverage": [
+              {
+                "guard": "BODY_CLEARANCE",
+                "stages": [
+                  "INSPECT_REGION",
+                  "PREPARE_RECOVERABLE",
+                  "APPLY_COMPILED",
+                  "RESTORE"
+                ],
+                "protectionPrincipal": null
+              },
+              {
+                "guard": "CELL_PROTECTION",
+                "stages": [
+                  "PREPARE_RECOVERABLE",
+                  "APPLY_COMPILED"
+                ],
+                "protectionPrincipal": "ANONYMOUS"
+              },
+              {
+                "guard": "PLAYER_ENCLOSURE",
+                "stages": [
+                  "APPLY_COMPILED"
+                ],
+                "protectionPrincipal": null
+              }
+            ]
+          },
+          "avatarEnvelope": {
+            "availability": "KNOWN",
+            "basis": "WORLD_SOURCE_DECLARATION",
+            "size": {
+              "width": 0.6,
+              "height": 1.77,
+              "depth": 0.6
+            }
+          }
+        },
+        "expect": {
+          "code": "SCHEMA_INVALID",
+          "reason": "INVALID_SHAPE"
+        }
+      },
+      {
+        "title": "write path conclusions of another Catalogue",
+        "type": "WorldSourceCapabilities",
+        "value": {
+          "profileVersion": "world-source-capabilities/v1",
+          "owner": "world-source",
+          "connection": {
+            "worldRef": "fixture-world",
+            "connectionRef": "local-connection",
+            "connectionIncarnationRef": "socket-open-1"
+          },
+          "capabilityRevision": "fixture-capability-1",
+          "catalogueDigest": "8429d43abbf2e574c8db6ce4045583924f9973ab615c86da0c876191ce745574",
+          "worldGeometry": {
+            "profileVersion": "world-geometry/v1",
+            "geometryProfiles": [
+              "voxel-grid/v1"
+            ],
+            "partition": {
+              "edge": [
+                16,
+                16,
+                16
+              ]
+            },
+            "postWriteLighting": "REQUIRED"
+          },
+          "engineBounds": {
+            "min": [
+              -30912,
+              -30912,
+              -30912
+            ],
+            "max": [
+              30927,
+              30927,
+              30927
+            ]
+          },
+          "stateProfile": {
+            "profileVersion": "state-profile/v3",
+            "derivedFields": [
+              "light"
+            ],
+            "preservedFields": [],
+            "clearedFields": [
+              "inventory",
+              "metadata",
+              "timer"
+            ]
+          },
+          "writeBackend": {
+            "availability": "KNOWN",
+            "basis": "LOADED_PAYLOAD_DECLARATION",
+            "writeBackend": {
+              "profileId": "fixture-world-source-cell-write/v1",
+              "revision": "fixture-world-source-rev-7"
+            }
+          },
+          "compilationConfig": {
+            "profileVersion": "compilation-config/v3",
+            "writeBackend": {
+              "profileId": "fixture-world-source-cell-write/v1",
+              "revision": "fixture-world-source-rev-7"
+            },
+            "overlapRule": "last-writer-wins",
+            "effectOrder": "numeric-x-y-z",
+            "compressionRule": "exact-final-effects-only"
+          },
+          "writeMethods": [
+            "PER_CELL",
+            "REGION"
+          ],
+          "writePath": {
+            "profileVersion": "write-path-conclusions/v1",
+            "catalogueDigest": "0000000000000000000000000000000000000000000000000000000000000000",
+            "path": {
+              "hasSideEffects": false,
+              "hasPersistentState": false
+            },
+            "materials": {
+              "air": {
+                "hasSideEffects": false,
+                "hasPersistentState": false
+              },
+              "fixture:stone": {
+                "hasSideEffects": false,
+                "hasPersistentState": false
+              }
+            }
+          },
+          "engineGuards": {
+            "profileVersion": "engine-guards/v1",
+            "coverage": [
+              {
+                "guard": "BODY_CLEARANCE",
+                "stages": [
+                  "INSPECT_REGION",
+                  "PREPARE_RECOVERABLE",
+                  "APPLY_COMPILED",
+                  "RESTORE"
+                ],
+                "protectionPrincipal": null
+              },
+              {
+                "guard": "CELL_PROTECTION",
+                "stages": [
+                  "PREPARE_RECOVERABLE",
+                  "APPLY_COMPILED"
+                ],
+                "protectionPrincipal": "ANONYMOUS"
+              },
+              {
+                "guard": "PLAYER_ENCLOSURE",
+                "stages": [
+                  "APPLY_COMPILED"
+                ],
+                "protectionPrincipal": null
+              }
+            ]
+          },
+          "avatarEnvelope": {
+            "availability": "KNOWN",
+            "basis": "WORLD_SOURCE_DECLARATION",
+            "size": {
+              "width": 0.6,
+              "height": 1.77,
+              "depth": 0.6
+            }
+          }
+        },
+        "expect": {
+          "code": "SCHEMA_INVALID",
+          "reason": "INVALID_SHAPE"
+        }
+      },
+      {
+        "title": "inspection context of another world",
+        "type": "InspectionContext",
+        "value": {
+          "sessionRef": "fixture-session",
+          "worldRef": "fixture-world",
+          "localContext": {
+            "connectionRef": "local-connection",
+            "connectionIncarnationRef": "socket-open-1",
+            "worldRef": "fixture-other-world",
+            "selectionRevision": "selection-1"
+          },
+          "orderedSelectedObjectRefs": [
+            "object-2",
+            "object-1"
+          ]
+        },
+        "expect": {
+          "code": "SCHEMA_INVALID",
+          "reason": "INVALID_SHAPE"
+        }
+      }
+    ]
+  },
+  "consumer": {
+    "bind": [
+      {
+        "title": "catalogue read of a previous incarnation",
+        "check": "validateCatalogueFacts",
+        "value": {
+          "profileVersion": "catalogue-facts/v1",
+          "connection": {
+            "worldRef": "fixture-world",
+            "connectionRef": "local-connection",
+            "connectionIncarnationRef": "socket-open-1-fixture-reconnected"
+          },
+          "catalogue": {
+            "profileVersion": "catalogue/v3",
+            "engineRevisions": {
+              "fixture-game": "fixture-game-1",
+              "fixture-mod": "fixture-mod-1"
+            },
+            "emptyMaterialRef": "air",
+            "materials": {
+              "air": {
+                "passable": true,
+                "liquid": false,
+                "hazardPerSecond": 0,
+                "emitsLight": false,
+                "placeable": true,
+                "orientations": [
+                  0
+                ],
+                "definitionRevision": "fixture-def-1",
+                "unknownFields": [],
+                "extension": {
+                  "collisionBoxes": [],
+                  "param2Type": "none"
+                }
+              },
+              "fixture:stone": {
+                "passable": false,
+                "liquid": false,
+                "hazardPerSecond": 0,
+                "emitsLight": false,
+                "placeable": true,
+                "orientations": [
+                  0
+                ],
+                "definitionRevision": "fixture-def-1",
+                "unknownFields": [],
+                "extension": {
+                  "collisionBoxes": [
+                    [
+                      -0.5,
+                      -0.5,
+                      -0.5,
+                      0.5,
+                      0.5,
+                      0.5
+                    ]
+                  ],
+                  "param2Type": "none"
+                }
+              }
+            }
+          },
+          "catalogueDigest": "8429d43abbf2e574c8db6ce4045583924f9973ab615c86da0c876191ce745574",
+          "presentation": {
+            "air": {
+              "displayName": null,
+              "color": null
+            },
+            "fixture:stone": {
+              "displayName": "Fixture stone",
+              "color": "#7f7f7f"
+            }
+          },
+          "orientationIndex": [
+            {
+              "orientation": 0,
+              "quarterTurnsAboutUp": 0,
+              "upsideDown": false
+            }
+          ]
+        },
+        "expect": {
+          "code": "CURRENT_WORLD_MISMATCH",
+          "reason": "INVALID_SHAPE"
+        }
+      },
+      {
+        "title": "catalogue digest that is not the carried Catalogue",
+        "check": "validateCatalogueFacts",
+        "value": {
+          "profileVersion": "catalogue-facts/v1",
+          "connection": {
+            "worldRef": "fixture-world",
+            "connectionRef": "local-connection",
+            "connectionIncarnationRef": "socket-open-1"
+          },
+          "catalogue": {
+            "profileVersion": "catalogue/v3",
+            "engineRevisions": {
+              "fixture-game": "fixture-game-1",
+              "fixture-mod": "fixture-mod-1"
+            },
+            "emptyMaterialRef": "air",
+            "materials": {
+              "air": {
+                "passable": true,
+                "liquid": false,
+                "hazardPerSecond": 0,
+                "emitsLight": false,
+                "placeable": true,
+                "orientations": [
+                  0
+                ],
+                "definitionRevision": "fixture-def-1",
+                "unknownFields": [],
+                "extension": {
+                  "collisionBoxes": [],
+                  "param2Type": "none"
+                }
+              },
+              "fixture:stone": {
+                "passable": false,
+                "liquid": false,
+                "hazardPerSecond": 0,
+                "emitsLight": false,
+                "placeable": true,
+                "orientations": [
+                  0
+                ],
+                "definitionRevision": "fixture-def-1",
+                "unknownFields": [],
+                "extension": {
+                  "collisionBoxes": [
+                    [
+                      -0.5,
+                      -0.5,
+                      -0.5,
+                      0.5,
+                      0.5,
+                      0.5
+                    ]
+                  ],
+                  "param2Type": "none"
+                }
+              }
+            }
+          },
+          "catalogueDigest": "0000000000000000000000000000000000000000000000000000000000000000",
+          "presentation": {
+            "air": {
+              "displayName": null,
+              "color": null
+            },
+            "fixture:stone": {
+              "displayName": "Fixture stone",
+              "color": "#7f7f7f"
+            }
+          },
+          "orientationIndex": [
+            {
+              "orientation": 0,
+              "quarterTurnsAboutUp": 0,
+              "upsideDown": false
+            }
+          ]
+        },
+        "expect": {
+          "code": "CATALOGUE_MISMATCH",
+          "reason": "INVALID_SHAPE"
+        }
+      },
+      {
+        "title": "material sources not re-signed",
+        "check": "validateMaterialSourceFacts",
+        "value": {
+          "profileVersion": "material-source-facts/v1",
+          "snapshot": {
+            "profileVersion": "material-sources/v2",
+            "connection": {
+              "worldRef": "fixture-world",
+              "connectionRef": "local-connection",
+              "connectionIncarnationRef": "socket-open-1"
+            },
+            "catalogueDigest": "8429d43abbf2e574c8db6ce4045583924f9973ab615c86da0c876191ce745574",
+            "engineRevisions": {
+              "fixture-game": "fixture-game-1",
+              "fixture-mod": "fixture-mod-1"
+            },
+            "sourceBasis": "WORLD_SOURCE_ASSET_ONLY",
+            "materials": [
+              {
+                "availability": "UNKNOWN",
+                "materialRef": "air",
+                "orientation": 0,
+                "definitionRevision": "fixture-def-1",
+                "texture": null,
+                "reason": "UNSUPPORTED_APPEARANCE"
+              },
+              {
+                "availability": "KNOWN",
+                "materialRef": "fixture:stone",
+                "orientation": 0,
+                "definitionRevision": "fixture-def-1",
+                "texture": {
+                  "textureName": "fixture_stone.png",
+                  "sourceKind": "MOD",
+                  "sourceRef": "fixture-mod/textures/fixture_stone.png",
+                  "interpretation": "SIMPLE_UNIFORM_NODE_TILES",
+                  "mediaType": "image/png",
+                  "bytesDigest": "5555555555555555555555555555555555555555555555555555555555555555",
+                  "byteLength": 97
+                }
+              }
+            ],
+            "sourceRevision": "ba12d6196a5c2becba11de6bbf439fb9648da89ce79818d49ac4ac6e5b600f68"
+          },
+          "presentation": {
+            "air": {
+              "displayName": null,
+              "color": null
+            },
+            "fixture:stone": {
+              "displayName": "Fixture stone",
+              "color": "#7f7f7f"
+            }
+          }
+        },
+        "expect": {
+          "code": "NON_CANONICAL_AMBIGUITY",
+          "reason": "INVALID_SHAPE"
+        }
+      },
+      {
+        "title": "engine facts of another connection",
+        "check": "validateEngineFacts",
+        "value": {
+          "profileVersion": "engine-facts/v1",
+          "connection": {
+            "worldRef": "fixture-world",
+            "connectionRef": "local-connection",
+            "connectionIncarnationRef": "socket-open-1-fixture-reconnected"
+          },
+          "worldGeometry": {
+            "profileVersion": "world-geometry/v1",
+            "geometryProfiles": [
+              "voxel-grid/v1"
+            ],
+            "partition": {
+              "edge": [
+                16,
+                16,
+                16
+              ]
+            },
+            "postWriteLighting": "REQUIRED"
+          },
+          "engineBounds": {
+            "min": [
+              -30912,
+              -30912,
+              -30912
+            ],
+            "max": [
+              30927,
+              30927,
+              30927
+            ]
+          },
+          "frame": {
+            "axes": [
+              "+X",
+              "+Y",
+              "+Z"
+            ],
+            "handedness": "left",
+            "gridUnit": {
+              "name": "cell",
+              "metersPerGridUnit": 1
+            }
+          },
+          "writeMethods": [
+            "PER_CELL",
+            "REGION"
+          ],
+          "writeBackend": {
+            "availability": "KNOWN",
+            "basis": "LOADED_PAYLOAD_DECLARATION",
+            "writeBackend": {
+              "profileId": "fixture-world-source-cell-write/v1",
+              "revision": "fixture-world-source-rev-7"
+            }
+          }
+        },
+        "expect": {
+          "code": "CURRENT_WORLD_MISMATCH",
+          "reason": "INVALID_SHAPE"
+        }
+      },
+      {
+        "title": "write profile of another Catalogue",
+        "check": "validateWriteProfile",
+        "value": {
+          "profileVersion": "write-profile/v1",
+          "connection": {
+            "worldRef": "fixture-world",
+            "connectionRef": "local-connection",
+            "connectionIncarnationRef": "socket-open-1"
+          },
+          "catalogueDigest": "0000000000000000000000000000000000000000000000000000000000000000",
+          "writeBackend": {
+            "availability": "KNOWN",
+            "basis": "LOADED_PAYLOAD_DECLARATION",
+            "writeBackend": {
+              "profileId": "fixture-world-source-cell-write/v1",
+              "revision": "fixture-world-source-rev-7"
+            }
+          },
+          "compilationConfig": {
+            "profileVersion": "compilation-config/v3",
+            "writeBackend": {
+              "profileId": "fixture-world-source-cell-write/v1",
+              "revision": "fixture-world-source-rev-7"
+            },
+            "overlapRule": "last-writer-wins",
+            "effectOrder": "numeric-x-y-z",
+            "compressionRule": "exact-final-effects-only"
+          },
+          "writeMethods": [
+            "PER_CELL",
+            "REGION"
+          ],
+          "avatarEnvelope": {
+            "availability": "KNOWN",
+            "basis": "WORLD_SOURCE_DECLARATION",
+            "size": {
+              "width": 0.6,
+              "height": 1.77,
+              "depth": 0.6
+            }
+          }
+        },
+        "expect": {
+          "code": "CATALOGUE_MISMATCH",
+          "reason": "INVALID_SHAPE"
+        }
+      },
+      {
+        "title": "placeable material without a clean write path conclusion",
+        "check": "validateWorldSourceCapabilities",
+        "value": {
+          "profileVersion": "world-source-capabilities/v1",
+          "owner": "world-source",
+          "connection": {
+            "worldRef": "fixture-world",
+            "connectionRef": "local-connection",
+            "connectionIncarnationRef": "socket-open-1"
+          },
+          "capabilityRevision": "fixture-capability-1",
+          "catalogueDigest": "8429d43abbf2e574c8db6ce4045583924f9973ab615c86da0c876191ce745574",
+          "worldGeometry": {
+            "profileVersion": "world-geometry/v1",
+            "geometryProfiles": [
+              "voxel-grid/v1"
+            ],
+            "partition": {
+              "edge": [
+                16,
+                16,
+                16
+              ]
+            },
+            "postWriteLighting": "REQUIRED"
+          },
+          "engineBounds": {
+            "min": [
+              -30912,
+              -30912,
+              -30912
+            ],
+            "max": [
+              30927,
+              30927,
+              30927
+            ]
+          },
+          "stateProfile": {
+            "profileVersion": "state-profile/v3",
+            "derivedFields": [
+              "light"
+            ],
+            "preservedFields": [],
+            "clearedFields": [
+              "inventory",
+              "metadata",
+              "timer"
+            ]
+          },
+          "writeBackend": {
+            "availability": "KNOWN",
+            "basis": "LOADED_PAYLOAD_DECLARATION",
+            "writeBackend": {
+              "profileId": "fixture-world-source-cell-write/v1",
+              "revision": "fixture-world-source-rev-7"
+            }
+          },
+          "compilationConfig": {
+            "profileVersion": "compilation-config/v3",
+            "writeBackend": {
+              "profileId": "fixture-world-source-cell-write/v1",
+              "revision": "fixture-world-source-rev-7"
+            },
+            "overlapRule": "last-writer-wins",
+            "effectOrder": "numeric-x-y-z",
+            "compressionRule": "exact-final-effects-only"
+          },
+          "writeMethods": [
+            "PER_CELL",
+            "REGION"
+          ],
+          "writePath": {
+            "profileVersion": "write-path-conclusions/v1",
+            "catalogueDigest": "8429d43abbf2e574c8db6ce4045583924f9973ab615c86da0c876191ce745574",
+            "path": {
+              "hasSideEffects": false,
+              "hasPersistentState": null
+            },
+            "materials": {
+              "air": {
+                "hasSideEffects": false,
+                "hasPersistentState": null
+              },
+              "fixture:stone": {
+                "hasSideEffects": false,
+                "hasPersistentState": null
+              }
+            }
+          },
+          "engineGuards": {
+            "profileVersion": "engine-guards/v1",
+            "coverage": [
+              {
+                "guard": "BODY_CLEARANCE",
+                "stages": [
+                  "INSPECT_REGION",
+                  "PREPARE_RECOVERABLE",
+                  "APPLY_COMPILED",
+                  "RESTORE"
+                ],
+                "protectionPrincipal": null
+              },
+              {
+                "guard": "CELL_PROTECTION",
+                "stages": [
+                  "PREPARE_RECOVERABLE",
+                  "APPLY_COMPILED"
+                ],
+                "protectionPrincipal": "ANONYMOUS"
+              },
+              {
+                "guard": "PLAYER_ENCLOSURE",
+                "stages": [
+                  "APPLY_COMPILED"
+                ],
+                "protectionPrincipal": null
+              }
+            ]
+          },
+          "avatarEnvelope": {
+            "availability": "KNOWN",
+            "basis": "WORLD_SOURCE_DECLARATION",
+            "size": {
+              "width": 0.6,
+              "height": 1.77,
+              "depth": 0.6
+            }
+          }
+        },
+        "expect": {
+          "code": "CATALOGUE_MISMATCH",
+          "reason": "CATALOGUE_UNRESOLVED"
+        }
+      },
+      {
+        "title": "placeable material while the path itself has side effects",
+        "check": "validateWorldSourceCapabilities",
+        "value": {
+          "profileVersion": "world-source-capabilities/v1",
+          "owner": "world-source",
+          "connection": {
+            "worldRef": "fixture-world",
+            "connectionRef": "local-connection",
+            "connectionIncarnationRef": "socket-open-1"
+          },
+          "capabilityRevision": "fixture-capability-1",
+          "catalogueDigest": "8429d43abbf2e574c8db6ce4045583924f9973ab615c86da0c876191ce745574",
+          "worldGeometry": {
+            "profileVersion": "world-geometry/v1",
+            "geometryProfiles": [
+              "voxel-grid/v1"
+            ],
+            "partition": {
+              "edge": [
+                16,
+                16,
+                16
+              ]
+            },
+            "postWriteLighting": "REQUIRED"
+          },
+          "engineBounds": {
+            "min": [
+              -30912,
+              -30912,
+              -30912
+            ],
+            "max": [
+              30927,
+              30927,
+              30927
+            ]
+          },
+          "stateProfile": {
+            "profileVersion": "state-profile/v3",
+            "derivedFields": [
+              "light"
+            ],
+            "preservedFields": [],
+            "clearedFields": [
+              "inventory",
+              "metadata",
+              "timer"
+            ]
+          },
+          "writeBackend": {
+            "availability": "KNOWN",
+            "basis": "LOADED_PAYLOAD_DECLARATION",
+            "writeBackend": {
+              "profileId": "fixture-world-source-cell-write/v1",
+              "revision": "fixture-world-source-rev-7"
+            }
+          },
+          "compilationConfig": {
+            "profileVersion": "compilation-config/v3",
+            "writeBackend": {
+              "profileId": "fixture-world-source-cell-write/v1",
+              "revision": "fixture-world-source-rev-7"
+            },
+            "overlapRule": "last-writer-wins",
+            "effectOrder": "numeric-x-y-z",
+            "compressionRule": "exact-final-effects-only"
+          },
+          "writeMethods": [
+            "PER_CELL",
+            "REGION"
+          ],
+          "writePath": {
+            "profileVersion": "write-path-conclusions/v1",
+            "catalogueDigest": "8429d43abbf2e574c8db6ce4045583924f9973ab615c86da0c876191ce745574",
+            "path": {
+              "hasSideEffects": true,
+              "hasPersistentState": false
+            },
+            "materials": {
+              "air": {
+                "hasSideEffects": true,
+                "hasPersistentState": false
+              },
+              "fixture:stone": {
+                "hasSideEffects": true,
+                "hasPersistentState": false
+              }
+            }
+          },
+          "engineGuards": {
+            "profileVersion": "engine-guards/v1",
+            "coverage": [
+              {
+                "guard": "BODY_CLEARANCE",
+                "stages": [
+                  "INSPECT_REGION",
+                  "PREPARE_RECOVERABLE",
+                  "APPLY_COMPILED",
+                  "RESTORE"
+                ],
+                "protectionPrincipal": null
+              },
+              {
+                "guard": "CELL_PROTECTION",
+                "stages": [
+                  "PREPARE_RECOVERABLE",
+                  "APPLY_COMPILED"
+                ],
+                "protectionPrincipal": "ANONYMOUS"
+              },
+              {
+                "guard": "PLAYER_ENCLOSURE",
+                "stages": [
+                  "APPLY_COMPILED"
+                ],
+                "protectionPrincipal": null
+              }
+            ]
+          },
+          "avatarEnvelope": {
+            "availability": "KNOWN",
+            "basis": "WORLD_SOURCE_DECLARATION",
+            "size": {
+              "width": 0.6,
+              "height": 1.77,
+              "depth": 0.6
+            }
+          }
+        },
+        "expect": {
+          "code": "CATALOGUE_MISMATCH",
+          "reason": "CATALOGUE_UNRESOLVED"
+        }
+      },
+      {
+        "title": "write path conclusion for a material outside the Catalogue",
+        "check": "validateWorldSourceCapabilities",
+        "value": {
+          "profileVersion": "world-source-capabilities/v1",
+          "owner": "world-source",
+          "connection": {
+            "worldRef": "fixture-world",
+            "connectionRef": "local-connection",
+            "connectionIncarnationRef": "socket-open-1"
+          },
+          "capabilityRevision": "fixture-capability-1",
+          "catalogueDigest": "8429d43abbf2e574c8db6ce4045583924f9973ab615c86da0c876191ce745574",
+          "worldGeometry": {
+            "profileVersion": "world-geometry/v1",
+            "geometryProfiles": [
+              "voxel-grid/v1"
+            ],
+            "partition": {
+              "edge": [
+                16,
+                16,
+                16
+              ]
+            },
+            "postWriteLighting": "REQUIRED"
+          },
+          "engineBounds": {
+            "min": [
+              -30912,
+              -30912,
+              -30912
+            ],
+            "max": [
+              30927,
+              30927,
+              30927
+            ]
+          },
+          "stateProfile": {
+            "profileVersion": "state-profile/v3",
+            "derivedFields": [
+              "light"
+            ],
+            "preservedFields": [],
+            "clearedFields": [
+              "inventory",
+              "metadata",
+              "timer"
+            ]
+          },
+          "writeBackend": {
+            "availability": "KNOWN",
+            "basis": "LOADED_PAYLOAD_DECLARATION",
+            "writeBackend": {
+              "profileId": "fixture-world-source-cell-write/v1",
+              "revision": "fixture-world-source-rev-7"
+            }
+          },
+          "compilationConfig": {
+            "profileVersion": "compilation-config/v3",
+            "writeBackend": {
+              "profileId": "fixture-world-source-cell-write/v1",
+              "revision": "fixture-world-source-rev-7"
+            },
+            "overlapRule": "last-writer-wins",
+            "effectOrder": "numeric-x-y-z",
+            "compressionRule": "exact-final-effects-only"
+          },
+          "writeMethods": [
+            "PER_CELL",
+            "REGION"
+          ],
+          "writePath": {
+            "profileVersion": "write-path-conclusions/v1",
+            "catalogueDigest": "8429d43abbf2e574c8db6ce4045583924f9973ab615c86da0c876191ce745574",
+            "path": {
+              "hasSideEffects": false,
+              "hasPersistentState": false
+            },
+            "materials": {
+              "air": {
+                "hasSideEffects": false,
+                "hasPersistentState": false
+              },
+              "fixture:stone": {
+                "hasSideEffects": false,
+                "hasPersistentState": false
+              },
+              "fixture:wood": {
+                "hasSideEffects": false,
+                "hasPersistentState": false
+              }
+            }
+          },
+          "engineGuards": {
+            "profileVersion": "engine-guards/v1",
+            "coverage": [
+              {
+                "guard": "BODY_CLEARANCE",
+                "stages": [
+                  "INSPECT_REGION",
+                  "PREPARE_RECOVERABLE",
+                  "APPLY_COMPILED",
+                  "RESTORE"
+                ],
+                "protectionPrincipal": null
+              },
+              {
+                "guard": "CELL_PROTECTION",
+                "stages": [
+                  "PREPARE_RECOVERABLE",
+                  "APPLY_COMPILED"
+                ],
+                "protectionPrincipal": "ANONYMOUS"
+              },
+              {
+                "guard": "PLAYER_ENCLOSURE",
+                "stages": [
+                  "APPLY_COMPILED"
+                ],
+                "protectionPrincipal": null
+              }
+            ]
+          },
+          "avatarEnvelope": {
+            "availability": "KNOWN",
+            "basis": "WORLD_SOURCE_DECLARATION",
+            "size": {
+              "width": 0.6,
+              "height": 1.77,
+              "depth": 0.6
+            }
+          }
+        },
+        "expect": {
+          "code": "CATALOGUE_MISMATCH",
+          "reason": "CATALOGUE_UNRESOLVED"
+        }
+      }
+    ],
+    "require": [
+      {
+        "title": "known backend: the complete configuration, unchanged",
+        "check": "requireWriteProfileConfig",
+        "value": {
+          "profileVersion": "write-profile/v1",
+          "connection": {
+            "worldRef": "fixture-world",
+            "connectionRef": "local-connection",
+            "connectionIncarnationRef": "socket-open-1"
+          },
+          "catalogueDigest": "8429d43abbf2e574c8db6ce4045583924f9973ab615c86da0c876191ce745574",
+          "writeBackend": {
+            "availability": "KNOWN",
+            "basis": "LOADED_PAYLOAD_DECLARATION",
+            "writeBackend": {
+              "profileId": "fixture-world-source-cell-write/v1",
+              "revision": "fixture-world-source-rev-7"
+            }
+          },
+          "compilationConfig": {
+            "profileVersion": "compilation-config/v3",
+            "writeBackend": {
+              "profileId": "fixture-world-source-cell-write/v1",
+              "revision": "fixture-world-source-rev-7"
+            },
+            "overlapRule": "last-writer-wins",
+            "effectOrder": "numeric-x-y-z",
+            "compressionRule": "exact-final-effects-only"
+          },
+          "writeMethods": [
+            "PER_CELL",
+            "REGION"
+          ],
+          "avatarEnvelope": {
+            "availability": "KNOWN",
+            "basis": "WORLD_SOURCE_DECLARATION",
+            "size": {
+              "width": 0.6,
+              "height": 1.77,
+              "depth": 0.6
+            }
+          }
+        },
+        "expect": {
+          "profileVersion": "compilation-config/v3",
+          "writeBackend": {
+            "profileId": "fixture-world-source-cell-write/v1",
+            "revision": "fixture-world-source-rev-7"
+          },
+          "overlapRule": "last-writer-wins",
+          "effectOrder": "numeric-x-y-z",
+          "compressionRule": "exact-final-effects-only"
+        }
+      },
+      {
+        "title": "unknown backend: named refusal, no configuration",
+        "check": "requireWriteProfileConfig",
+        "value": {
+          "profileVersion": "write-profile/v1",
+          "connection": {
+            "worldRef": "fixture-world",
+            "connectionRef": "local-connection",
+            "connectionIncarnationRef": "socket-open-1"
+          },
+          "catalogueDigest": "8429d43abbf2e574c8db6ce4045583924f9973ab615c86da0c876191ce745574",
+          "writeBackend": {
+            "availability": "UNAVAILABLE",
+            "reason": "NOT_DECLARED_BY_PAYLOAD"
+          },
+          "compilationConfig": null,
+          "writeMethods": [],
+          "avatarEnvelope": {
+            "availability": "UNAVAILABLE",
+            "reason": "NO_PUBLIC_SOURCE"
+          }
+        },
+        "expect": {
+          "code": "CAPABILITY_UNAVAILABLE",
+          "reason": "REQUIRED_FACT_UNKNOWN"
+        }
+      },
+      {
+        "title": "declared body envelope from the write profile",
+        "check": "requireDeclaredAvatarEnvelope",
+        "value": {
+          "profileVersion": "write-profile/v1",
+          "connection": {
+            "worldRef": "fixture-world",
+            "connectionRef": "local-connection",
+            "connectionIncarnationRef": "socket-open-1"
+          },
+          "catalogueDigest": "8429d43abbf2e574c8db6ce4045583924f9973ab615c86da0c876191ce745574",
+          "writeBackend": {
+            "availability": "KNOWN",
+            "basis": "LOADED_PAYLOAD_DECLARATION",
+            "writeBackend": {
+              "profileId": "fixture-world-source-cell-write/v1",
+              "revision": "fixture-world-source-rev-7"
+            }
+          },
+          "compilationConfig": {
+            "profileVersion": "compilation-config/v3",
+            "writeBackend": {
+              "profileId": "fixture-world-source-cell-write/v1",
+              "revision": "fixture-world-source-rev-7"
+            },
+            "overlapRule": "last-writer-wins",
+            "effectOrder": "numeric-x-y-z",
+            "compressionRule": "exact-final-effects-only"
+          },
+          "writeMethods": [
+            "PER_CELL",
+            "REGION"
+          ],
+          "avatarEnvelope": {
+            "availability": "KNOWN",
+            "basis": "WORLD_SOURCE_DECLARATION",
+            "size": {
+              "width": 0.6,
+              "height": 1.77,
+              "depth": 0.6
+            }
+          }
+        },
+        "expect": {
+          "width": 0.6,
+          "height": 1.77,
+          "depth": 0.6
+        }
+      },
+      {
+        "title": "declared body envelope from the capabilities",
+        "check": "requireDeclaredAvatarEnvelope",
+        "value": {
+          "profileVersion": "world-source-capabilities/v1",
+          "owner": "world-source",
+          "connection": {
+            "worldRef": "fixture-world",
+            "connectionRef": "local-connection",
+            "connectionIncarnationRef": "socket-open-1"
+          },
+          "capabilityRevision": "fixture-capability-1",
+          "catalogueDigest": "8429d43abbf2e574c8db6ce4045583924f9973ab615c86da0c876191ce745574",
+          "worldGeometry": {
+            "profileVersion": "world-geometry/v1",
+            "geometryProfiles": [
+              "voxel-grid/v1"
+            ],
+            "partition": {
+              "edge": [
+                16,
+                16,
+                16
+              ]
+            },
+            "postWriteLighting": "REQUIRED"
+          },
+          "engineBounds": {
+            "min": [
+              -30912,
+              -30912,
+              -30912
+            ],
+            "max": [
+              30927,
+              30927,
+              30927
+            ]
+          },
+          "stateProfile": {
+            "profileVersion": "state-profile/v3",
+            "derivedFields": [
+              "light"
+            ],
+            "preservedFields": [],
+            "clearedFields": [
+              "inventory",
+              "metadata",
+              "timer"
+            ]
+          },
+          "writeBackend": {
+            "availability": "KNOWN",
+            "basis": "LOADED_PAYLOAD_DECLARATION",
+            "writeBackend": {
+              "profileId": "fixture-world-source-cell-write/v1",
+              "revision": "fixture-world-source-rev-7"
+            }
+          },
+          "compilationConfig": {
+            "profileVersion": "compilation-config/v3",
+            "writeBackend": {
+              "profileId": "fixture-world-source-cell-write/v1",
+              "revision": "fixture-world-source-rev-7"
+            },
+            "overlapRule": "last-writer-wins",
+            "effectOrder": "numeric-x-y-z",
+            "compressionRule": "exact-final-effects-only"
+          },
+          "writeMethods": [
+            "PER_CELL",
+            "REGION"
+          ],
+          "writePath": {
+            "profileVersion": "write-path-conclusions/v1",
+            "catalogueDigest": "8429d43abbf2e574c8db6ce4045583924f9973ab615c86da0c876191ce745574",
+            "path": {
+              "hasSideEffects": false,
+              "hasPersistentState": false
+            },
+            "materials": {
+              "air": {
+                "hasSideEffects": false,
+                "hasPersistentState": false
+              },
+              "fixture:stone": {
+                "hasSideEffects": false,
+                "hasPersistentState": false
+              }
+            }
+          },
+          "engineGuards": {
+            "profileVersion": "engine-guards/v1",
+            "coverage": [
+              {
+                "guard": "BODY_CLEARANCE",
+                "stages": [
+                  "INSPECT_REGION",
+                  "PREPARE_RECOVERABLE",
+                  "APPLY_COMPILED",
+                  "RESTORE"
+                ],
+                "protectionPrincipal": null
+              },
+              {
+                "guard": "CELL_PROTECTION",
+                "stages": [
+                  "PREPARE_RECOVERABLE",
+                  "APPLY_COMPILED"
+                ],
+                "protectionPrincipal": "ANONYMOUS"
+              },
+              {
+                "guard": "PLAYER_ENCLOSURE",
+                "stages": [
+                  "APPLY_COMPILED"
+                ],
+                "protectionPrincipal": null
+              }
+            ]
+          },
+          "avatarEnvelope": {
+            "availability": "KNOWN",
+            "basis": "WORLD_SOURCE_DECLARATION",
+            "size": {
+              "width": 0.6,
+              "height": 1.77,
+              "depth": 0.6
+            }
+          }
+        },
+        "expect": {
+          "width": 0.6,
+          "height": 1.77,
+          "depth": 0.6
+        }
+      },
+      {
+        "title": "no declared body envelope: named refusal, no size",
+        "check": "requireDeclaredAvatarEnvelope",
+        "value": {
+          "profileVersion": "write-profile/v1",
+          "connection": {
+            "worldRef": "fixture-world",
+            "connectionRef": "local-connection",
+            "connectionIncarnationRef": "socket-open-1"
+          },
+          "catalogueDigest": "8429d43abbf2e574c8db6ce4045583924f9973ab615c86da0c876191ce745574",
+          "writeBackend": {
+            "availability": "UNAVAILABLE",
+            "reason": "NOT_DECLARED_BY_PAYLOAD"
+          },
+          "compilationConfig": null,
+          "writeMethods": [],
+          "avatarEnvelope": {
+            "availability": "UNAVAILABLE",
+            "reason": "NO_PUBLIC_SOURCE"
+          }
+        },
+        "expect": {
+          "code": "CAPABILITY_UNAVAILABLE",
+          "reason": "REQUIRED_FACT_UNKNOWN"
+        }
+      }
+    ],
+    "inspection": [
+      {
+        "title": "answer about another session",
+        "request": {
+          "contractVersion": "world-inspection/v1",
+          "requestId": "read-inspection-1",
+          "sessionRef": "fixture-session",
+          "worldRef": "fixture-world"
+        },
+        "response": {
+          "contractVersion": "world-inspection/v1",
+          "requestId": "read-inspection-1",
+          "result": {
+            "sessionRef": "fixture-other-session",
+            "worldRef": "fixture-world",
+            "localContext": {
+              "connectionRef": "local-connection",
+              "connectionIncarnationRef": "socket-open-1",
+              "worldRef": "fixture-world",
+              "selectionRevision": "selection-1"
+            },
+            "orderedSelectedObjectRefs": [
+              "object-2",
+              "object-1"
+            ]
+          },
+          "error": null
+        },
+        "expect": {
+          "code": "TRANSACTION_CONFLICT",
+          "reason": "PAYLOAD_CHANGED"
+        }
+      },
+      {
+        "title": "answer about another world",
+        "request": {
+          "contractVersion": "world-inspection/v1",
+          "requestId": "read-inspection-1",
+          "sessionRef": "fixture-session",
+          "worldRef": "fixture-world"
+        },
+        "response": {
+          "contractVersion": "world-inspection/v1",
+          "requestId": "read-inspection-1",
+          "result": {
+            "sessionRef": "fixture-session",
+            "worldRef": "fixture-other-world",
+            "localContext": {
+              "connectionRef": "local-connection",
+              "connectionIncarnationRef": "socket-open-1",
+              "worldRef": "fixture-other-world",
+              "selectionRevision": "selection-1"
+            },
+            "orderedSelectedObjectRefs": [
+              "object-2",
+              "object-1"
+            ]
+          },
+          "error": null
+        },
+        "expect": {
+          "code": "CURRENT_WORLD_MISMATCH",
+          "reason": "REVISION_CHANGED"
+        }
+      }
+    ]
+  }
+}

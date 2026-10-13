@@ -1,4 +1,4 @@
-import { requestWorldSelectors, targetWorldRef } from 'hanaworlds-contracts';
+import { requestWorldSelectors, targetWorldRef } from './protocol/local/index.mjs';
 
 // Contracts 2.7.0 Error.worldRef: the public codes by which Canvas fails closed because the
 // world an admitted operation needs — or the store, Adapter, port or capability that reaches

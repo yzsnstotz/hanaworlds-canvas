@@ -1,4 +1,4 @@
-import { comparePosition, expandRegionBlock, requireGeometryProfile } from 'hanaworlds-contracts';
+import { comparePosition, expandRegionBlock, requireGeometryProfile } from './protocol/local/index.mjs';
 
 export const VOXEL_GRID = 'voxel-grid/v1';
 /** Only this module interprets a footprint as integer cells. Never infer a profile. */

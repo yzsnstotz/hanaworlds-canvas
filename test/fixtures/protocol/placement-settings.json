@@ -1,0 +1,252 @@
+{
+  "evidence": "PUBLIC FIXTURE, no real world or UI acceptance",
+  "state": {
+    "sessionRef": "fixture-session",
+    "worldRef": "fixture-world",
+    "localContext": {
+      "connectionRef": "fixture-connection",
+      "connectionIncarnationRef": "fixture-open-1",
+      "worldRef": "fixture-world",
+      "selectionRevision": "fixture-selection-1"
+    },
+    "placementSettings": {
+      "frontGapCells": 0,
+      "forwardSearchCells": 3,
+      "lateralSearchCells": 1,
+      "verticalSearchCells": 0,
+      "settingsRevision": "fixture-settings-7"
+    }
+  },
+  "exchanges": [
+    {
+      "title": "current values differ from defaults",
+      "request": {
+        "contractVersion": "canvas/v7",
+        "sessionRef": "fixture-session",
+        "requestId": "fixture-read",
+        "worldRef": "fixture-world",
+        "localContext": {
+          "connectionRef": "fixture-connection",
+          "connectionIncarnationRef": "fixture-open-1",
+          "worldRef": "fixture-world",
+          "selectionRevision": "fixture-selection-1"
+        }
+      },
+      "response": {
+        "contractVersion": "canvas/v7",
+        "requestId": "fixture-read",
+        "result": {
+          "sessionRef": "fixture-session",
+          "worldRef": "fixture-world",
+          "localContext": {
+            "connectionRef": "fixture-connection",
+            "connectionIncarnationRef": "fixture-open-1",
+            "worldRef": "fixture-world",
+            "selectionRevision": "fixture-selection-1"
+          },
+          "placementSettings": {
+            "frontGapCells": 0,
+            "forwardSearchCells": 3,
+            "lateralSearchCells": 1,
+            "verticalSearchCells": 0,
+            "settingsRevision": "fixture-settings-7"
+          }
+        },
+        "error": null
+      }
+    },
+    {
+      "title": "no world",
+      "request": {
+        "contractVersion": "canvas/v7",
+        "sessionRef": "fixture-session",
+        "requestId": "fixture-no-world",
+        "worldRef": "fixture-world",
+        "localContext": null
+      },
+      "response": {
+        "contractVersion": "canvas/v7",
+        "requestId": "fixture-no-world",
+        "result": null,
+        "error": {
+          "code": "WORLD_NOT_BOUND",
+          "phase": "validate",
+          "reason": "SCOPE_DENIED",
+          "retryability": "AFTER_NEW_FACTS",
+          "mutationState": "NONE",
+          "transactionRef": null,
+          "causeCode": null
+        }
+      }
+    },
+    {
+      "title": "unknown session",
+      "request": {
+        "contractVersion": "canvas/v7",
+        "sessionRef": "unknown",
+        "requestId": "fixture-unknown-session",
+        "worldRef": "fixture-world",
+        "localContext": null
+      },
+      "response": {
+        "contractVersion": "canvas/v7",
+        "requestId": "fixture-unknown-session",
+        "result": null,
+        "error": {
+          "code": "SESSION_NOT_FOUND",
+          "phase": "validate",
+          "reason": "SCOPE_DENIED",
+          "retryability": "AFTER_NEW_FACTS",
+          "mutationState": "NONE",
+          "transactionRef": null,
+          "causeCode": null
+        }
+      }
+    },
+    {
+      "title": "stale context",
+      "request": {
+        "contractVersion": "canvas/v7",
+        "sessionRef": "fixture-session",
+        "requestId": "fixture-stale-context",
+        "worldRef": "fixture-world",
+        "localContext": {
+          "connectionRef": "fixture-connection",
+          "connectionIncarnationRef": "fixture-open-1",
+          "worldRef": "fixture-world",
+          "selectionRevision": "old"
+        }
+      },
+      "response": {
+        "contractVersion": "canvas/v7",
+        "requestId": "fixture-stale-context",
+        "result": null,
+        "error": {
+          "code": "CURRENT_WORLD_MISMATCH",
+          "phase": "validate",
+          "reason": "SCOPE_DENIED",
+          "retryability": "AFTER_NEW_FACTS",
+          "mutationState": "NONE",
+          "transactionRef": null,
+          "causeCode": null
+        }
+      }
+    },
+    {
+      "title": "cross world",
+      "request": {
+        "contractVersion": "canvas/v7",
+        "sessionRef": "fixture-session",
+        "requestId": "fixture-cross-world",
+        "worldRef": "other-world",
+        "localContext": {
+          "connectionRef": "fixture-connection",
+          "connectionIncarnationRef": "fixture-open-1",
+          "worldRef": "other-world",
+          "selectionRevision": "fixture-selection-1"
+        }
+      },
+      "response": {
+        "contractVersion": "canvas/v7",
+        "requestId": "fixture-cross-world",
+        "result": null,
+        "error": {
+          "code": "CURRENT_WORLD_MISMATCH",
+          "phase": "validate",
+          "reason": "SCOPE_DENIED",
+          "retryability": "AFTER_NEW_FACTS",
+          "mutationState": "NONE",
+          "transactionRef": null,
+          "causeCode": null
+        }
+      }
+    },
+    {
+      "title": "cross session",
+      "request": {
+        "contractVersion": "canvas/v7",
+        "sessionRef": "another-session",
+        "requestId": "fixture-cross-session",
+        "worldRef": "fixture-world",
+        "localContext": {
+          "connectionRef": "fixture-connection",
+          "connectionIncarnationRef": "fixture-open-1",
+          "worldRef": "fixture-world",
+          "selectionRevision": "fixture-selection-1"
+        }
+      },
+      "response": {
+        "contractVersion": "canvas/v7",
+        "requestId": "fixture-cross-session",
+        "result": null,
+        "error": {
+          "code": "CURRENT_WORLD_MISMATCH",
+          "phase": "validate",
+          "reason": "SCOPE_DENIED",
+          "retryability": "AFTER_NEW_FACTS",
+          "mutationState": "NONE",
+          "transactionRef": null,
+          "causeCode": null
+        }
+      }
+    },
+    {
+      "title": "read failure",
+      "request": {
+        "contractVersion": "canvas/v7",
+        "sessionRef": "fixture-session",
+        "requestId": "fixture-read-failure",
+        "worldRef": "fixture-world",
+        "localContext": {
+          "connectionRef": "fixture-connection",
+          "connectionIncarnationRef": "fixture-open-1",
+          "worldRef": "fixture-world",
+          "selectionRevision": "fixture-selection-1"
+        }
+      },
+      "response": {
+        "contractVersion": "canvas/v7",
+        "requestId": "fixture-read-failure",
+        "result": null,
+        "error": {
+          "code": "READBACK_FAILED",
+          "phase": "readback",
+          "reason": "REQUIRED_FACT_UNKNOWN",
+          "retryability": "AFTER_NEW_FACTS",
+          "mutationState": "NONE",
+          "transactionRef": null,
+          "causeCode": null
+        }
+      }
+    },
+    {
+      "title": "undeclared settings",
+      "request": {
+        "contractVersion": "canvas/v7",
+        "sessionRef": "fixture-session",
+        "requestId": "fixture-undeclared-settings",
+        "worldRef": "fixture-world",
+        "localContext": {
+          "connectionRef": "fixture-connection",
+          "connectionIncarnationRef": "fixture-open-1",
+          "worldRef": "fixture-world",
+          "selectionRevision": "fixture-selection-1"
+        }
+      },
+      "response": {
+        "contractVersion": "canvas/v7",
+        "requestId": "fixture-undeclared-settings",
+        "result": null,
+        "error": {
+          "code": "CAPABILITY_UNAVAILABLE",
+          "phase": "validate",
+          "reason": "POLICY_UNAVAILABLE",
+          "retryability": "AFTER_NEW_FACTS",
+          "mutationState": "NONE",
+          "transactionRef": null,
+          "causeCode": null
+        }
+      }
+    }
+  ]
+}

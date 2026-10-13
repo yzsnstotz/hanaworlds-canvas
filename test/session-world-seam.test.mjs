@@ -4,7 +4,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import * as contracts from 'hanaworlds-contracts';
+import * as contracts from '../src/protocol/local/index.mjs';
 import { CanvasV5, CanvasStore } from '../src/index.mjs';
 import { g3CellHandshake } from './support/g3-adapter-handshake.mjs';
 import { fixtureSessions } from '../scripts/fixture-sessions.mjs';
@@ -19,7 +19,7 @@ import { guardSlot } from '../scripts/fixture-engine-guards.mjs';
  */
 assert.match(contracts.version, /^2\./u);
 assert.equal(contracts.contractProtocols.find(row => row.protocol === 'canvas').major, 7);
-const fixture = createRequire(import.meta.url)('hanaworlds-contracts/fixtures/session-world');
+const fixture = createRequire(import.meta.url)('./fixtures/protocol/session-world.json');
 const evidence = process.env.CANVAS_SEAM_EVIDENCE ?? null;
 const stateProfile = { profileVersion: 'state-profile/v3', derivedFields: ['light'], preservedFields: ['inventory', 'metadata', 'timer'], clearedFields: [] };
 
@@ -384,7 +384,7 @@ test('C2: connection state of a BOUND selection is derived from the Adapter inve
  */
 test('apply() consumes Workshop’s public hanaworldsWorkshopV3; other keys and a disposed provider fail closed',
   async t => {
-    const { Context } = await import('cordis');
+    const { Context } = await import('@deepseek-ai/cordis');
     const canvasModule = await import('../src/index.mjs');
     const read = async canvas => canvas.call('ReadWorldSelectionContext', { contractVersion: 'canvas/v7',
       sessionRef: 'fixture-session-S1', requestId: `r-${Math.random()}`, worldRef: 'fixture-world-A' });

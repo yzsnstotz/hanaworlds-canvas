@@ -2,7 +2,8 @@
 
 Canvas `0.16.0` manages local world selection, object footprints, recoverable
 transactions and durable Undo/Redo history. It provides `canvas/v7` and
-`canvas-region/v3`, using the formal Contracts `v2.12.0` git tag.
+`canvas-region/v3`, with Canvas-owned structures and schemas following the formal
+C-canvas, C-world-adapter and C-world-facts documents.
 
 Host compatibility is pinned to the official DSH `0.2.1-alpha.2` Typert protocol
 and Cordis `4.0.5-alpha.1`; no other host version is declared supported.
@@ -83,7 +84,7 @@ is a validated illustrative event (its IDs and digest are explicit fixture data)
 in `test/support/undo-fixture-world.mjs` and `scripts/fixture-sessions.mjs` to exercise
 analysis, refusal, notification and reopen through the public Canvas operations.
 
-World selection uses the published Contracts v2.2.1 SDK (`canvas/v7` wire).
+World selection follows the documented `canvas/v7` wire using owned validators.
 `ReadWorldSelectionContext` always returns that Session's current selection; its
 `worldRef` argument only scopes the connection inventory. Two Sessions can share
 one world and switch independently.
@@ -111,13 +112,12 @@ stand-ins and receipt examples for this seam.
 
 ### Independent production artifact
 
-`hanaworlds-contracts` is exact **development supply** from public git tag `v2.12.0`
-(commit `33c34372fd5092a83b6f3cc81c086470fa76d794`). `npm run build` compiles
-all Host, display, and public NativeFacts-consumer entries into `lib/`, including
-necessary SDK validators/schema. The production package has no Contracts runtime
-package dependency. Installed package-version readback stays dynamic. Cordis,
-Typert, Schemastery, canonicalize, ICU and Host Zod remain normal externals;
-Client React remains the Host's shared external. No sibling/Host implementation is bundled.
+Canvas owns project document contract structures in `src/protocol` and `types/protocol`,
+with auditable hashes in `scripts/protocol-source.json`. Normal build/prepack embeds
+validators/schema into all Host, display and public consumer entries. Development, fixture,
+type and production graphs require no external contract package. Historical MIT attribution
+remains. Installed Canvas version readback stays dynamic. Official Cordis, Typert,
+Schemastery, canonicalize, ICU, Host Zod and Client React keep their existing external roles.
 
 `npm run test:package-boundary` runs a normal `npm pack` lifecycle, inspects the
 actual tgz manifest and every runtime artifact (static/dynamic imports, require,
@@ -136,13 +136,29 @@ By default, evidence and fresh production projects live in
 `~/.cache/hanaworlds-canvas/package-boundary`, outside the development source tree
 so Node cannot find its development dependencies through parent directories.
 `CANVAS_BOUNDARY_EVIDENCE` may select another location outside that tree. Child npm
-pack uses the writable global `~/.cache/npm` cache independently of inherited npm
-cache settings; pnpm security policies remain at their defaults.
+pack preserves the explicitly selected `npm_config_cache`/`NPM_CONFIG_CACHE`, or
+uses an isolated cache within its evidence directory; pnpm security policies remain at their defaults.
 
-TypeScript declarations intentionally refer to Contracts **development types**;
-consumers compiling those declarations install the same public tag in their own
-devDependencies. Cross-provider code validates `error.publicError` as the published
-Error envelope rather than checking a private exception constructor. Upstream
-Contracts release semantics are unchanged. These checks prove component production
-install/runtime with fixture peers; they do not establish real-world guard coverage,
-Session connection stability, official subscriptions, UI or owner acceptance.
+Public declarations resolve to Canvas-owned local types. Cross-provider errors are
+consumed by their documented JSON fields, without shared private exception identity.
+The neutral scoped read is `hanaworldsWorldFacts.readScopedState(connectionRef, positions)`
+through the active Canvas provider's official Cordis context. It preserves input order,
+world/profile and opaque digests and performs no writes. Missing, malformed, inactive,
+replaced or unauthorized sources refuse by name; there is no alternate source.
+
+The client registers matching official `main` and `sidebar.panellist` keys. Its apply entry
+accepts an optional nonempty `panelId` for a renamed registration. Consumers discover the
+live target and select it through `layout.selectPanel`; absent/stale targets are rejected.
+
+These gates prove component production install/runtime with fixture peers. Stable guards,
+synchronous races, real world product Host/UI and owner acceptance remain separate gates.
+
+`await canvas.readToolSummary({sessionRef})` returns `canvas-tool-summary/v1` for
+that Session's current selected world. It includes the complete sourced tools,
+unit, Frame and native partition from the registered world's `readCanvasFacts`
+port, plus Canvas's current objects/history display. Optional complete
+`expectedConnection` and `expectedProvider` compare prior public facts. The read
+checks the actual selection and source identities before and after awaiting,
+keeps physical-unit nulls and opaque provenance unchanged, and performs no writes.
+Missing facts or stale providers are named refusals. These component fixtures are
+not native world-source evidence or real UI/owner acceptance.

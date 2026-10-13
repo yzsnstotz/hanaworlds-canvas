@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { canonicalJSON } from 'hanaworlds-contracts';
+import { canonicalJSON } from '../src/protocol/local/index.mjs';
 import { CanvasV5, CanvasStore, apply } from '../src/index.mjs';
 import { fixtureSessions } from './fixture-sessions.mjs';
 

@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { contractHandshake, digestValue, publicError, schemaBundle, validateType }
-  from 'hanaworlds-contracts';
+  from '../src/protocol/local/index.mjs';
 const { CanvasV5, CanvasStore, CanvasConfigSupply, assembleProfile, STORE_ROOT,
   apply: applyCanvas } =
   await import(process.env.CANVAS_ENTRY ?? new URL('../src/index.mjs', import.meta.url).href);
@@ -16,7 +16,7 @@ import { guardSlot } from '../scripts/fixture-engine-guards.mjs';
 // Session port). Canvas's assembly, provenance, revision and invalidation are what is under test.
 const stateProfile = { profileVersion: 'state-profile/v3', derivedFields: ['light'], preservedFields: ['inventory', 'metadata', 'timer'], clearedFields: [] };
 const factsFixture = JSON.parse(await readFile(new URL(import.meta.resolve(
-  'hanaworlds-contracts/fixtures/world-source-facts'))));
+  './fixtures/protocol/world-source-facts.json'))));
 const exchange = (operation, test) => factsFixture.exchanges.find(e =>
   e.operation === operation && e.response.result !== null && test(e.response.result)).response.result;
 const catalogueFacts = exchange('ReadCatalogue', () => true);

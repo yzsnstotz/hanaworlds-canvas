@@ -1,9 +1,9 @@
 import { readFile } from 'node:fs/promises';
-import { validateType, canonicalJSON } from 'hanaworlds-contracts';
+import { validateType, canonicalJSON } from '../src/protocol/local/index.mjs';
 const contracts = Object.freeze({ validateType, canonicalJSON });
 
-/** Validate the existing Canvas-owned injection return, not a new wire/type in
- * Contracts. Extra wrapper fields are not consumed; the three fields are required.
+/** Validate the documented C-world-facts@2 Host return with Canvas-owned structures.
+ * Extra wrapper fields are not consumed; the three fields are required.
  * Subtype/order/uniqueness/KNOWN-digest rules come from public validateType.
  * Canvas subsequently matches world/profile/positions and requires every cell KNOWN.
  */

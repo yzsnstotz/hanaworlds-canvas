@@ -6,6 +6,7 @@ import { dirname, join } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import vm from 'node:vm';
+import { officialUi } from './support/official-ui.mjs';
 import { Context, Service } from '@deepseek-ai/cordis';
 import { TypertRegistry } from '@deepseek-ai/dsh-typert-registry';
 import { TypertGatewayService } from '@deepseek-ai/dsh-api-gateway';
@@ -33,7 +34,7 @@ function loadClientBundle(source, sharedReact) {
 }
 
 async function compose(seed, { fixtureWorld = false, mountFailure, panelFailure,
-  panelFailureSlot = 'main', cleanupFailure, sharedReact } = {}) {
+  panelFailureSlot = 'main', cleanupFailure, sharedReact, officialNavigation = false, panelId } = {}) {
   const profile = await mkdtemp(join(tmpdir(), 'canvas-client-remote-'));
   const store = join(profile, 'data', 'hanaworlds-canvas-v2');
   if (seed) await seed(store);
@@ -48,7 +49,7 @@ async function compose(seed, { fixtureWorld = false, mountFailure, panelFailure,
     world = await openUndoFixtureWorld(undoWorldFile(store));
     host.provide('hanaworldsWorldAdapterV6', world.adapter);
     host.provide('hanaworldsWorldAdapterRegionV1', world.regionAdapter);
-    host.provide('hanaworldsLuantiNativeFacts', world.nativeFacts);
+    host.provide('hanaworldsWorldFacts', world.nativeFacts);
   }
   const { default: canvasPlugin } = await import(process.env.CANVAS_ENTRY ?? new URL('../src/index.mjs', import.meta.url).href);
   await host.plugin(canvasPlugin);
@@ -93,6 +94,26 @@ async function compose(seed, { fixtureWorld = false, mountFailure, panelFailure,
   let failPanel = !!panelFailure;
   // FIXTURE declared slots, with the public renderer's synchronous setup and
   // caller-fiber effect ownership; registration cleanup is real Cordis.
+  let slots, layout, sidebar;
+  if (officialNavigation) {
+    const renderer = await officialUi('dsh-client-ui-renderer');
+    new renderer.SlotRegistry(client);
+    slots = client.get('slots');
+    slots.register({ name: 'root', children: { main: { kind:'keyed', scope:'root' },
+      sidebar: { kind:'single', scope:'root' }, 'shell.leading': { kind:'single', scope:'root' } } }, () => null);
+    let selected = null;
+    const { LayoutController } = await officialUi('dsh-client-ui-layout');
+    layout = new LayoutController({ selectPanel(id) { selected = id; },
+      toggleSidebar() {}, openRightbar() {}, closeRightbar() {} },
+      id => slots.entries('main').some(e => e.options.key === id),
+      { getSnapshot: () => ({ activePanelId:selected }), subscribe: () => () => {} });
+    client.provide('layout', layout);
+    // Non-navigation shell services are explicit FIXTURE inputs.
+    client.provide('locale', { register: () => () => {}, subscribe: () => () => {} });
+    client.provide('uiWorkspace', { startSession() {} });
+    client.provide('shortcuts', { catalog: { getSnapshot: () => [], subscribe: () => () => {} } });
+    sidebar = await client.plugin(await officialUi('dsh-client-ui-sidebar'));
+  } else {
   new class extends Service {
     constructor() { super(client, 'slots'); }
     inject(_name, register) {
@@ -109,13 +130,15 @@ async function compose(seed, { fixtureWorld = false, mountFailure, panelFailure,
     }
   }();
   client.provide('layout', {});
+  }
   client.provide('sessions', {});
   const bundle = loadClientBundle(await readFile(artifact, 'utf8'), sharedReact);
-  const fiber = client.plugin({ name: bundle.name, inject: bundle.inject, apply: bundle.apply });
+  const fiber = client.plugin({ name: bundle.name, inject: bundle.inject,
+    apply: c => bundle.apply(c, panelId !== undefined ? { panelId } : undefined) });
   const close = async () => { await fiber.dispose(); await client.fiber.dispose(); await host.fiber.dispose();
     await rm(profile, { recursive: true, force: true }); };
   try { await fiber; } catch (error) { await close(); throw error; }
-  return { host, gateway, wire, registered, close, world, canvas, client, fiber };
+  return { host, gateway, wire, registered, close, world, canvas, client, fiber, slots, layout, sidebar };
 }
 
 test('partial sidebar setup and a rejecting remote cleanup still show the original Canvas fault', async () => {
@@ -374,7 +397,7 @@ test('shipped client redoes the clicked origin through the public gateway and re
 test('formal Canvas panel uses scoped region undo and reports region Redo unavailable (FIXTURE source)',async()=>{
   const {createUndoExample}=await import('./support/undo-example.mjs');
   const {undoSessionRef,undoWorldRef}=await import('./support/undo-fixture-world.mjs');
-  const {encodeRegionBlock,digestValue}=await import('hanaworlds-contracts');
+  const {encodeRegionBlock,digestValue}=await import('../src/protocol/local/index.mjs');
   const {registered,close,world,canvas,host}=await compose(d=>createUndoExample(d),{fixtureWorld:true});
   try {
     const region=host.get('hanaworldsCanvasRegionV1');
@@ -394,4 +417,51 @@ test('formal Canvas panel uses scoped region undo and reports region Redo unavai
     assert.equal(canvas.store.snapshot.history[object.objectRef].length,2);
     assert.equal(world.calls.filter(c=>c.port==='world-adapter-region/v3'&&c.operation==='WriteRegion').length,2);
   }finally{await close();}
+});
+
+for (const panelId of [undefined, 'legally-renamed-canvas-panel'])
+test(`official main/panellist registry selects the actual Canvas target ${panelId ?? 'default'}`, async () => {
+  const { createUndoExample } = await import('./support/undo-example.mjs');
+  const { undoSessionRef } = await import('./support/undo-fixture-world.mjs');
+  const env = await compose(directory => createUndoExample(directory), { officialNavigation:true, panelId });
+  try {
+    const row = env.slots.entriesOfSlot('sidebar.panellist').find(e => e.options.label() === '对象与历史（Canvas）');
+    const main = env.slots.entries('main').find(e => e.options.key === row.options.id);
+    assert.ok(main);
+    if (panelId) assert.equal(row.options.id, panelId);
+    env.layout.selectPanel(row.options.id);
+    assert.equal(env.layout.panelInfo.getSnapshot().activePanelId, row.options.id);
+    const entry = main.component({ useSessions: select => select({ byId: { [undoSessionRef]: { id:undoSessionRef, retainedBy:{mainView:1} } } }) });
+    const read = await entry.props.read(undoSessionRef);
+    assert.equal(read.state, 'READY');
+    assert.equal(read.objects.length, 2);
+    assert.equal(read.history.length, 2);
+    for (const bad of ['missing-target', {}, 17]) {
+      assert.throws(() => env.layout.selectPanel(bad), /not registered/);
+      assert.equal(env.layout.panelInfo.getSnapshot().activePanelId, row.options.id);
+    }
+    const navigation = env.layout.beginNavigation();
+    env.layout.selectPanel(row.options.id);
+    assert.equal(navigation.aborted, true);
+    await env.fiber.dispose();
+    assert.equal(env.slots.entries('main').length, 0);
+    assert.equal(env.slots.entriesOfSlot('sidebar.panellist').length, 0);
+    assert.throws(() => env.layout.selectPanel(row.options.id), /not registered/);
+  } finally { env.layout.dispose(); await env.close(); }
+});
+
+for (const panelId of ['', 17])
+test(`invalid Canvas registration key ${JSON.stringify(panelId)} presents a named failure without remote access`, async () => {
+  const React = (await import('react')).default;
+  const { renderToStaticMarkup } = await import('react-dom/server');
+  const env = await compose(null, { officialNavigation:true, panelId, sharedReact:React });
+  try {
+    const row = env.slots.entriesOfSlot('sidebar.panellist').find(e => e.options.label() === '对象与历史（Canvas）');
+    const main = env.slots.entries('main').find(e => e.options.key === row.options.id);
+    env.layout.selectPanel(row.options.id);
+    const html = renderToStaticMarkup(React.createElement(main.component));
+    assert.match(html, /INVALID_CANVAS_PANEL_ID/);
+    assert.equal(env.wire.length, 0);
+    assert.equal(env.client.get('remote.hanaworldsCanvasDisplay'), undefined);
+  } finally { env.layout.dispose(); await env.close(); }
 });

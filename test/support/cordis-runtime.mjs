@@ -1,4 +1,4 @@
-import { Context } from 'cordis';
+import { Context } from '@deepseek-ai/cordis';
 import { join } from 'node:path';
 import { fixtureSessions } from '../../scripts/fixture-sessions.mjs';
 
@@ -12,7 +12,7 @@ export async function openRuntime(profile, { adapter, nativeFacts,
   const ctx = new Context();
   ctx.provide('dshHomePath', (...parts) => join(profile, ...parts));
   if (adapter) ctx.provide('hanaworldsWorldAdapterV6', adapter);
-  if (nativeFacts) ctx.provide('hanaworldsLuantiNativeFacts', nativeFacts);
+  if (nativeFacts) ctx.provide('hanaworldsWorldFacts', nativeFacts);
   if (sessions) ctx.provide('hanaworldsWorkshopV3', sessions);
   const fiber = ctx.plugin(canvasModule.default);
   await fiber;

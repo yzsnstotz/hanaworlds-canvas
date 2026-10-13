@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { TypertRemoteService, Remote, RemoteError } from '@deepseek-ai/dsh-typert-protocol';
-import { checkProtocolCompatibility, protocolRequirement } from 'hanaworlds-contracts';
+import { checkProtocolCompatibility, protocolRequirement } from './protocol/local/index.mjs';
 import { displayHostContribution } from './display-remote.mjs';
 
 const digest = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');

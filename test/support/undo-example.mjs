@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { digestValue } from 'hanaworlds-contracts';
+import { digestValue } from '../../src/protocol/local/index.mjs';
 import { CanvasV5, CanvasStore } from '../../src/index.mjs';
 import { openUndoFixtureWorld, undoConnection, undoSessionRef, undoWorldRef } from './undo-fixture-world.mjs';
 import { undoWorldFile } from './undo-host.mjs';

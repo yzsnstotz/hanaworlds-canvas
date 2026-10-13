@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { regionCapabilities } from 'hanaworlds-contracts';
+import { regionCapabilities } from '../src/protocol/local/index.mjs';
 import { ADAPTER_REGION_REQUIREMENT, ADAPTER_CELL_REQUIREMENT, CANVAS_REGION_CAPABILITIES,
   REGION_WIRE } from '../src/index.mjs';
 

@@ -1,0 +1,482 @@
+{
+ "profileVersion": "contracts-major-compat/v1",
+ "evidence": "FIXTURE · public conformance cases for the contracts major-compatibility rule (0.5.6; major 1 since 1.0.0; major 2 since 2.0.0). Package version: same package, well-formed semver, equal major passes; minor, patch and prerelease never decide. Structure, wires, capabilities and trust are decided separately and still reject. Both providers and consumers run test/contracts-major-compat.mjs against the installed package.",
+ "major": 2,
+ "contractsVersion": {
+  "accept": [
+   "hanaworlds-contracts@2.0.0-rc.1",
+   "hanaworlds-contracts@2.0.0",
+   "hanaworlds-contracts@2.0.1",
+   "hanaworlds-contracts@2.2.0",
+   "hanaworlds-contracts@2.2.0-rc.1",
+   "hanaworlds-contracts@2.99.12"
+  ],
+  "reject": [
+   {
+    "title": "previous major 0.x (no compatibility, no migration)",
+    "ref": "hanaworlds-contracts@0.5.6"
+   },
+   {
+    "title": "previous major 0.x prerelease",
+    "ref": "hanaworlds-contracts@0.5.5-rc.1"
+   },
+   {
+    "title": "previous major 1.x (no compatibility, no migration)",
+    "ref": "hanaworlds-contracts@1.2.0"
+   },
+   {
+    "title": "next major",
+    "ref": "hanaworlds-contracts@3.0.0"
+   },
+   {
+    "title": "next major prerelease",
+    "ref": "hanaworlds-contracts@3.0.0-rc.1"
+   },
+   {
+    "title": "far major",
+    "ref": "hanaworlds-contracts@4.5.6"
+   },
+   {
+    "title": "another package, same version",
+    "ref": "other-contracts@2.0.0"
+   },
+   {
+    "title": "package name is case-sensitive",
+    "ref": "Hanaworlds-contracts@2.0.0"
+   },
+   {
+    "title": "no package name",
+    "ref": "2.0.0"
+   },
+   {
+    "title": "two-part version",
+    "ref": "hanaworlds-contracts@2.0"
+   },
+   {
+    "title": "leading zero major",
+    "ref": "hanaworlds-contracts@02.0.0"
+   },
+   {
+    "title": "v prefix",
+    "ref": "hanaworlds-contracts@v2.0.0"
+   },
+   {
+    "title": "range is not a version",
+    "ref": "hanaworlds-contracts@^2.0.0"
+   },
+   {
+    "title": "trailing space",
+    "ref": "hanaworlds-contracts@2.0.0 "
+   },
+   {
+    "title": "empty",
+    "ref": ""
+   },
+   {
+    "title": "not a string",
+    "ref": 56
+   },
+   {
+    "title": "null",
+    "ref": null
+   }
+  ],
+  "rejection": {
+   "code": "UNSUPPORTED_VERSION",
+   "phase": "decode",
+   "reason": "VERSION_UNSUPPORTED"
+  }
+ },
+ "contractHandshake": {
+  "base": "the installed package's contractHandshake; each case shallow-merges patch over it",
+  "accept": [
+   {
+    "title": "current",
+    "patch": {},
+    "expect": "HANDSHAKE_VERSION_MATCH"
+   },
+   {
+    "title": "candidate of the same major",
+    "patch": {
+     "contracts": "hanaworlds-contracts@2.0.0-rc.1"
+    },
+    "expect": "HANDSHAKE_VERSION_MATCH"
+   },
+   {
+    "title": "release of the same major",
+    "patch": {
+     "contracts": "hanaworlds-contracts@2.0.0"
+    },
+    "expect": "HANDSHAKE_VERSION_MATCH"
+   },
+   {
+    "title": "newer minor of the same major",
+    "patch": {
+     "contracts": "hanaworlds-contracts@2.3.0"
+    },
+    "expect": "HANDSHAKE_VERSION_MATCH"
+   },
+   {
+    "title": "newer patch of the same major",
+    "patch": {
+     "contracts": "hanaworlds-contracts@2.0.9"
+    },
+    "expect": "HANDSHAKE_VERSION_MATCH"
+   }
+  ],
+  "reject": [
+   {
+    "title": "different major",
+    "patch": {
+     "contracts": "hanaworlds-contracts@3.0.0"
+    },
+    "error": {
+     "code": "UNSUPPORTED_VERSION",
+     "reason": "VERSION_UNSUPPORTED"
+    }
+   },
+   {
+    "title": "previous major 0.x peer (no compatibility)",
+    "patch": {
+     "contracts": "hanaworlds-contracts@0.5.6"
+    },
+    "error": {
+     "code": "UNSUPPORTED_VERSION",
+     "reason": "VERSION_UNSUPPORTED"
+    }
+   },
+   {
+    "title": "another package",
+    "patch": {
+     "contracts": "other-contracts@2.0.0"
+    },
+    "error": {
+     "code": "UNSUPPORTED_VERSION",
+     "reason": "VERSION_UNSUPPORTED"
+    }
+   },
+   {
+    "title": "malformed version",
+    "patch": {
+     "contracts": "hanaworlds-contracts@2.0"
+    },
+    "error": {
+     "code": "UNSUPPORTED_VERSION",
+     "reason": "VERSION_UNSUPPORTED"
+    }
+   },
+   {
+    "title": "same major but a required wire is missing (version never implies an interface)",
+    "patch": {
+     "contracts": "hanaworlds-contracts@2.0.0"
+    },
+    "dropWire": "canvas/v7",
+    "error": {
+     "code": "UNSUPPORTED_VERSION",
+     "reason": "VERSION_UNSUPPORTED"
+    }
+   },
+   {
+    "title": "same major but the required fact profile is missing",
+    "patch": {
+     "contracts": "hanaworlds-contracts@2.0.0",
+     "factProfiles": [
+      "target-facts/v3"
+     ]
+    },
+    "error": {
+     "code": "UNSUPPORTED_VERSION",
+     "reason": "VERSION_UNSUPPORTED"
+    }
+   },
+   {
+    "title": "same major, other compiled operations profile (structure)",
+    "patch": {
+     "compiledOperationsVersion": "operations/v5"
+    },
+    "error": {
+     "code": "SCHEMA_INVALID",
+     "reason": "INVALID_SHAPE"
+    }
+   },
+   {
+    "title": "contracts of the wrong type",
+    "patch": {
+     "contracts": 56
+    },
+    "error": {
+     "code": "SCHEMA_INVALID",
+     "reason": "INVALID_SHAPE"
+    }
+   },
+   {
+    "title": "a handshake cannot carry authority (trust boundary: unknown field)",
+    "patch": {
+     "authorization": "grant"
+    },
+    "error": {
+     "code": "UNKNOWN_REQUIRED_FIELD",
+     "reason": "UNKNOWN_FIELD"
+    }
+   },
+   {
+    "title": "empty wires",
+    "patch": {
+     "wireVersions": []
+    },
+    "error": {
+     "code": "SCHEMA_INVALID",
+     "reason": "INVALID_SHAPE"
+    }
+   }
+  ]
+ },
+ "buildProposalHandshake": {
+  "accept": [
+   {
+    "contracts": "hanaworlds-contracts@2.0.0-rc.1"
+   },
+   {
+    "contracts": "hanaworlds-contracts@2.4.1"
+   }
+  ],
+  "reject": [
+   {
+    "title": "previous major 0.x",
+    "patch": {
+     "contracts": "hanaworlds-contracts@0.5.6"
+    },
+    "error": {
+     "code": "UNSUPPORTED_VERSION",
+     "reason": "VERSION_UNSUPPORTED"
+    }
+   },
+   {
+    "title": "painter/v6 wire missing",
+    "patch": {},
+    "dropWire": "painter/v6",
+    "error": {
+     "code": "UNSUPPORTED_VERSION",
+     "reason": "VERSION_UNSUPPORTED"
+    }
+   }
+  ]
+ },
+ "schema": {
+  "accept": [
+   {
+    "title": "release bundle of the same major",
+    "input": {
+     "$id": "https://hanaworlds.invalid/contracts/2.0.0/schema.json",
+     "definitions": {
+      "ContractHandshake": {},
+      "CompilationConfig": {}
+     }
+    },
+    "requiredTypes": [
+     "ContractHandshake",
+     "CompilationConfig"
+    ],
+    "version": "2.0.0"
+   },
+   {
+    "title": "prerelease profile of the same major",
+    "input": {
+     "version": "2.0.0-rc.1",
+     "definitions": {
+      "ConfigEngineFacts": {}
+     }
+    },
+    "requiredTypes": [
+     "ConfigEngineFacts"
+    ],
+    "version": "2.0.0-rc.1"
+   },
+   {
+    "title": "newer minor bundle, no required types",
+    "input": {
+     "$id": "https://hanaworlds.invalid/contracts/2.9.0/schema.json",
+     "definitions": {}
+    },
+    "requiredTypes": [],
+    "version": "2.9.0"
+   }
+  ],
+  "reject": [
+   {
+    "title": "schema bundle of another major",
+    "input": {
+     "$id": "https://hanaworlds.invalid/contracts/0.5.6/schema.json",
+     "definitions": {
+      "ContractHandshake": {}
+     }
+    },
+    "requiredTypes": [],
+    "error": {
+     "code": "UNSUPPORTED_VERSION",
+     "reason": "VERSION_UNSUPPORTED"
+    }
+   },
+   {
+    "title": "profile of another major",
+    "input": {
+     "version": "3.2.0",
+     "definitions": {}
+    },
+    "requiredTypes": [],
+    "error": {
+     "code": "UNSUPPORTED_VERSION",
+     "reason": "VERSION_UNSUPPORTED"
+    }
+   },
+   {
+    "title": "foreign schema id",
+    "input": {
+     "$id": "https://example.invalid/contracts/2.0.0/schema.json",
+     "definitions": {}
+    },
+    "requiredTypes": [],
+    "error": {
+     "code": "UNSUPPORTED_VERSION",
+     "reason": "VERSION_UNSUPPORTED"
+    }
+   },
+   {
+    "title": "no version at all",
+    "input": {
+     "definitions": {}
+    },
+    "requiredTypes": [],
+    "error": {
+     "code": "UNSUPPORTED_VERSION",
+     "reason": "VERSION_UNSUPPORTED"
+    }
+   },
+   {
+    "title": "same major but a required type is absent (version never implies a type)",
+    "input": {
+     "$id": "https://hanaworlds.invalid/contracts/2.0.0-rc.1/schema.json",
+     "definitions": {
+      "ContractHandshake": {}
+     }
+    },
+    "requiredTypes": [
+     "ConfigEngineFacts"
+    ],
+    "error": {
+     "code": "CAPABILITY_UNAVAILABLE",
+     "reason": "VERSION_UNSUPPORTED"
+    }
+   },
+   {
+    "title": "same major, definitions not an object",
+    "input": {
+     "version": "2.0.0",
+     "definitions": []
+    },
+    "requiredTypes": [],
+    "error": {
+     "code": "SCHEMA_INVALID",
+     "reason": "INVALID_SHAPE"
+    }
+   },
+   {
+    "title": "not an object",
+    "input": "2.0.0",
+    "requiredTypes": [],
+    "error": {
+     "code": "UNSUPPORTED_VERSION",
+     "reason": "VERSION_UNSUPPORTED"
+    }
+   }
+  ]
+ },
+ "protocol": {
+  "requirement": {
+   "wire": "canvas/v7",
+   "capabilities": [
+    "canvas/v7:fixture-capability"
+   ]
+  },
+  "peer": {
+   "profileVersion": "protocol-handshake/v1",
+   "component": "fixture-peer",
+   "protocols": [
+    {
+     "protocol": "canvas",
+     "major": 7,
+     "minor": 1
+    }
+   ],
+   "capabilities": [
+    "canvas/v7:fixture-capability"
+   ],
+   "provenance": {
+    "packageName": "fixture-peer",
+    "packageVersion": "2.0.0-rc.1",
+    "sourceRevision": null,
+    "artifactDigest": null
+   }
+  },
+  "acceptMinors": [
+   0,
+   1,
+   7
+  ],
+  "acceptPackageVersions": [
+   "2.0.0-rc.1",
+   "2.0.0",
+   "2.2.0",
+   "0.5.6"
+  ],
+  "reject": [
+   {
+    "title": "other protocol major",
+    "protocols": [
+     {
+      "protocol": "canvas",
+      "major": 8,
+      "minor": 0
+     }
+    ],
+    "error": {
+     "code": "UNSUPPORTED_VERSION",
+     "reason": "VERSION_UNSUPPORTED"
+    }
+   },
+   {
+    "title": "protocol absent",
+    "protocols": [
+     {
+      "protocol": "session",
+      "major": 4,
+      "minor": 1
+     }
+    ],
+    "error": {
+     "code": "UNSUPPORTED_VERSION",
+     "reason": "VERSION_UNSUPPORTED"
+    }
+   },
+   {
+    "title": "same major, required capability missing",
+    "capabilities": [],
+    "error": {
+     "code": "CAPABILITY_UNAVAILABLE",
+     "reason": "VERSION_UNSUPPORTED"
+    }
+   },
+   {
+    "title": "unknown field cannot widen trust",
+    "extra": {
+     "authorization": "grant"
+    },
+    "error": {
+     "code": "UNKNOWN_REQUIRED_FIELD",
+     "reason": "UNKNOWN_FIELD"
+    }
+   }
+  ],
+  "note": "protocolRequirement(wire, capabilities) defaults minMinor to 0, so any minor of the required major passes; a consumer that explicitly declares minMinor states a structural need and keeps its existing rejection."
+ }
+}

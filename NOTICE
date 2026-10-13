@@ -10,10 +10,12 @@ icu 2.3.1 is Unicode-3.0. Their notices and license texts remain with the
 separately installed npm packages. WorldEdit (AGPL-3.0) and the Luanti Adapter
 are separate origins and are not bundled or relicensed by Canvas.
 
-hanaworlds-contracts 2.12.0 (MIT, HanaWorlds-owned), from
+Historical MIT source attribution for Canvas-owned protocol structures, previously
+embedded from hanaworlds-contracts 2.12.0 (no live package dependency), from
 https://github.com/yzsnstotz/hanaworlds-contracts public tag v2.12.0,
-peeled SHA 33c34372fd5092a83b6f3cc81c086470fa76d794, is development supply only.
-The reproducible esbuild build embeds the SDK functions and schema needed by Canvas
+peeled SHA 33c34372fd5092a83b6f3cc81c086470fa76d794. This is historical
+attribution; development and production use Canvas-owned local source.
+The reproducible esbuild build embeds the validators and schema needed by Canvas
 Host/display/native-facts consumer. No resolvable Contracts package or upstream
 fixture suite is distributed. Its license/NOTICE are in LICENSES/; input and
 artifact SHA256 records are in lib/build-source.json.
@@ -37,3 +39,8 @@ separately installed runtime dependency for the plugin management Config schema.
 acorn 8.15.0 (MIT), https://github.com/acornjs/acorn, parses production artifacts
 in development boundary tests. pnpm 11.28.5 (MIT), https://github.com/pnpm/pnpm,
 performs strict isolated production-install verification; neither is shipped runtime.
+
+Official UI fixture dependencies @deepseek-ai/dsh-client-ui-layout, ui-sidebar,
+ui-renderer, ui-slots and dsh-client-store 0.2.1-alpha.2 (MIT) come from
+deepseek-ai/deepseek-harness. zustand 4.5.7 and immer 10.1.1 (MIT) support
+the official store in these component tests. They are development-only.

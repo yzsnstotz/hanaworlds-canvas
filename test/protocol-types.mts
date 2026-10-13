@@ -1,5 +1,5 @@
 import type { CanvasV5ProtocolSource, CanvasV5, CanvasRegionV1 } from 'hanaworlds-canvas';
-import { checkProtocolCompatibility, protocolRequirement } from 'hanaworlds-contracts';
+import { checkProtocolCompatibility, protocolRequirement } from '../types/protocol/index.js';
 import { Context } from '@deepseek-ai/cordis';
 import type { CanvasSelectionEvent } from 'hanaworlds-canvas';
 declare const publicService: CanvasV5ProtocolSource;
@@ -29,7 +29,7 @@ if (event.event === 'AffectedObjectNotificationRequired') {
   const operation: 'DecideAffectedObjectNotification' = event.operation;
 }
 
-import type {UndoScopedRegionCommitRequest,UndoScopedRegionCommitResponse} from 'hanaworlds-contracts';
+import type {UndoScopedRegionCommitRequest,UndoScopedRegionCommitResponse} from '../types/protocol/index.js';
 declare const scopedUndo:UndoScopedRegionCommitRequest;
 const scopedResponse:Promise<UndoScopedRegionCommitResponse>=region.call('UndoScopedRegionCommit',scopedUndo);
 checkProtocolCompatibility(region.protocolHandshake,[protocolRequirement('canvas-region/v3',['canvas-region/v3:confirmed-scope-undo'],2)]);

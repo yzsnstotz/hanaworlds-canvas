@@ -77,12 +77,12 @@ function registerStyle(ctx) {
     return () => style.remove();
   });
 }
-function registerSlots(ctx, Panel) {
-  ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: PANEL_ID }, Panel));
+function registerSlots(ctx, Panel, panelId = PANEL_ID) {
+  ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: panelId }, Panel));
   ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({ name: 'sidebar.panellist',
-    id: PANEL_ID, order: 45, label: () => '对象与历史（Canvas）' }, CanvasIcon));
+    id: panelId, order: 45, label: () => '对象与历史（Canvas）' }, CanvasIcon));
 }
-function registerFailure(ctx, stage, error, cleanupErrors) {
+function registerFailure(ctx, stage, error, cleanupErrors, panelId) {
   registerStyle(ctx);
   function CanvasFailurePanel() {
     return <main className="hw-canvas-display">
@@ -99,11 +99,11 @@ function registerFailure(ctx, stage, error, cleanupErrors) {
       </section>
     </main>;
   }
-  registerSlots(ctx, CanvasFailurePanel);
+  registerSlots(ctx, CanvasFailurePanel, panelId);
 }
 // The mounted namespace is the traced child Service `remote.hanaworldsCanvasDisplay`; the panel
 // runs inside a fiber that injects it, as the public DSH Client Remote contract requires.
-function registerPanel(ctx) {
+function registerPanel(ctx, panelId) {
   const remote = method => async (...args) => {
     const result = await ctx.remote.hanaworldsCanvasDisplay[method](...args);
     if (!result.ok) throw result.error;
@@ -118,9 +118,10 @@ function registerPanel(ctx) {
       .find(session => (session.retainedBy.mainView ?? 0) > 0)?.id ?? null);
     return <ObjectsHistoryPanel sessionRef={sessionRef} read={read} readActions={readActions} undo={undo} redo={redo} changes={changes} />;
   }
-  registerSlots(ctx, CanvasPanel);
+  registerSlots(ctx, CanvasPanel, panelId);
 }
-export async function apply(ctx) {
+export async function apply(ctx, config = {}) {
+  const panelId = config?.panelId ?? PANEL_ID;
   let disposeRemote, panel, stage = 'REMOTE_MOUNT';
   const dispose = async () => {
     const failures = [];
@@ -130,13 +131,15 @@ export async function apply(ctx) {
     return failures;
   };
   try {
+    if (typeof panelId !== 'string' || !panelId.trim())
+      throw Object.assign(new Error('Canvas panelId must be a nonempty registered key'), { code: 'INVALID_CANVAS_PANEL_ID' });
     disposeRemote = await ctx.remote.$mount(displayClientContribution);
     stage = 'PANEL_REGISTER';
-    panel = ctx.inject(['remote.hanaworldsCanvasDisplay', 'slots', 'sessions'], registerPanel);
+    panel = ctx.inject(['remote.hanaworldsCanvasDisplay', 'slots', 'sessions'], c => registerPanel(c, panelId));
     await panel;
   } catch (error) {
     const cleanupErrors = await dispose();
-    registerFailure(ctx, stage, error, cleanupErrors);
+    registerFailure(ctx, stage, error, cleanupErrors, typeof panelId === 'string' && panelId.trim() ? panelId : PANEL_ID);
     return;
   }
   return async () => {

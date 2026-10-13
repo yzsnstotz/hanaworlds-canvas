@@ -1,0 +1,73 @@
+{
+  "format": "canvas-owned-protocol/v1",
+  "owner": "hanaworlds-canvas",
+  "documents": [
+    "C-canvas@2",
+    "C-world-adapter@2",
+    "C-world-facts@2"
+  ],
+  "origin": {
+    "description": "MIT implementation previously embedded in Canvas baseline 85fbd3b; now owned local source, no supplier resolution",
+    "revision": "33c34372fd5092a83b6f3cc81c086470fa76d794"
+  },
+  "files": {
+    "src/protocol/errors.mjs": "1b824c26f10d7b525878685f1962c4efae44ae4b089ceec6a1fbf8f0d63f5912",
+    "src/protocol/geometry.mjs": "87ba4e8e3c77b50608b4c38a3ad30baa51d1b9a881e6b00e58a009e2127f4322",
+    "src/protocol/local/build-proposal.mjs": "7df7b04ec670e5b19337ebc165be81d2fb98daac31308e85b5b21cc27c7f26f0",
+    "src/protocol/local/config-engine-facts.mjs": "a155a10f52bbb0741432dab336f22db99cc784326495318c35f56f5988337ac5",
+    "src/protocol/local/domain.mjs": "81daf0f92280f827d97ffb8898919a805cd05d8ddea0bc87b98578f5228bc2e1",
+    "src/protocol/local/generated/contracts.mjs": "6df1240f705d5730b66aaae9712816efd89c6c84b9cafc4ef7fd60864cdb3009",
+    "src/protocol/local/history-receipt.mjs": "4bd8cf075a64ace07a9e27fde8c1837e9acdfd343a67501cd6e0cc2988cee44a",
+    "src/protocol/local/index.mjs": "c05cd5826548d94094a27ee45beadfabb4b11fa58c04c0ae0de3b4b2c03c460f",
+    "src/protocol/local/local-world-source.mjs": "21f807797e9edf8e796d6699ae79029df345e2cfc9c78e0875df3d838895886a",
+    "src/protocol/local/material-sources.mjs": "44b665d42382afc30d9cf89ed3e931d688cc215399288c2d7cae069c197bd0ab",
+    "src/protocol/local/placement-region.mjs": "d4b2aaaf749f973b08eb0fbee374fedb88258ce413f1fbf1d36a83e455ab633e",
+    "src/protocol/local/placement-settings.mjs": "d351ed8d72521aa718b0d318e7987d4d0c81b2125a7a554cb6c2f12c5a1e2675",
+    "src/protocol/local/placement.mjs": "73fad37ec0611dd0c356f7fc40fe5c8907c50894c5d8a6f4270e77b9126c7fc2",
+    "src/protocol/local/plugin-roles-binding.mjs": "59fdc0ab72c127200717a400138b401d8cf35dc99cca15b7576cc54cd89cde9a",
+    "src/protocol/local/plugin-roles.mjs": "04e3bd4eb0112d1d18c03b43c629a24f9d644935ad3de60aa979b50325b0141d",
+    "src/protocol/local/region-domain.mjs": "edc5acf81ab38b026e9363162d8196147d1b854818f1a67647e16b262f91f481",
+    "src/protocol/local/region.mjs": "7d8608f65c2a313fd5cd76132d4204833ef76e964e3afcde259a4835e7432fc2",
+    "src/protocol/local/runtime.mjs": "24caba4fbe5cf0956e83ef456cea5ddef6fa690f4b77ce99c4fb7e9c3d27d286",
+    "src/protocol/local/schema-validator.mjs": "4724684d6f948f6b0262881d7a30bb24e5b2e473e291f8f6066975627c136a78",
+    "src/protocol/local/scoped-region-undo.mjs": "522407334a08eb6aac5c8c792ce9015832883ab7da2ed17b3c11bf82c197c66c",
+    "src/protocol/local/session-read-guard.mjs": "84f22b2c0f60c690379647b43afdd170ae76e21cb6c4b656929e937b79e61db7",
+    "src/protocol/local/skill-tools.mjs": "c0e2e5e75cf3e1e7580eedd01b389e517b168e6ffd75f2a8691aaaa33e9d4ee6",
+    "src/protocol/local/world-error.mjs": "5161db1d52212bdbff3a00967738159a8917a2f580ba56958707d44971df1186",
+    "src/protocol/local/world-lifecycle-mock.mjs": "2ac55f1fa3630faf04b91f2b1d09023b0ea2e16dfbe1d4e19e4e748cce09278b",
+    "src/protocol/local/world-lifecycle.mjs": "9eab17e88aa28d75efc9fcca328b1678b26de671cef89843ce14c0da36cb7b20",
+    "src/protocol/local/world-source-facts.mjs": "c6a47587bd7d7371e6e11a7a012a355f8731686808bd5b94cdf1f28e607f5fb6",
+    "src/protocol/local/write-path.mjs": "4248ca651e6d7b5f602a4bdcbab2ef3b3488c18040eb42ddccac5413e5de213a",
+    "src/protocol/names.mjs": "56c760fa438181a44f37588dc33914ad9076175bc69b4fdf1354ede02a027dad",
+    "src/protocol/strict-json.mjs": "d774f8119b2932af815df666059b4a5e90d65ec2cf181c0ca8803099f15a4c31",
+    "test/fixtures/protocol/confirmed-placement.json": "d0c26ef8026c845226ecc3a8982a9146e2c43dafbb9496c258409d9a4ac27b93",
+    "test/fixtures/protocol/contracts-major-compat.json": "4397c33cfe72c224de548ae759b731fa0e66c176110857501e60827493c5e3da",
+    "test/fixtures/protocol/history-receipt.json": "faa8920b258ebd9ad260a67e9fa0c5ab14ce0999098fe558a239f9bc111da05c",
+    "test/fixtures/protocol/main.json": "4ca5cd7cd53d913e32b7685ce5661e50b9349c91f42d6f853a1321f246c656fd",
+    "test/fixtures/protocol/placement-settings.json": "9e7c620ef242c5d8cc497d8ab937fffacc4e23c826aa12116918fdd5c24a73f7",
+    "test/fixtures/protocol/plugin-roles.json": "041249ef638d4d20b3f03bfaef604e28af844f59be8354b08e49537bd316fff1",
+    "test/fixtures/protocol/region.json": "131f4aba45671168ace88bde406dfae7f32387e4d058124b8e8163324b010e66",
+    "test/fixtures/protocol/session-world.json": "5cb482e42b7fe39b0b8b9b0438927f57e849cf2fb54f3a96c84c83c649f64334",
+    "test/fixtures/protocol/skill-site-rules.json": "dda8f9dd1da5da8fd97ab261bc5ea2a26adf687c573a1cb4b63aaeb0586f91d2",
+    "test/fixtures/protocol/world-error.json": "345030923341638e99061097e263b41ee3d648c1140a2354142f2531971566b9",
+    "test/fixtures/protocol/world-source-facts.json": "2b02602d7d225c5d6dc3b1b59ec697011b578925d40514021cea60528b8f259b",
+    "types/index.d.ts": "824acafb1e0dfe28df30b615f28d2d8c34fd5a8d59fcb8fc4dd02197afcef23c",
+    "types/native-facts-consumer.d.ts": "20fa35517b278ceab59882e2a2da29bbce6cef2681b2e315724dcd35a3fcf99a",
+    "types/native-facts.d.ts": "fcf37800fc6365486f829f18566356a43ac0b384c39985d20f57ad63e72c583c",
+    "types/protocol/contracts.d.ts": "21d3538479e86e46b93e47ffe5846513c7af0879a17a3ca8030dc3df2a078c5a",
+    "types/protocol/index.d.ts": "bacb68c84cf3dde0162c1203312b9b23ca2f8ce867f165c681e2e97dc0df36cf"
+  },
+  "publicAdditions": {
+    "C-world-facts@2": "readScopedState and Error.source from provider 418bffc root public declarations; consumer owns exact shapes",
+    "C-canvas@2": "Error.source preserves world-source provenance; readToolSummary request/result and full CanvasSourceFacts declarations follow the card-owned additive C-canvas document and formal C-world-facts@2"
+  },
+  "documentReadback": {
+    "C-canvas": "7e20635e1acc7b785942a7b54c7d8d41f01be64009f5a608f5e13dc023babc69",
+    "C-world-adapter": "e033230f0192751360b6e9d3fb32b74442438ac667bb1d6069981b45dad5c3d5",
+    "C-world-facts": "07c2bc7000d4179c59b0c8d65204868822986ac5d2e05e7fb35c75020160b01e"
+  },
+  "cardOwnedAddition": {
+    "document": "C-canvas readToolSummary additive contract",
+    "sha256": "e52881027bfd6273f253de74f7bc114d79e35eafd2842782f50193b98f5a228a"
+  }
+}

@@ -9,7 +9,7 @@ import { canonicalJSON, checkProtocolCompatibility, comparePosition, contractHan
   guardRefusalError, validateResponse,
   encodeRegionBlock, expandRegionBlock, protocolRequirement, regionChunksOfBox,
   validateRegionSnapshotContent, createPlacementProposal, confirmedPlacementBinding,
-  validateRegionCommitSubmission, regionRollbackCauseOf, summarizeRegionStates, validateRegionUndo } from 'hanaworlds-contracts';
+  validateRegionCommitSubmission, regionRollbackCauseOf, summarizeRegionStates, validateRegionUndo } from '../src/protocol/local/index.mjs';
 import { restoreFailedResponse as regionRestoreFailedResponse } from '../src/region-v1.mjs';
 import { CanvasV5, CanvasStore, CanvasRegionV1, canvasProtocolHandshake,
   ADAPTER_REGION_REQUIREMENT, ADAPTER_CELL_REQUIREMENT, apply as applyCanvas } from '../src/index.mjs';
@@ -421,7 +421,7 @@ test('unverified restore stays durably pending and normal reopen recovers from t
 test('a region rollback refused in the engine form becomes RESTORE_FAILED pending with both causes',
   async () => {
     // Public rc.3 fixture: every engine-form REGION_RESTORE refusal, wrapped by Canvas.
-    const examples = createRequire(import.meta.url)('hanaworlds-contracts/fixtures/skill-site-rules')
+    const examples = createRequire(import.meta.url)('./fixtures/protocol/skill-site-rules.json')
       .engineGuards.regionRestore.engine;
     assert.equal(examples.length, 3);
     for (const [index, example] of examples.entries()) {
@@ -462,7 +462,7 @@ test('a region rollback refused in the engine form becomes RESTORE_FAILED pendin
 
 test('rc.4 relay: a region APPLY the engine guard refuses is forwarded unchanged, nothing written',
   async () => {
-    const fixture = createRequire(import.meta.url)('hanaworlds-contracts/fixtures/skill-site-rules');
+    const fixture = createRequire(import.meta.url)('./fixtures/protocol/skill-site-rules.json');
     const refusal = fixture.engineGuards.regionRestore.rollbackApplyRefusal;
     const directory = await mkdtemp(join(tmpdir(), 'canvas-region-apply-refused-'));
     try {
@@ -494,7 +494,7 @@ test('rc.4 relay: a region APPLY the engine guard refuses is forwarded unchanged
 
 test('a region Undo the engine guard refuses is returned unchanged, writes nothing, is not pending',
   async () => {
-    const examples = createRequire(import.meta.url)('hanaworlds-contracts/fixtures/skill-site-rules')
+    const examples = createRequire(import.meta.url)('./fixtures/protocol/skill-site-rules.json')
       .engineGuards.regionRestore.engine;
     for (const example of examples) {
       const directory = await mkdtemp(join(tmpdir(), 'canvas-region-g1-undo-'));
@@ -723,7 +723,7 @@ test('region self-description reads the current world-source geometry without de
 
 test('Contracts public region fixture operations reproduce the contract summaries exactly',
   async () => {
-    const fixture = createRequire(import.meta.url)('hanaworlds-contracts/fixtures/region');
+    const fixture = createRequire(import.meta.url)('./fixtures/protocol/region.json');
     const directory = await mkdtemp(join(tmpdir(), 'canvas-region-public-'));
     try {
       const world = fixtureWorld({ worldRef: 'fixture-world', profile: fixture.readResponse.result.chunks[0].state.stateProfile });
@@ -764,7 +764,7 @@ test('Contracts public region fixture operations reproduce the contract summarie
 
 // Real Canvas/store decisions over explicit official-contract Adapter/Session/engine FIXTURES.
 test('confirmed REGION: own source is retained, A-to-B and stale/missing/foreign sources refuse before snapshots or writes', async () => {
-  const fx=JSON.parse(await readFile(new URL(import.meta.resolve('hanaworlds-contracts/fixtures/confirmed-placement'))));
+  const fx=JSON.parse(await readFile(new URL(import.meta.resolve('./fixtures/protocol/confirmed-placement.json'))));
   const official=fx.canvasRegion.accept[0], selectedWorld=official.commit.worldRef;
   const directory=await mkdtemp(join(tmpdir(),'canvas-confirmed-region-'));
   const results=[];
@@ -967,7 +967,7 @@ test('Canvas incomplete APPLY cause states its validated write progress, not def
 
 
 test('placement requires explicit declared geometry and checks its response before retention', async () => {
-  const fx = JSON.parse(await readFile(new URL(import.meta.resolve('hanaworlds-contracts/fixtures/confirmed-placement'))));
+  const fx = JSON.parse(await readFile(new URL(import.meta.resolve('./fixtures/protocol/confirmed-placement.json'))));
   const worldRef = fx.canvasRegion.accept[0].commit.worldRef;
   const directory = await mkdtemp(join(tmpdir(), 'canvas-geometry-placement-'));
   try {

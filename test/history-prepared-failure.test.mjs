@@ -1,5 +1,5 @@
 import test from 'node:test';
-import {guardRefusalError,digestValue} from 'hanaworlds-contracts';
+import {guardRefusalError,digestValue} from '../src/protocol/local/index.mjs';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';

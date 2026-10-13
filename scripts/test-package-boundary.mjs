@@ -16,12 +16,12 @@ assert.ok(!resolve(evidenceRoot).startsWith(resolve(root) + '/') && resolve(evid
 await mkdir(evidenceRoot, { recursive: true });
 const directory = await mkdtemp(join(evidenceRoot, 'run-'));
 const config = join(directory, 'empty-config'); await mkdir(config);
-// npm scripts inject the resolved user cache into npm_config_cache. The isolated
-// pack must use our writable global cache even when that setting names an absent
-// volume; keep package-manager security settings at their defaults.
+// Preserve the explicitly selected writable cache in lifecycle children.
+// Package-manager security settings stay at their defaults.
 const env = { PATH: process.env.PATH, HOME: process.env.HOME, TMPDIR: join(directory, 'temp'),
   XDG_CONFIG_HOME: config, XDG_STATE_HOME: join(directory, 'state'), CI: 'true',
-  npm_config_cache: join(homedir(), '.cache/npm') };
+  npm_config_cache: process.env.npm_config_cache ?? process.env.NPM_CONFIG_CACHE ?? join(directory, 'npm-cache'),
+  NPM_CONFIG_CACHE: process.env.NPM_CONFIG_CACHE ?? process.env.npm_config_cache ?? join(directory, 'npm-cache') };
 await mkdir(env.TMPDIR);
 function command(binary, args, cwd, name, extra = {}, expectSuccess = true) {
   const result = spawnSync(binary, args, { cwd, env: { ...env, ...extra }, encoding: 'utf8' });
@@ -56,13 +56,17 @@ async function fault(name, mutate, pattern) {
 }
 const entryFile = typeof manifest.exports['.'] === 'string' ? manifest.exports['.'] : manifest.exports['.'].import;
 const append = (path, text) => async dir => writeFile(join(dir, path), (await readFile(join(dir, path), 'utf8')) + '\n' + text);
-for (const section of ['dependencies', 'peerDependencies', 'optionalDependencies'])
-  await fault(section, async dir => { const copy = structuredClone(manifest); copy[section] ??= {}; copy[section]['hanaworlds-contracts'] = manifest.devDependencies['hanaworlds-contracts']; await writeFile(join(dir, 'package.json'), JSON.stringify(copy)); }, /production contracts dependency/);
+for (const section of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'])
+  await fault(section, async dir => { const copy = structuredClone(manifest); copy[section] ??= {}; copy[section]['hanaworlds-contracts'] = 'git+https://github.com/yzsnstotz/hanaworlds-contracts.git#v2.12.0'; await writeFile(join(dir, 'package.json'), JSON.stringify(copy)); }, /production contracts dependency/);
+for (const section of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'])
+  await fault(`cordis-${section}`, async dir => { const copy = structuredClone(manifest); copy[section] ??= {}; copy[section].cordis = '4.0.0-rc.10'; await writeFile(join(dir, 'package.json'), JSON.stringify(copy)); }, /unscoped Cordis dependency/);
+await fault('unscoped-cordis-runtime', append(entryFile, 'import "cordis";'), /unscoped Cordis runtime/);
+await fault('unscoped-cordis-type', append('types/index.d.ts', 'import type {Context} from "cordis";'), /unscoped Cordis type/);
 await fault('bare-value-import', append(entryFile, 'import "hanaworlds-contracts";'), /contracts runtime load/);
 await fault('dynamic-import', append(entryFile, 'await import("hanaworlds-" + "contracts");'), /contracts runtime load/);
 await fault('require', append(entryFile, 'require("hanaworlds-contracts");'), /contracts runtime load/);
 await fault('resolve', append(entryFile, 'import.meta.resolve("hanaworlds-contracts/package.json");'), /contracts runtime load/);
-await fault('package-import', async dir => { const copy = structuredClone(manifest); copy.imports = { '#contracts': manifest.devDependencies['hanaworlds-contracts'] }; await writeFile(join(dir, 'package.json'), JSON.stringify(copy)); }, /#contracts/);
+await fault('package-import', async dir => { const copy = structuredClone(manifest); copy.imports = { '#contracts': 'git+https://github.com/yzsnstotz/hanaworlds-contracts.git#v2.12.0' }; await writeFile(join(dir, 'package.json'), JSON.stringify(copy)); }, /#contracts/);
 await fault('hash-loader', append(entryFile, 'await import("#contracts");'), /contracts runtime load/);
 await fault('external-resource', append(entryFile, 'new URL("file:///development/schema.json", import.meta.url);'), /external\/dynamic resource/);
 await fault('aliased-create-require', append(entryFile, 'import {createRequire as cr} from "node:module"; export function contractsEscape(){const r=cr(import.meta.url);return r("hanaworlds-contracts");}'), /uninspectable dynamic loader|contracts runtime load/);
@@ -75,7 +79,11 @@ await fault('global-fetch', append(entryFile, 'export function schemaEscape(){re
 await fault('computed-resource' , append(entryFile, 'await import(process.env.CONTRACT_ENTRY);'), /dynamic module\/resource/);
 await fault('missing-local', append(entryFile, 'import "./unpacked.mjs";'), /missing packed file/);
 await fault('schema-resource', async dir => { const p = join(dir, 'fixtures/native-facts-scoped-state.schema.json'); const schema = JSON.parse(await readFile(p)); schema.$ref = 'file:///development/contracts.schema.json'; await writeFile(p, JSON.stringify(schema)); }, /external schema/);
-await fault('wrong-source', async dir => { const p = join(dir, 'lib/build-source.json'); const source = JSON.parse(await readFile(p)); source.supplier.revision = '0'.repeat(40); await writeFile(p, JSON.stringify(source)); }, /strictEqual|Expected values/);
+await fault('external-type', append('types/index.d.ts', 'import type {Ref} from \"hanaworlds-contracts\";'), /contracts type load/);
+await fault('missing-type', async dir => unlink(join(dir, 'types/protocol/contracts.d.ts')), /missing packed file/);
+await fault('modified-artifact', append(entryFile, '// changed production artifact'), /packed build drift/);
+await fault('modified-public-type', append('types/index.d.ts', '// changed public declaration'), /packed build drift/);
+await fault('wrong-source', async dir => { const p = join(dir, 'lib/build-source.json'); const source = JSON.parse(await readFile(p)); source.supplier.protocolSourceSHA256 = '0'.repeat(64); await writeFile(p, JSON.stringify(source)); }, /strictEqual|Expected values/);
 const reachableChunk = inventory.files.find(p => p.startsWith('lib/chunks/') && inventory.edges[entryFile.replace('./', '')]?.includes(p));
 assert.ok(reachableChunk);
 await fault('omitted-bundle', async dir => unlink(join(dir, reachableChunk)), /missing packed file/);
@@ -112,10 +120,36 @@ await run(process.execPath, [pnpm, 'install', '--prod'], project, 'pnpm-producti
 await run(process.execPath, [pnpm, 'list', '--prod', '--depth', 'Infinity', '--json'], project, 'production-graph');
 const graph = await readFile(join(directory, 'production-graph.log'), 'utf8');
 assert.ok(!graph.includes('hanaworlds-contracts'), 'contracts in production resolution graph');
+assert.ok(!/"cordis"\s*:/.test(graph), 'unscoped Cordis in production resolution graph');
 const lock = await readFile(join(project, 'pnpm-lock.yaml'), 'utf8');
 assert.ok(!lock.includes('hanaworlds-contracts'), 'contracts in production lock');
+assert.ok(!/(?:^|\n)\s+(?:cordis|['"]cordis)(?:@|:)/.test(lock), 'unscoped Cordis in production lock');
+await build({ entryPoints:[join(root, 'scripts/production-summary-fixture.mjs')], outfile:join(project,'production-summary-fixture.mjs'),
+  bundle:true, format:'esm', platform:'node', target:'node24',
+  external:['canonicalize','icu','hanaworlds-canvas','hanaworlds-canvas/*','@deepseek-ai/*'],
+  plugins:[{name:'summary-installed-canvas-only',setup(builder) {
+    builder.onResolve({filter:/src\/index\.mjs$/}, () => ({path:'hanaworlds-canvas',external:true}));
+  }}] });
 await cp(join(root, 'scripts/production-smoke.mjs'), join(project, 'production-smoke.mjs'));
 await run(process.execPath, ['production-smoke.mjs'], project, 'production-smoke');
+await writeFile(join(project, 'public-types.mts'), `import {CanvasV5} from 'hanaworlds-canvas';
+import type {NativeFactsPort, NativeFactsScopedState, CanvasToolSummaryRequest, CanvasToolSummary} from 'hanaworlds-canvas';
+import {validateNativeFactsScopedState} from 'hanaworlds-canvas/examples/native-facts-consumer.mjs';
+declare const facts: NativeFactsPort;
+const result: NativeFactsScopedState = await facts.readScopedState('connection', [[0,1,3]]);
+const canvas = new CanvasV5({store:null, nativeFacts:facts});
+const summaryInput: CanvasToolSummaryRequest = {sessionRef:'current-session'};
+const summary: CanvasToolSummary = await canvas.readToolSummary(summaryInput);
+summary.source.frame.value.origin[0] satisfies number;
+summary.source.tools[0].typicalScale.value.size[2] satisfies number;
+// @ts-expect-error sessionRef is mandatory
+const incompleteSummaryInput: CanvasToolSummaryRequest = {};
+// @ts-expect-error provider identity requires both opaque fields
+const incompleteProvider: CanvasToolSummaryRequest = {sessionRef:'current-session',expectedProvider:{providerRef:'p'}};
+validateNativeFactsScopedState(result).stateProfile.profileVersion satisfies 'state-profile/v3';
+`);
+await run(process.execPath, [join(root, 'node_modules/typescript/bin/tsc'), '--noEmit', '--strict', '--skipLibCheck',
+  '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', 'public-types.mts'], project, 'production-public-types');
 // Peer fixtures and their development validators are embedded ONLY in this test harness.
 // Canvas operations remain external and load the installed tgz; no development package/alias.
 await build({ entryPoints: [join(root, 'test/undo-redo.test.mjs')], outfile: join(project, 'transaction-capabilities.mjs'),

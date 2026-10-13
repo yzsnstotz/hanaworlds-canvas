@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 
-const consumer = await import(process.env.CANVAS_CONSUMER_ENTRY ?? 'hanaworlds-contracts');
+const consumer = await import(process.env.CANVAS_CONSUMER_ENTRY ?? '../src/protocol/local/index.mjs');
 const publicPath = name => process.env.CANVAS_PUBLIC_ROOT ?
   new URL(name, process.env.CANVAS_PUBLIC_ROOT).href :
   import.meta.resolve('hanaworlds-canvas/' + name);

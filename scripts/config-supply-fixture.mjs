@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { digestValue } from 'hanaworlds-contracts';
+import { digestValue } from '../src/protocol/local/index.mjs';
 import { fixtureSessions } from './fixture-sessions.mjs';
 import { guardSlot } from './fixture-engine-guards.mjs';
 
@@ -13,7 +13,7 @@ export const supplySessionRef = 'supply-fixture-session';
 export const supplyWorldRef = 'supply-fixture-world';
 const stateProfile = { profileVersion: 'state-profile/v3', derivedFields: ['light'], preservedFields: ['inventory', 'metadata', 'timer'], clearedFields: [] };
 const factsFixture = async () => JSON.parse(await readFile(new URL(
-  import.meta.resolve('hanaworlds-contracts/fixtures/world-source-facts'))));
+  import.meta.resolve('../test/fixtures/protocol/world-source-facts.json'))));
 
 export async function supplyFixturePeers({ incarnation = 'supply-fixture-incarnation-1',
   sourceRevision = 'fixture-source-1', backendDeclared = false } = {}) {
@@ -74,7 +74,7 @@ export async function supplyFixturePeers({ incarnation = 'supply-fixture-incarna
       throw new Error(`FIXTURE_WORLD_FACTS_UNSUPPORTED:${operation}`);
     } };
   env.describe = () => ({ kind: 'FIXTURE', sessionRef: supplySessionRef, worldRef: supplyWorldRef,
-    connectionIncarnationRef: env.incarnation, worldFacts: 'hanaworlds-contracts/fixtures/' +
+    connectionIncarnationRef: env.incarnation, worldFacts: 'Canvas-owned test/fixtures/protocol/' +
       `world-source-facts (engineRevisions.fixture-source=${env.sourceRevision}, ` +
       `backend ${env.backendDeclared ? 'KNOWN' : 'NOT_DECLARED_BY_PAYLOAD'})`,
     session: 'scripts/fixture-sessions.mjs', adapter: 'scripts/config-supply-fixture.mjs' });

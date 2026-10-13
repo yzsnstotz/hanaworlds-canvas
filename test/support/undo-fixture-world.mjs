@@ -2,7 +2,7 @@ import { open, readFile, rename, rm } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import canonicalize from 'canonicalize';
 import { digestValue, encodeRegionBlock, expandRegionBlock, regionChunksOfBox, guardRefusalError }
-  from 'hanaworlds-contracts';
+  from '../../src/protocol/local/index.mjs';
 import { fixtureEngineGuards, guardSlot } from '../../scripts/fixture-engine-guards.mjs';
 
 // Explicit, isolated fixture world for the /undo development page. Only the world and

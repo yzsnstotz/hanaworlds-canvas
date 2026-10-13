@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp } from 'node:fs/promises';
-import { homedir } from 'node:os';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Context } from '@deepseek-ai/cordis';
 import Schema from '@deepseek-ai/schemastery';
@@ -9,9 +9,9 @@ import * as plugin from '../src/index.mjs';
 import { undoConnection } from './support/undo-fixture-world.mjs';
 import { fixtureSessions } from '../scripts/fixture-sessions.mjs';
 import { g3CellHandshake } from './support/g3-adapter-handshake.mjs';
-import { guardRefusalError } from 'hanaworlds-contracts';
+import { guardRefusalError } from '../src/protocol/local/index.mjs';
 
-const runRoot = join(homedir(), '.cache/hana-world-runs/canvas-03');
+const runRoot = tmpdir();
 const defaults = { frontGapCells: 2, forwardSearchCells: 16,
   lateralSearchCells: 8, verticalSearchCells: 4 };
 
@@ -36,7 +36,6 @@ test('management Config serializes editable, documented placement search fields'
 });
 
 test('Cordis saved config reaches existing worlds after reload and invalidates old inspections', async () => {
-  await mkdir(runRoot, { recursive: true });
   const profile = await mkdtemp(join(runRoot, 'config-host-'));
   let observed;
   const adapter = { protocolHandshake: g3CellHandshake(), async call(operation, request) {
@@ -105,5 +104,6 @@ test('Cordis saved config reaches existing worlds after reload and invalidates o
   } finally {
     if (fiber) await fiber.dispose();
     await ctx.fiber.dispose();
+    await rm(profile, { recursive: true, force: true });
   }
 });

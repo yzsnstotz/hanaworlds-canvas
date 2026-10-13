@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { digestValue, encodeRegionBlock, regionChunksOfBox, guardRefusalError, validateResponse,
-  unmetEngineGuards } from 'hanaworlds-contracts';
+  unmetEngineGuards } from '../src/protocol/local/index.mjs';
 import { CanvasV5, CanvasStore, CanvasRegionV1, ADAPTER_CELL_REQUIREMENT,
   ADAPTER_REGION_REQUIREMENT, ENGINE_GUARD_REQUIREMENTS, apply as applyCanvas } from '../src/index.mjs';
 import { openUndoFixtureWorld, undoConnection, undoSessionRef,

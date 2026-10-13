@@ -1,0 +1,1276 @@
+{
+  "evidence": "SOURCE/FIXTURE only: service names are those the current plugins register; no host, loader or plugin ran.",
+  "exchanges": [
+    {
+      "wire": "world-inspection/v1",
+      "operation": "ReadPluginRoles",
+      "title": "current assembly: every role filled",
+      "host": {
+        "services": [
+          {
+            "name": "hanaworldsShellUi",
+            "moduleName": "hanaworlds-shell-ui"
+          },
+          {
+            "name": "hanaworldsWorldAdapterV6",
+            "moduleName": "hanaworlds-adapter-luanti"
+          },
+          {
+            "name": "hanaworldsWorldAdapterRegionV1",
+            "moduleName": "hanaworlds-adapter-luanti"
+          },
+          {
+            "name": "hanaworldsLuantiNativeFacts",
+            "moduleName": "hanaworlds-adapter-luanti"
+          },
+          {
+            "name": "hanaworldsCanvasV5",
+            "moduleName": "hanaworlds-canvas"
+          },
+          {
+            "name": "hanaworldsCanvasRegionV1",
+            "moduleName": "hanaworlds-canvas"
+          },
+          {
+            "name": "hanaworldsCanvasDisplay",
+            "moduleName": "hanaworlds-canvas"
+          },
+          {
+            "name": "hanaworldsBrushV3",
+            "moduleName": "hanaworlds-brush"
+          },
+          {
+            "name": "hanaworldsPainterV2PictureBlocks",
+            "moduleName": "hanaworlds-building-exterior-painter"
+          },
+          {
+            "name": "hanaworldsWorkshop",
+            "moduleName": "hanaworlds-workshop"
+          },
+          {
+            "name": "hanaworldsWorkshopV3",
+            "moduleName": "hanaworlds-workshop"
+          },
+          {
+            "name": "hanaworldsDesktopBridge",
+            "moduleName": "hanaworlds-desktop-bridge"
+          },
+          {
+            "name": "hanaworldsWorldInspectionContext",
+            "moduleName": "hanaworlds-desktop-bridge"
+          },
+          {
+            "name": "hanaworldsPainterRegionV1",
+            "moduleName": "hanaworlds-desktop-bridge"
+          },
+          {
+            "name": "hanaworldsWorldLifecycle",
+            "moduleName": "hanaworlds-local-runtime"
+          },
+          {
+            "name": "hanaworldsEngineRuntime",
+            "moduleName": "hanaworlds-local-runtime"
+          }
+        ],
+        "skills": [
+          {
+            "name": "hanaworlds-building",
+            "provider": "hanaworlds-skills"
+          },
+          {
+            "name": "pdf",
+            "provider": "filesystem"
+          }
+        ]
+      },
+      "request": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "plugin-roles-1"
+      },
+      "response": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "plugin-roles-1",
+        "result": {
+          "status": "COMPLETE",
+          "missingRoles": [],
+          "providers": {
+            "shell-ui": [
+              "hanaworlds-shell-ui"
+            ],
+            "world-source": [
+              "hanaworlds-adapter-luanti"
+            ],
+            "canvas": [
+              "hanaworlds-canvas"
+            ],
+            "brush": [
+              "hanaworlds-brush"
+            ],
+            "painter": [
+              "hanaworlds-building-exterior-painter"
+            ],
+            "workshop": [
+              "hanaworlds-workshop"
+            ],
+            "skills": [
+              "hanaworlds-skills"
+            ],
+            "desktop-bridge": [
+              "hanaworlds-desktop-bridge"
+            ],
+            "local-runtime": [
+              "hanaworlds-local-runtime"
+            ]
+          }
+        },
+        "error": null
+      }
+    },
+    {
+      "wire": "world-inspection/v1",
+      "operation": "ReadPluginRoles",
+      "title": "renamed world source: the role follows the registered service, not the package name",
+      "host": {
+        "services": [
+          {
+            "name": "hanaworldsShellUi",
+            "moduleName": "hanaworlds-shell-ui"
+          },
+          {
+            "name": "hanaworldsWorldAdapterV6",
+            "moduleName": "acme-voxel-world-source"
+          },
+          {
+            "name": "hanaworldsWorldAdapterRegionV1",
+            "moduleName": "acme-voxel-world-source"
+          },
+          {
+            "name": "hanaworldsLuantiNativeFacts",
+            "moduleName": "acme-voxel-world-source"
+          },
+          {
+            "name": "hanaworldsCanvasV5",
+            "moduleName": "hanaworlds-canvas"
+          },
+          {
+            "name": "hanaworldsCanvasRegionV1",
+            "moduleName": "hanaworlds-canvas"
+          },
+          {
+            "name": "hanaworldsCanvasDisplay",
+            "moduleName": "hanaworlds-canvas"
+          },
+          {
+            "name": "hanaworldsBrushV3",
+            "moduleName": "hanaworlds-brush"
+          },
+          {
+            "name": "hanaworldsPainterV2PictureBlocks",
+            "moduleName": "hanaworlds-building-exterior-painter"
+          },
+          {
+            "name": "hanaworldsWorkshop",
+            "moduleName": "hanaworlds-workshop"
+          },
+          {
+            "name": "hanaworldsWorkshopV3",
+            "moduleName": "hanaworlds-workshop"
+          },
+          {
+            "name": "hanaworldsDesktopBridge",
+            "moduleName": "hanaworlds-desktop-bridge"
+          },
+          {
+            "name": "hanaworldsWorldInspectionContext",
+            "moduleName": "hanaworlds-desktop-bridge"
+          },
+          {
+            "name": "hanaworldsPainterRegionV1",
+            "moduleName": "hanaworlds-desktop-bridge"
+          },
+          {
+            "name": "hanaworldsWorldLifecycle",
+            "moduleName": "hanaworlds-local-runtime"
+          },
+          {
+            "name": "hanaworldsEngineRuntime",
+            "moduleName": "hanaworlds-local-runtime"
+          }
+        ],
+        "skills": [
+          {
+            "name": "hanaworlds-building",
+            "provider": "hanaworlds-skills"
+          },
+          {
+            "name": "pdf",
+            "provider": "filesystem"
+          }
+        ]
+      },
+      "request": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "plugin-roles-2"
+      },
+      "response": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "plugin-roles-2",
+        "result": {
+          "status": "COMPLETE",
+          "missingRoles": [],
+          "providers": {
+            "shell-ui": [
+              "hanaworlds-shell-ui"
+            ],
+            "world-source": [
+              "acme-voxel-world-source"
+            ],
+            "canvas": [
+              "hanaworlds-canvas"
+            ],
+            "brush": [
+              "hanaworlds-brush"
+            ],
+            "painter": [
+              "hanaworlds-building-exterior-painter"
+            ],
+            "workshop": [
+              "hanaworlds-workshop"
+            ],
+            "skills": [
+              "hanaworlds-skills"
+            ],
+            "desktop-bridge": [
+              "hanaworlds-desktop-bridge"
+            ],
+            "local-runtime": [
+              "hanaworlds-local-runtime"
+            ]
+          }
+        },
+        "error": null
+      }
+    },
+    {
+      "wire": "world-inspection/v1",
+      "operation": "ReadPluginRoles",
+      "title": "several skill providers publish the contracted skill",
+      "host": {
+        "services": [
+          {
+            "name": "hanaworldsShellUi",
+            "moduleName": "hanaworlds-shell-ui"
+          },
+          {
+            "name": "hanaworldsWorldAdapterV6",
+            "moduleName": "hanaworlds-adapter-luanti"
+          },
+          {
+            "name": "hanaworldsWorldAdapterRegionV1",
+            "moduleName": "hanaworlds-adapter-luanti"
+          },
+          {
+            "name": "hanaworldsLuantiNativeFacts",
+            "moduleName": "hanaworlds-adapter-luanti"
+          },
+          {
+            "name": "hanaworldsCanvasV5",
+            "moduleName": "hanaworlds-canvas"
+          },
+          {
+            "name": "hanaworldsCanvasRegionV1",
+            "moduleName": "hanaworlds-canvas"
+          },
+          {
+            "name": "hanaworldsCanvasDisplay",
+            "moduleName": "hanaworlds-canvas"
+          },
+          {
+            "name": "hanaworldsBrushV3",
+            "moduleName": "hanaworlds-brush"
+          },
+          {
+            "name": "hanaworldsPainterV2PictureBlocks",
+            "moduleName": "hanaworlds-building-exterior-painter"
+          },
+          {
+            "name": "hanaworldsWorkshop",
+            "moduleName": "hanaworlds-workshop"
+          },
+          {
+            "name": "hanaworldsWorkshopV3",
+            "moduleName": "hanaworlds-workshop"
+          },
+          {
+            "name": "hanaworldsDesktopBridge",
+            "moduleName": "hanaworlds-desktop-bridge"
+          },
+          {
+            "name": "hanaworldsWorldInspectionContext",
+            "moduleName": "hanaworlds-desktop-bridge"
+          },
+          {
+            "name": "hanaworldsPainterRegionV1",
+            "moduleName": "hanaworlds-desktop-bridge"
+          },
+          {
+            "name": "hanaworldsWorldLifecycle",
+            "moduleName": "hanaworlds-local-runtime"
+          },
+          {
+            "name": "hanaworldsEngineRuntime",
+            "moduleName": "hanaworlds-local-runtime"
+          }
+        ],
+        "skills": [
+          {
+            "name": "hanaworlds-building",
+            "provider": "hanaworlds-skills"
+          },
+          {
+            "name": "pdf",
+            "provider": "filesystem"
+          },
+          {
+            "name": "hanaworlds-building",
+            "provider": "studio-skills"
+          }
+        ]
+      },
+      "request": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "plugin-roles-3"
+      },
+      "response": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "plugin-roles-3",
+        "result": {
+          "status": "COMPLETE",
+          "missingRoles": [],
+          "providers": {
+            "shell-ui": [
+              "hanaworlds-shell-ui"
+            ],
+            "world-source": [
+              "hanaworlds-adapter-luanti"
+            ],
+            "canvas": [
+              "hanaworlds-canvas"
+            ],
+            "brush": [
+              "hanaworlds-brush"
+            ],
+            "painter": [
+              "hanaworlds-building-exterior-painter"
+            ],
+            "workshop": [
+              "hanaworlds-workshop"
+            ],
+            "skills": [
+              "hanaworlds-skills",
+              "studio-skills"
+            ],
+            "desktop-bridge": [
+              "hanaworlds-desktop-bridge"
+            ],
+            "local-runtime": [
+              "hanaworlds-local-runtime"
+            ]
+          }
+        },
+        "error": null
+      }
+    },
+    {
+      "wire": "world-inspection/v1",
+      "operation": "ReadPluginRoles",
+      "title": "missing roles are named",
+      "host": {
+        "services": [
+          {
+            "name": "hanaworldsShellUi",
+            "moduleName": "hanaworlds-shell-ui"
+          },
+          {
+            "name": "hanaworldsWorldAdapterV6",
+            "moduleName": "hanaworlds-adapter-luanti"
+          },
+          {
+            "name": "hanaworldsWorldAdapterRegionV1",
+            "moduleName": "hanaworlds-adapter-luanti"
+          },
+          {
+            "name": "hanaworldsLuantiNativeFacts",
+            "moduleName": "hanaworlds-adapter-luanti"
+          },
+          {
+            "name": "hanaworldsCanvasV5",
+            "moduleName": "hanaworlds-canvas"
+          },
+          {
+            "name": "hanaworldsCanvasRegionV1",
+            "moduleName": "hanaworlds-canvas"
+          },
+          {
+            "name": "hanaworldsCanvasDisplay",
+            "moduleName": "hanaworlds-canvas"
+          },
+          {
+            "name": "hanaworldsWorkshop",
+            "moduleName": "hanaworlds-workshop"
+          },
+          {
+            "name": "hanaworldsWorkshopV3",
+            "moduleName": "hanaworlds-workshop"
+          },
+          {
+            "name": "hanaworldsDesktopBridge",
+            "moduleName": "hanaworlds-desktop-bridge"
+          },
+          {
+            "name": "hanaworldsWorldInspectionContext",
+            "moduleName": "hanaworlds-desktop-bridge"
+          },
+          {
+            "name": "hanaworldsPainterRegionV1",
+            "moduleName": "hanaworlds-desktop-bridge"
+          },
+          {
+            "name": "hanaworldsWorldLifecycle",
+            "moduleName": "hanaworlds-local-runtime"
+          },
+          {
+            "name": "hanaworldsEngineRuntime",
+            "moduleName": "hanaworlds-local-runtime"
+          }
+        ],
+        "skills": [
+          {
+            "name": "hanaworlds-building",
+            "provider": "hanaworlds-skills"
+          },
+          {
+            "name": "pdf",
+            "provider": "filesystem"
+          }
+        ]
+      },
+      "request": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "plugin-roles-4"
+      },
+      "response": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "plugin-roles-4",
+        "result": {
+          "status": "PARTIAL",
+          "missingRoles": [
+            "brush",
+            "painter"
+          ],
+          "providers": {
+            "shell-ui": [
+              "hanaworlds-shell-ui"
+            ],
+            "world-source": [
+              "hanaworlds-adapter-luanti"
+            ],
+            "canvas": [
+              "hanaworlds-canvas"
+            ],
+            "brush": [],
+            "painter": [],
+            "workshop": [
+              "hanaworlds-workshop"
+            ],
+            "skills": [
+              "hanaworlds-skills"
+            ],
+            "desktop-bridge": [
+              "hanaworlds-desktop-bridge"
+            ],
+            "local-runtime": [
+              "hanaworlds-local-runtime"
+            ]
+          }
+        },
+        "error": null
+      }
+    },
+    {
+      "wire": "world-inspection/v1",
+      "operation": "ReadPluginRoles",
+      "title": "one plugin fills several roles",
+      "host": {
+        "services": [
+          {
+            "name": "hanaworldsShellUi",
+            "moduleName": "hanaworlds-shell-ui"
+          },
+          {
+            "name": "hanaworldsWorldAdapterV6",
+            "moduleName": "hanaworlds-adapter-luanti"
+          },
+          {
+            "name": "hanaworldsWorldAdapterRegionV1",
+            "moduleName": "hanaworlds-adapter-luanti"
+          },
+          {
+            "name": "hanaworldsLuantiNativeFacts",
+            "moduleName": "hanaworlds-adapter-luanti"
+          },
+          {
+            "name": "hanaworldsCanvasV5",
+            "moduleName": "hanaworlds-canvas"
+          },
+          {
+            "name": "hanaworldsCanvasRegionV1",
+            "moduleName": "hanaworlds-canvas"
+          },
+          {
+            "name": "hanaworldsCanvasDisplay",
+            "moduleName": "hanaworlds-canvas"
+          },
+          {
+            "name": "hanaworldsPainterV2PictureBlocks",
+            "moduleName": "hanaworlds-building-exterior-painter"
+          },
+          {
+            "name": "hanaworldsWorkshop",
+            "moduleName": "hanaworlds-workshop"
+          },
+          {
+            "name": "hanaworldsWorkshopV3",
+            "moduleName": "hanaworlds-workshop"
+          },
+          {
+            "name": "hanaworldsDesktopBridge",
+            "moduleName": "hanaworlds-desktop-bridge"
+          },
+          {
+            "name": "hanaworldsWorldInspectionContext",
+            "moduleName": "hanaworlds-desktop-bridge"
+          },
+          {
+            "name": "hanaworldsPainterRegionV1",
+            "moduleName": "hanaworlds-desktop-bridge"
+          },
+          {
+            "name": "hanaworldsWorldLifecycle",
+            "moduleName": "hanaworlds-local-runtime"
+          },
+          {
+            "name": "hanaworldsEngineRuntime",
+            "moduleName": "hanaworlds-local-runtime"
+          },
+          {
+            "name": "hanaworldsBrushV3",
+            "moduleName": "hanaworlds-canvas"
+          }
+        ],
+        "skills": [
+          {
+            "name": "hanaworlds-building",
+            "provider": "hanaworlds-skills"
+          },
+          {
+            "name": "pdf",
+            "provider": "filesystem"
+          }
+        ]
+      },
+      "request": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "plugin-roles-5"
+      },
+      "response": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "plugin-roles-5",
+        "result": {
+          "status": "COMPLETE",
+          "missingRoles": [],
+          "providers": {
+            "shell-ui": [
+              "hanaworlds-shell-ui"
+            ],
+            "world-source": [
+              "hanaworlds-adapter-luanti"
+            ],
+            "canvas": [
+              "hanaworlds-canvas"
+            ],
+            "brush": [
+              "hanaworlds-canvas"
+            ],
+            "painter": [
+              "hanaworlds-building-exterior-painter"
+            ],
+            "workshop": [
+              "hanaworlds-workshop"
+            ],
+            "skills": [
+              "hanaworlds-skills"
+            ],
+            "desktop-bridge": [
+              "hanaworlds-desktop-bridge"
+            ],
+            "local-runtime": [
+              "hanaworlds-local-runtime"
+            ]
+          }
+        },
+        "error": null
+      }
+    },
+    {
+      "wire": "world-inspection/v1",
+      "operation": "ReadPluginRoles",
+      "title": "package names and unrelated services never fill a role",
+      "host": {
+        "services": [
+          {
+            "name": "hanaworldsUnrelated",
+            "moduleName": "hanaworlds-brush"
+          },
+          {
+            "name": "hanaworldsLuantiLocalWorlds",
+            "moduleName": "hanaworlds-adapter-luanti"
+          }
+        ],
+        "skills": [
+          {
+            "name": "pdf",
+            "provider": "hanaworlds-skills"
+          }
+        ]
+      },
+      "request": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "plugin-roles-6"
+      },
+      "response": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "plugin-roles-6",
+        "result": {
+          "status": "UNAVAILABLE",
+          "missingRoles": [
+            "shell-ui",
+            "world-source",
+            "canvas",
+            "brush",
+            "painter",
+            "workshop",
+            "skills",
+            "desktop-bridge",
+            "local-runtime"
+          ],
+          "providers": {
+            "shell-ui": [],
+            "world-source": [],
+            "canvas": [],
+            "brush": [],
+            "painter": [],
+            "workshop": [],
+            "skills": [],
+            "desktop-bridge": [],
+            "local-runtime": []
+          }
+        },
+        "error": null
+      }
+    },
+    {
+      "wire": "world-inspection/v1",
+      "operation": "ReadPluginRoles",
+      "title": "nothing registered",
+      "host": {
+        "services": [],
+        "skills": []
+      },
+      "request": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "plugin-roles-7"
+      },
+      "response": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "plugin-roles-7",
+        "result": {
+          "status": "UNAVAILABLE",
+          "missingRoles": [
+            "shell-ui",
+            "world-source",
+            "canvas",
+            "brush",
+            "painter",
+            "workshop",
+            "skills",
+            "desktop-bridge",
+            "local-runtime"
+          ],
+          "providers": {
+            "shell-ui": [],
+            "world-source": [],
+            "canvas": [],
+            "brush": [],
+            "painter": [],
+            "workshop": [],
+            "skills": [],
+            "desktop-bridge": [],
+            "local-runtime": []
+          }
+        },
+        "error": null
+      }
+    },
+    {
+      "wire": "world-inspection/v1",
+      "operation": "ReadPluginRoles",
+      "title": "host registrations could not be read",
+      "host": {
+        "unreadable": true
+      },
+      "request": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "plugin-roles-8"
+      },
+      "response": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "plugin-roles-8",
+        "result": null,
+        "error": {
+          "code": "CAPABILITY_UNAVAILABLE",
+          "phase": "validate",
+          "retryability": "AFTER_NEW_FACTS",
+          "mutationState": "NONE",
+          "transactionRef": null,
+          "causeCode": null,
+          "reason": "REQUIRED_FACT_UNKNOWN"
+        }
+      }
+    }
+  ],
+  "reject": [
+    {
+      "wire": "world-inspection/v1",
+      "operation": "ReadPluginRoles",
+      "title": "status that does not follow from providers",
+      "code": "SCHEMA_INVALID",
+      "request": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "plugin-roles-4"
+      },
+      "response": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "plugin-roles-4",
+        "result": {
+          "status": "COMPLETE",
+          "missingRoles": [
+            "brush",
+            "painter"
+          ],
+          "providers": {
+            "shell-ui": [
+              "hanaworlds-shell-ui"
+            ],
+            "world-source": [
+              "hanaworlds-adapter-luanti"
+            ],
+            "canvas": [
+              "hanaworlds-canvas"
+            ],
+            "brush": [],
+            "painter": [],
+            "workshop": [
+              "hanaworlds-workshop"
+            ],
+            "skills": [
+              "hanaworlds-skills"
+            ],
+            "desktop-bridge": [
+              "hanaworlds-desktop-bridge"
+            ],
+            "local-runtime": [
+              "hanaworlds-local-runtime"
+            ]
+          }
+        },
+        "error": null
+      }
+    },
+    {
+      "wire": "world-inspection/v1",
+      "operation": "ReadPluginRoles",
+      "title": "missingRoles that omits a role without providers",
+      "code": "SCHEMA_INVALID",
+      "request": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "plugin-roles-4"
+      },
+      "response": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "plugin-roles-4",
+        "result": {
+          "status": "PARTIAL",
+          "missingRoles": [
+            "brush"
+          ],
+          "providers": {
+            "shell-ui": [
+              "hanaworlds-shell-ui"
+            ],
+            "world-source": [
+              "hanaworlds-adapter-luanti"
+            ],
+            "canvas": [
+              "hanaworlds-canvas"
+            ],
+            "brush": [],
+            "painter": [],
+            "workshop": [
+              "hanaworlds-workshop"
+            ],
+            "skills": [
+              "hanaworlds-skills"
+            ],
+            "desktop-bridge": [
+              "hanaworlds-desktop-bridge"
+            ],
+            "local-runtime": [
+              "hanaworlds-local-runtime"
+            ]
+          }
+        },
+        "error": null
+      }
+    },
+    {
+      "wire": "world-inspection/v1",
+      "operation": "ReadPluginRoles",
+      "title": "missingRoles naming a provided role",
+      "code": "SCHEMA_INVALID",
+      "request": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "plugin-roles-1"
+      },
+      "response": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "plugin-roles-1",
+        "result": {
+          "status": "PARTIAL",
+          "missingRoles": [
+            "canvas"
+          ],
+          "providers": {
+            "shell-ui": [
+              "hanaworlds-shell-ui"
+            ],
+            "world-source": [
+              "hanaworlds-adapter-luanti"
+            ],
+            "canvas": [
+              "hanaworlds-canvas"
+            ],
+            "brush": [
+              "hanaworlds-brush"
+            ],
+            "painter": [
+              "hanaworlds-building-exterior-painter"
+            ],
+            "workshop": [
+              "hanaworlds-workshop"
+            ],
+            "skills": [
+              "hanaworlds-skills"
+            ],
+            "desktop-bridge": [
+              "hanaworlds-desktop-bridge"
+            ],
+            "local-runtime": [
+              "hanaworlds-local-runtime"
+            ]
+          }
+        },
+        "error": null
+      }
+    },
+    {
+      "wire": "world-inspection/v1",
+      "operation": "ReadPluginRoles",
+      "title": "providers not sorted",
+      "code": "NON_CANONICAL_AMBIGUITY",
+      "request": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "plugin-roles-3"
+      },
+      "response": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "plugin-roles-3",
+        "result": {
+          "status": "COMPLETE",
+          "missingRoles": [],
+          "providers": {
+            "shell-ui": [
+              "hanaworlds-shell-ui"
+            ],
+            "world-source": [
+              "hanaworlds-adapter-luanti"
+            ],
+            "canvas": [
+              "hanaworlds-canvas"
+            ],
+            "brush": [
+              "hanaworlds-brush"
+            ],
+            "painter": [
+              "hanaworlds-building-exterior-painter"
+            ],
+            "workshop": [
+              "hanaworlds-workshop"
+            ],
+            "skills": [
+              "studio-skills",
+              "hanaworlds-skills"
+            ],
+            "desktop-bridge": [
+              "hanaworlds-desktop-bridge"
+            ],
+            "local-runtime": [
+              "hanaworlds-local-runtime"
+            ]
+          }
+        },
+        "error": null
+      }
+    },
+    {
+      "wire": "world-inspection/v1",
+      "operation": "ReadPluginRoles",
+      "title": "duplicate provider",
+      "code": "NON_CANONICAL_AMBIGUITY",
+      "request": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "plugin-roles-1"
+      },
+      "response": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "plugin-roles-1",
+        "result": {
+          "status": "COMPLETE",
+          "missingRoles": [],
+          "providers": {
+            "shell-ui": [
+              "hanaworlds-shell-ui"
+            ],
+            "world-source": [
+              "hanaworlds-adapter-luanti"
+            ],
+            "canvas": [
+              "hanaworlds-canvas",
+              "hanaworlds-canvas"
+            ],
+            "brush": [
+              "hanaworlds-brush"
+            ],
+            "painter": [
+              "hanaworlds-building-exterior-painter"
+            ],
+            "workshop": [
+              "hanaworlds-workshop"
+            ],
+            "skills": [
+              "hanaworlds-skills"
+            ],
+            "desktop-bridge": [
+              "hanaworlds-desktop-bridge"
+            ],
+            "local-runtime": [
+              "hanaworlds-local-runtime"
+            ]
+          }
+        },
+        "error": null
+      }
+    },
+    {
+      "wire": "world-inspection/v1",
+      "operation": "ReadPluginRoles",
+      "title": "a role key is absent",
+      "code": "SCHEMA_INVALID",
+      "request": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "plugin-roles-1"
+      },
+      "response": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "plugin-roles-1",
+        "result": {
+          "status": "COMPLETE",
+          "missingRoles": [],
+          "providers": {
+            "shell-ui": [
+              "hanaworlds-shell-ui"
+            ],
+            "world-source": [
+              "hanaworlds-adapter-luanti"
+            ],
+            "canvas": [
+              "hanaworlds-canvas"
+            ],
+            "brush": [
+              "hanaworlds-brush"
+            ],
+            "painter": [
+              "hanaworlds-building-exterior-painter"
+            ],
+            "workshop": [
+              "hanaworlds-workshop"
+            ],
+            "desktop-bridge": [
+              "hanaworlds-desktop-bridge"
+            ],
+            "local-runtime": [
+              "hanaworlds-local-runtime"
+            ]
+          }
+        },
+        "error": null
+      }
+    },
+    {
+      "wire": "world-inspection/v1",
+      "operation": "ReadPluginRoles",
+      "title": "an undeclared role",
+      "code": "UNKNOWN_REQUIRED_FIELD",
+      "request": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "plugin-roles-1"
+      },
+      "response": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "plugin-roles-1",
+        "result": {
+          "status": "COMPLETE",
+          "missingRoles": [],
+          "providers": {
+            "shell-ui": [
+              "hanaworlds-shell-ui"
+            ],
+            "world-source": [
+              "hanaworlds-adapter-luanti"
+            ],
+            "canvas": [
+              "hanaworlds-canvas"
+            ],
+            "brush": [
+              "hanaworlds-brush"
+            ],
+            "painter": [
+              "hanaworlds-building-exterior-painter"
+            ],
+            "workshop": [
+              "hanaworlds-workshop"
+            ],
+            "skills": [
+              "hanaworlds-skills"
+            ],
+            "desktop-bridge": [
+              "hanaworlds-desktop-bridge"
+            ],
+            "local-runtime": [
+              "hanaworlds-local-runtime"
+            ],
+            "model": [
+              "x"
+            ]
+          }
+        },
+        "error": null
+      }
+    },
+    {
+      "wire": "world-inspection/v1",
+      "operation": "ReadPluginRoles",
+      "title": "a version is not part of the answer",
+      "code": "UNKNOWN_REQUIRED_FIELD",
+      "request": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "plugin-roles-1"
+      },
+      "response": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "plugin-roles-1",
+        "result": {
+          "status": "COMPLETE",
+          "missingRoles": [],
+          "providers": {
+            "shell-ui": [
+              "hanaworlds-shell-ui"
+            ],
+            "world-source": [
+              "hanaworlds-adapter-luanti"
+            ],
+            "canvas": [
+              "hanaworlds-canvas"
+            ],
+            "brush": [
+              "hanaworlds-brush"
+            ],
+            "painter": [
+              "hanaworlds-building-exterior-painter"
+            ],
+            "workshop": [
+              "hanaworlds-workshop"
+            ],
+            "skills": [
+              "hanaworlds-skills"
+            ],
+            "desktop-bridge": [
+              "hanaworlds-desktop-bridge"
+            ],
+            "local-runtime": [
+              "hanaworlds-local-runtime"
+            ]
+          },
+          "versions": {}
+        },
+        "error": null
+      }
+    },
+    {
+      "wire": "world-inspection/v1",
+      "operation": "ReadPluginRoles",
+      "title": "a failed read answered as empty providers",
+      "code": "SCHEMA_INVALID",
+      "request": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "plugin-roles-8"
+      },
+      "response": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "plugin-roles-8",
+        "result": {
+          "status": "UNAVAILABLE",
+          "missingRoles": [
+            "shell-ui",
+            "world-source",
+            "canvas",
+            "brush",
+            "painter",
+            "workshop",
+            "skills",
+            "desktop-bridge",
+            "local-runtime"
+          ],
+          "providers": {
+            "shell-ui": [],
+            "world-source": [],
+            "canvas": [],
+            "brush": [],
+            "painter": [],
+            "workshop": [],
+            "skills": [],
+            "desktop-bridge": [],
+            "local-runtime": []
+          }
+        },
+        "error": {
+          "code": "CAPABILITY_UNAVAILABLE",
+          "phase": "validate",
+          "retryability": "AFTER_NEW_FACTS",
+          "mutationState": "NONE",
+          "transactionRef": null,
+          "causeCode": null,
+          "reason": "REQUIRED_FACT_UNKNOWN"
+        }
+      }
+    },
+    {
+      "wire": "world-inspection/v1",
+      "operation": "ReadPluginRoles",
+      "title": "neither result nor error",
+      "code": "SCHEMA_INVALID",
+      "request": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "plugin-roles-8"
+      },
+      "response": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "plugin-roles-8",
+        "result": null,
+        "error": null
+      }
+    },
+    {
+      "wire": "world-inspection/v1",
+      "operation": "ReadPluginRoles",
+      "title": "an error the operation does not declare",
+      "code": "SCHEMA_INVALID",
+      "request": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "plugin-roles-8"
+      },
+      "response": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "plugin-roles-8",
+        "result": null,
+        "error": {
+          "code": "WORLD_NOT_BOUND",
+          "phase": "validate",
+          "retryability": "AFTER_NEW_FACTS",
+          "mutationState": "NONE",
+          "transactionRef": null,
+          "causeCode": null,
+          "reason": "REQUIRED_FACT_UNKNOWN"
+        }
+      }
+    },
+    {
+      "wire": "world-inspection/v1",
+      "operation": "ReadPluginRoles",
+      "title": "another request",
+      "code": "TRANSACTION_CONFLICT",
+      "request": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "plugin-roles-1"
+      },
+      "response": {
+        "contractVersion": "world-inspection/v1",
+        "requestId": "other",
+        "result": {
+          "status": "COMPLETE",
+          "missingRoles": [],
+          "providers": {
+            "shell-ui": [
+              "hanaworlds-shell-ui"
+            ],
+            "world-source": [
+              "hanaworlds-adapter-luanti"
+            ],
+            "canvas": [
+              "hanaworlds-canvas"
+            ],
+            "brush": [
+              "hanaworlds-brush"
+            ],
+            "painter": [
+              "hanaworlds-building-exterior-painter"
+            ],
+            "workshop": [
+              "hanaworlds-workshop"
+            ],
+            "skills": [
+              "hanaworlds-skills"
+            ],
+            "desktop-bridge": [
+              "hanaworlds-desktop-bridge"
+            ],
+            "local-runtime": [
+              "hanaworlds-local-runtime"
+            ]
+          }
+        },
+        "error": null
+      }
+    }
+  ]
+}

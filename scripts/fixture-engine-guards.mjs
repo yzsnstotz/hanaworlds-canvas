@@ -1,4 +1,4 @@
-import { engineGuards, validateType } from 'hanaworlds-contracts';
+import { engineGuards, validateType } from '../src/protocol/local/index.mjs';
 
 /*
  * FIXTURE engine-guards/v1 declarations for in-memory peer Adapters (tests and dev pages). They

@@ -4,13 +4,13 @@ import { createRequire } from 'node:module';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { validateResponse } from 'hanaworlds-contracts';
+import { validateResponse } from '../src/protocol/local/index.mjs';
 import { CanvasV5, CanvasStore, CanvasRegionV1 } from '../src/index.mjs';
 
 // Public rc.4 fixture skill-site-rules#/engineGuards/relay: the exact set of responses that carry
 // guardRefusal. Canvas answers every canvas/v7 and canvas-region/v3 one of them with the field
 // present (null here: no guard decision), even for an operation Canvas refuses or does not serve.
-const relay = createRequire(import.meta.url)('hanaworlds-contracts/fixtures/skill-site-rules')
+const relay = createRequire(import.meta.url)('./fixtures/protocol/skill-site-rules.json')
   .engineGuards.relay.responses;
 const own = relay.filter(([wire]) => wire === 'canvas/v7' || wire === 'canvas-region/v3');
 

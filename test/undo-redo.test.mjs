@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { createUndoExample } from './support/undo-example.mjs';
 import { openUndoHost, undoWorldFile } from './support/undo-host.mjs';
 import { CanvasRegionV1 } from '../src/index.mjs';
-import { digestValue, encodeRegionBlock, regionChunksOfBox } from 'hanaworlds-contracts';
+import { digestValue, encodeRegionBlock, regionChunksOfBox } from '../src/protocol/local/index.mjs';
 
 const nodes = entry => entry.cells.map(cell => cell.materialRef);
 const writes = host => host.world.calls.filter(call =>

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { digestValue, historicalReceiptResponse } from 'hanaworlds-contracts';
+import { digestValue, historicalReceiptResponse } from '../src/protocol/local/index.mjs';
 import { createUndoExample } from './support/undo-example.mjs';
 import { openUndoHost } from './support/undo-host.mjs';
 import { undoSessionRef, undoWorldRef } from './support/undo-fixture-world.mjs';

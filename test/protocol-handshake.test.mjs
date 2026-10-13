@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openRuntime } from './support/cordis-runtime.mjs';
 
-const consumer = await import(process.env.CANVAS_CONSUMER_ENTRY ?? 'hanaworlds-contracts');
+const consumer = await import(process.env.CANVAS_CONSUMER_ENTRY ?? '../src/protocol/local/index.mjs');
 const { protocolRequirement, checkProtocolCompatibility, regionCapabilities } = consumer;
 const cellRequirement = protocolRequirement('canvas/v7', []);
 const regionRequirement = protocolRequirement('canvas-region/v3', regionCapabilities

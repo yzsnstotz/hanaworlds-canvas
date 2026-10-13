@@ -14,7 +14,7 @@ import { canonicalJSON, checkProtocolCompatibility, contractProtocols, digestVal
   validateBoundResponse, validateDigestBinding, validateRegionCommit, validateRegionRead,
   validateRegionSnapshotContent, validateRegionUndo, validateRegionWrite, validateRequest,
   validateResponse, validateType, deriveConfirmedRegionUndoScope, validateScopedRegionUndoRequest,
-  composeScopedRegionUndoTarget, composeScopedRegionUndoRecoveryTarget, validateScopedRegionUndo, validateRegionCommitRequest, checkConfirmedRegionPlacementCommit } from 'hanaworlds-contracts';
+  composeScopedRegionUndoTarget, composeScopedRegionUndoRecoveryTarget, validateScopedRegionUndo, validateRegionCommitRequest, checkConfirmedRegionPlacementCommit } from './protocol/local/index.mjs';
 
 /*
  * canvas-region/v3 over the public Contracts 1.x region v2 shapes.

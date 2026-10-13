@@ -1,0 +1,824 @@
+{
+  "evidence": "SOURCE/FIXTURE only: receipt shape and digests from an actual adapter-07 durable VERIFIED receipt; refs are fixture refs. No world, Canvas or Adapter ran.",
+  "durable": [
+    {
+      "receipt": {
+        "contractVersion": "canvas/v7",
+        "transactionId": "house",
+        "operationDigest": "90f83d4d7fb4bf3a742aed41bd2c31d86c4ef4de9f11303b236722c2f445e763",
+        "transactionPayloadDigest": "61351fcd755fc4eaa715d05a77af6ecede3c222b5d78f26d2b34cf7612994abe",
+        "status": "VERIFIED",
+        "previousWorldRevision": "scope-state:ef7a5ed806a9f86b1326e5ef72103c587d80452ed2c5e18707b5cedb1ae8da31",
+        "observedWorldRevision": "scope-state:6424a99cc3b40a57e3c388adc8aae9fefa71764dd0692c16b59f02f2c606b117",
+        "readbackDigest": "6424a99cc3b40a57e3c388adc8aae9fefa71764dd0692c16b59f02f2c606b117",
+        "restoreStatus": "NOT_REQUIRED",
+        "error": null,
+        "localContext": {
+          "worldRef": "fixture-world-A",
+          "connectionRef": "fixture-connection-1",
+          "connectionIncarnationRef": "fixture-incarnation-1",
+          "selectionRevision": "selection-1"
+        },
+        "guardRefusal": null,
+        "applyFailure": null
+      },
+      "receiptDigest": "8738979eb78236f13803f638e49d428b873bd1c624c7ddcfc71b663f7594f7f0"
+    }
+  ],
+  "exchanges": [
+    {
+      "wire": "world-adapter/v8",
+      "operation": "QueryTransaction",
+      "title": "same incarnation, pre-2.8 shape (unchanged)",
+      "request": {
+        "contractVersion": "world-adapter/v8",
+        "sessionRef": "fixture-session-S1",
+        "requestId": "query-same",
+        "worldRef": "fixture-world-A",
+        "transactionId": "house",
+        "transactionPayloadDigest": "61351fcd755fc4eaa715d05a77af6ecede3c222b5d78f26d2b34cf7612994abe",
+        "localContext": {
+          "worldRef": "fixture-world-A",
+          "connectionRef": "fixture-connection-1",
+          "connectionIncarnationRef": "fixture-incarnation-1",
+          "selectionRevision": "selection-1"
+        }
+      },
+      "response": {
+        "contractVersion": "world-adapter/v8",
+        "requestId": "query-same",
+        "result": {
+          "contractVersion": "canvas/v7",
+          "transactionId": "house",
+          "operationDigest": "90f83d4d7fb4bf3a742aed41bd2c31d86c4ef4de9f11303b236722c2f445e763",
+          "transactionPayloadDigest": "61351fcd755fc4eaa715d05a77af6ecede3c222b5d78f26d2b34cf7612994abe",
+          "status": "VERIFIED",
+          "previousWorldRevision": "scope-state:ef7a5ed806a9f86b1326e5ef72103c587d80452ed2c5e18707b5cedb1ae8da31",
+          "observedWorldRevision": "scope-state:6424a99cc3b40a57e3c388adc8aae9fefa71764dd0692c16b59f02f2c606b117",
+          "readbackDigest": "6424a99cc3b40a57e3c388adc8aae9fefa71764dd0692c16b59f02f2c606b117",
+          "restoreStatus": "NOT_REQUIRED",
+          "error": null,
+          "localContext": {
+            "worldRef": "fixture-world-A",
+            "connectionRef": "fixture-connection-1",
+            "connectionIncarnationRef": "fixture-incarnation-1",
+            "selectionRevision": "selection-1"
+          },
+          "guardRefusal": null,
+          "applyFailure": null
+        },
+        "error": null
+      }
+    },
+    {
+      "wire": "world-adapter/v8",
+      "operation": "QueryTransaction",
+      "title": "same incarnation, historical pair",
+      "request": {
+        "contractVersion": "world-adapter/v8",
+        "sessionRef": "fixture-session-S1",
+        "requestId": "query-same",
+        "worldRef": "fixture-world-A",
+        "transactionId": "house",
+        "transactionPayloadDigest": "61351fcd755fc4eaa715d05a77af6ecede3c222b5d78f26d2b34cf7612994abe",
+        "localContext": {
+          "worldRef": "fixture-world-A",
+          "connectionRef": "fixture-connection-1",
+          "connectionIncarnationRef": "fixture-incarnation-1",
+          "selectionRevision": "selection-1"
+        }
+      },
+      "response": {
+        "contractVersion": "world-adapter/v8",
+        "requestId": "query-same",
+        "result": {
+          "contractVersion": "canvas/v7",
+          "transactionId": "house",
+          "operationDigest": "90f83d4d7fb4bf3a742aed41bd2c31d86c4ef4de9f11303b236722c2f445e763",
+          "transactionPayloadDigest": "61351fcd755fc4eaa715d05a77af6ecede3c222b5d78f26d2b34cf7612994abe",
+          "status": "VERIFIED",
+          "previousWorldRevision": "scope-state:ef7a5ed806a9f86b1326e5ef72103c587d80452ed2c5e18707b5cedb1ae8da31",
+          "observedWorldRevision": "scope-state:6424a99cc3b40a57e3c388adc8aae9fefa71764dd0692c16b59f02f2c606b117",
+          "readbackDigest": "6424a99cc3b40a57e3c388adc8aae9fefa71764dd0692c16b59f02f2c606b117",
+          "restoreStatus": "NOT_REQUIRED",
+          "error": null,
+          "localContext": {
+            "worldRef": "fixture-world-A",
+            "connectionRef": "fixture-connection-1",
+            "connectionIncarnationRef": "fixture-incarnation-1",
+            "selectionRevision": "selection-1"
+          },
+          "guardRefusal": null,
+          "applyFailure": null
+        },
+        "error": null,
+        "currentLocalContext": {
+          "worldRef": "fixture-world-A",
+          "connectionRef": "fixture-connection-1",
+          "connectionIncarnationRef": "fixture-incarnation-1",
+          "selectionRevision": "selection-1"
+        },
+        "receiptDigest": "8738979eb78236f13803f638e49d428b873bd1c624c7ddcfc71b663f7594f7f0"
+      }
+    },
+    {
+      "wire": "world-adapter/v8",
+      "operation": "QueryTransaction",
+      "title": "after stop/reconnect, same world: receipt keeps its written context",
+      "request": {
+        "contractVersion": "world-adapter/v8",
+        "sessionRef": "fixture-session-S1",
+        "requestId": "query-reconnected",
+        "worldRef": "fixture-world-A",
+        "transactionId": "house",
+        "transactionPayloadDigest": "61351fcd755fc4eaa715d05a77af6ecede3c222b5d78f26d2b34cf7612994abe",
+        "localContext": {
+          "worldRef": "fixture-world-A",
+          "connectionRef": "fixture-connection-1",
+          "connectionIncarnationRef": "fixture-incarnation-2",
+          "selectionRevision": "selection-2"
+        }
+      },
+      "response": {
+        "contractVersion": "world-adapter/v8",
+        "requestId": "query-reconnected",
+        "result": {
+          "contractVersion": "canvas/v7",
+          "transactionId": "house",
+          "operationDigest": "90f83d4d7fb4bf3a742aed41bd2c31d86c4ef4de9f11303b236722c2f445e763",
+          "transactionPayloadDigest": "61351fcd755fc4eaa715d05a77af6ecede3c222b5d78f26d2b34cf7612994abe",
+          "status": "VERIFIED",
+          "previousWorldRevision": "scope-state:ef7a5ed806a9f86b1326e5ef72103c587d80452ed2c5e18707b5cedb1ae8da31",
+          "observedWorldRevision": "scope-state:6424a99cc3b40a57e3c388adc8aae9fefa71764dd0692c16b59f02f2c606b117",
+          "readbackDigest": "6424a99cc3b40a57e3c388adc8aae9fefa71764dd0692c16b59f02f2c606b117",
+          "restoreStatus": "NOT_REQUIRED",
+          "error": null,
+          "localContext": {
+            "worldRef": "fixture-world-A",
+            "connectionRef": "fixture-connection-1",
+            "connectionIncarnationRef": "fixture-incarnation-1",
+            "selectionRevision": "selection-1"
+          },
+          "guardRefusal": null,
+          "applyFailure": null
+        },
+        "error": null,
+        "currentLocalContext": {
+          "worldRef": "fixture-world-A",
+          "connectionRef": "fixture-connection-1",
+          "connectionIncarnationRef": "fixture-incarnation-2",
+          "selectionRevision": "selection-2"
+        },
+        "receiptDigest": "8738979eb78236f13803f638e49d428b873bd1c624c7ddcfc71b663f7594f7f0"
+      }
+    }
+  ],
+  "reject": [
+    {
+      "wire": "world-adapter/v8",
+      "operation": "QueryTransaction",
+      "title": "after reconnect without the pair: full equality still refuses (adapter-07 repro)",
+      "code": "CURRENT_WORLD_MISMATCH",
+      "request": {
+        "contractVersion": "world-adapter/v8",
+        "sessionRef": "fixture-session-S1",
+        "requestId": "query-reconnected",
+        "worldRef": "fixture-world-A",
+        "transactionId": "house",
+        "transactionPayloadDigest": "61351fcd755fc4eaa715d05a77af6ecede3c222b5d78f26d2b34cf7612994abe",
+        "localContext": {
+          "worldRef": "fixture-world-A",
+          "connectionRef": "fixture-connection-1",
+          "connectionIncarnationRef": "fixture-incarnation-2",
+          "selectionRevision": "selection-2"
+        }
+      },
+      "response": {
+        "contractVersion": "world-adapter/v8",
+        "requestId": "query-reconnected",
+        "result": {
+          "contractVersion": "canvas/v7",
+          "transactionId": "house",
+          "operationDigest": "90f83d4d7fb4bf3a742aed41bd2c31d86c4ef4de9f11303b236722c2f445e763",
+          "transactionPayloadDigest": "61351fcd755fc4eaa715d05a77af6ecede3c222b5d78f26d2b34cf7612994abe",
+          "status": "VERIFIED",
+          "previousWorldRevision": "scope-state:ef7a5ed806a9f86b1326e5ef72103c587d80452ed2c5e18707b5cedb1ae8da31",
+          "observedWorldRevision": "scope-state:6424a99cc3b40a57e3c388adc8aae9fefa71764dd0692c16b59f02f2c606b117",
+          "readbackDigest": "6424a99cc3b40a57e3c388adc8aae9fefa71764dd0692c16b59f02f2c606b117",
+          "restoreStatus": "NOT_REQUIRED",
+          "error": null,
+          "localContext": {
+            "worldRef": "fixture-world-A",
+            "connectionRef": "fixture-connection-1",
+            "connectionIncarnationRef": "fixture-incarnation-1",
+            "selectionRevision": "selection-1"
+          },
+          "guardRefusal": null,
+          "applyFailure": null
+        },
+        "error": null
+      }
+    },
+    {
+      "wire": "world-adapter/v8",
+      "operation": "QueryTransaction",
+      "title": "receipt of another world",
+      "code": "CURRENT_WORLD_MISMATCH",
+      "request": {
+        "contractVersion": "world-adapter/v8",
+        "sessionRef": "fixture-session-S1",
+        "requestId": "query-other-world",
+        "worldRef": "fixture-world-B",
+        "transactionId": "house",
+        "transactionPayloadDigest": "61351fcd755fc4eaa715d05a77af6ecede3c222b5d78f26d2b34cf7612994abe",
+        "localContext": {
+          "worldRef": "fixture-world-B",
+          "connectionRef": "fixture-connection-2",
+          "connectionIncarnationRef": "fixture-incarnation-3",
+          "selectionRevision": "selection-1"
+        }
+      },
+      "response": {
+        "contractVersion": "world-adapter/v8",
+        "requestId": "query-other-world",
+        "result": {
+          "contractVersion": "canvas/v7",
+          "transactionId": "house",
+          "operationDigest": "90f83d4d7fb4bf3a742aed41bd2c31d86c4ef4de9f11303b236722c2f445e763",
+          "transactionPayloadDigest": "61351fcd755fc4eaa715d05a77af6ecede3c222b5d78f26d2b34cf7612994abe",
+          "status": "VERIFIED",
+          "previousWorldRevision": "scope-state:ef7a5ed806a9f86b1326e5ef72103c587d80452ed2c5e18707b5cedb1ae8da31",
+          "observedWorldRevision": "scope-state:6424a99cc3b40a57e3c388adc8aae9fefa71764dd0692c16b59f02f2c606b117",
+          "readbackDigest": "6424a99cc3b40a57e3c388adc8aae9fefa71764dd0692c16b59f02f2c606b117",
+          "restoreStatus": "NOT_REQUIRED",
+          "error": null,
+          "localContext": {
+            "worldRef": "fixture-world-A",
+            "connectionRef": "fixture-connection-1",
+            "connectionIncarnationRef": "fixture-incarnation-1",
+            "selectionRevision": "selection-1"
+          },
+          "guardRefusal": null,
+          "applyFailure": null
+        },
+        "error": null,
+        "currentLocalContext": {
+          "worldRef": "fixture-world-B",
+          "connectionRef": "fixture-connection-2",
+          "connectionIncarnationRef": "fixture-incarnation-3",
+          "selectionRevision": "selection-1"
+        },
+        "receiptDigest": "8738979eb78236f13803f638e49d428b873bd1c624c7ddcfc71b663f7594f7f0"
+      }
+    },
+    {
+      "wire": "world-adapter/v8",
+      "operation": "QueryTransaction",
+      "title": "envelope context is not the current request context",
+      "code": "CURRENT_WORLD_MISMATCH",
+      "request": {
+        "contractVersion": "world-adapter/v8",
+        "sessionRef": "fixture-session-S1",
+        "requestId": "query-reconnected",
+        "worldRef": "fixture-world-A",
+        "transactionId": "house",
+        "transactionPayloadDigest": "61351fcd755fc4eaa715d05a77af6ecede3c222b5d78f26d2b34cf7612994abe",
+        "localContext": {
+          "worldRef": "fixture-world-A",
+          "connectionRef": "fixture-connection-1",
+          "connectionIncarnationRef": "fixture-incarnation-2",
+          "selectionRevision": "selection-2"
+        }
+      },
+      "response": {
+        "contractVersion": "world-adapter/v8",
+        "requestId": "query-reconnected",
+        "result": {
+          "contractVersion": "canvas/v7",
+          "transactionId": "house",
+          "operationDigest": "90f83d4d7fb4bf3a742aed41bd2c31d86c4ef4de9f11303b236722c2f445e763",
+          "transactionPayloadDigest": "61351fcd755fc4eaa715d05a77af6ecede3c222b5d78f26d2b34cf7612994abe",
+          "status": "VERIFIED",
+          "previousWorldRevision": "scope-state:ef7a5ed806a9f86b1326e5ef72103c587d80452ed2c5e18707b5cedb1ae8da31",
+          "observedWorldRevision": "scope-state:6424a99cc3b40a57e3c388adc8aae9fefa71764dd0692c16b59f02f2c606b117",
+          "readbackDigest": "6424a99cc3b40a57e3c388adc8aae9fefa71764dd0692c16b59f02f2c606b117",
+          "restoreStatus": "NOT_REQUIRED",
+          "error": null,
+          "localContext": {
+            "worldRef": "fixture-world-A",
+            "connectionRef": "fixture-connection-1",
+            "connectionIncarnationRef": "fixture-incarnation-1",
+            "selectionRevision": "selection-1"
+          },
+          "guardRefusal": null,
+          "applyFailure": null
+        },
+        "error": null,
+        "currentLocalContext": {
+          "worldRef": "fixture-world-A",
+          "connectionRef": "fixture-connection-1",
+          "connectionIncarnationRef": "fixture-incarnation-1",
+          "selectionRevision": "selection-1"
+        },
+        "receiptDigest": "8738979eb78236f13803f638e49d428b873bd1c624c7ddcfc71b663f7594f7f0"
+      }
+    },
+    {
+      "wire": "world-adapter/v8",
+      "operation": "QueryTransaction",
+      "title": "receipt re-bound to the current incarnation",
+      "code": "NON_CANONICAL_AMBIGUITY",
+      "request": {
+        "contractVersion": "world-adapter/v8",
+        "sessionRef": "fixture-session-S1",
+        "requestId": "query-reconnected",
+        "worldRef": "fixture-world-A",
+        "transactionId": "house",
+        "transactionPayloadDigest": "61351fcd755fc4eaa715d05a77af6ecede3c222b5d78f26d2b34cf7612994abe",
+        "localContext": {
+          "worldRef": "fixture-world-A",
+          "connectionRef": "fixture-connection-1",
+          "connectionIncarnationRef": "fixture-incarnation-2",
+          "selectionRevision": "selection-2"
+        }
+      },
+      "response": {
+        "contractVersion": "world-adapter/v8",
+        "requestId": "query-reconnected",
+        "result": {
+          "contractVersion": "canvas/v7",
+          "transactionId": "house",
+          "operationDigest": "90f83d4d7fb4bf3a742aed41bd2c31d86c4ef4de9f11303b236722c2f445e763",
+          "transactionPayloadDigest": "61351fcd755fc4eaa715d05a77af6ecede3c222b5d78f26d2b34cf7612994abe",
+          "status": "VERIFIED",
+          "previousWorldRevision": "scope-state:ef7a5ed806a9f86b1326e5ef72103c587d80452ed2c5e18707b5cedb1ae8da31",
+          "observedWorldRevision": "scope-state:6424a99cc3b40a57e3c388adc8aae9fefa71764dd0692c16b59f02f2c606b117",
+          "readbackDigest": "6424a99cc3b40a57e3c388adc8aae9fefa71764dd0692c16b59f02f2c606b117",
+          "restoreStatus": "NOT_REQUIRED",
+          "error": null,
+          "localContext": {
+            "worldRef": "fixture-world-A",
+            "connectionRef": "fixture-connection-1",
+            "connectionIncarnationRef": "fixture-incarnation-2",
+            "selectionRevision": "selection-2"
+          },
+          "guardRefusal": null,
+          "applyFailure": null
+        },
+        "error": null,
+        "currentLocalContext": {
+          "worldRef": "fixture-world-A",
+          "connectionRef": "fixture-connection-1",
+          "connectionIncarnationRef": "fixture-incarnation-2",
+          "selectionRevision": "selection-2"
+        },
+        "receiptDigest": "8738979eb78236f13803f638e49d428b873bd1c624c7ddcfc71b663f7594f7f0"
+      }
+    },
+    {
+      "wire": "world-adapter/v8",
+      "operation": "QueryTransaction",
+      "title": "tampered receipt previousWorldRevision",
+      "code": "NON_CANONICAL_AMBIGUITY",
+      "request": {
+        "contractVersion": "world-adapter/v8",
+        "sessionRef": "fixture-session-S1",
+        "requestId": "query-reconnected",
+        "worldRef": "fixture-world-A",
+        "transactionId": "house",
+        "transactionPayloadDigest": "61351fcd755fc4eaa715d05a77af6ecede3c222b5d78f26d2b34cf7612994abe",
+        "localContext": {
+          "worldRef": "fixture-world-A",
+          "connectionRef": "fixture-connection-1",
+          "connectionIncarnationRef": "fixture-incarnation-2",
+          "selectionRevision": "selection-2"
+        }
+      },
+      "response": {
+        "contractVersion": "world-adapter/v8",
+        "requestId": "query-reconnected",
+        "result": {
+          "contractVersion": "canvas/v7",
+          "transactionId": "house",
+          "operationDigest": "90f83d4d7fb4bf3a742aed41bd2c31d86c4ef4de9f11303b236722c2f445e763",
+          "transactionPayloadDigest": "61351fcd755fc4eaa715d05a77af6ecede3c222b5d78f26d2b34cf7612994abe",
+          "status": "VERIFIED",
+          "previousWorldRevision": "scope-state:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "observedWorldRevision": "scope-state:6424a99cc3b40a57e3c388adc8aae9fefa71764dd0692c16b59f02f2c606b117",
+          "readbackDigest": "6424a99cc3b40a57e3c388adc8aae9fefa71764dd0692c16b59f02f2c606b117",
+          "restoreStatus": "NOT_REQUIRED",
+          "error": null,
+          "localContext": {
+            "worldRef": "fixture-world-A",
+            "connectionRef": "fixture-connection-1",
+            "connectionIncarnationRef": "fixture-incarnation-1",
+            "selectionRevision": "selection-1"
+          },
+          "guardRefusal": null,
+          "applyFailure": null
+        },
+        "error": null,
+        "currentLocalContext": {
+          "worldRef": "fixture-world-A",
+          "connectionRef": "fixture-connection-1",
+          "connectionIncarnationRef": "fixture-incarnation-2",
+          "selectionRevision": "selection-2"
+        },
+        "receiptDigest": "8738979eb78236f13803f638e49d428b873bd1c624c7ddcfc71b663f7594f7f0"
+      }
+    },
+    {
+      "wire": "world-adapter/v8",
+      "operation": "QueryTransaction",
+      "title": "tampered receipt operationDigest",
+      "code": "NON_CANONICAL_AMBIGUITY",
+      "request": {
+        "contractVersion": "world-adapter/v8",
+        "sessionRef": "fixture-session-S1",
+        "requestId": "query-reconnected",
+        "worldRef": "fixture-world-A",
+        "transactionId": "house",
+        "transactionPayloadDigest": "61351fcd755fc4eaa715d05a77af6ecede3c222b5d78f26d2b34cf7612994abe",
+        "localContext": {
+          "worldRef": "fixture-world-A",
+          "connectionRef": "fixture-connection-1",
+          "connectionIncarnationRef": "fixture-incarnation-2",
+          "selectionRevision": "selection-2"
+        }
+      },
+      "response": {
+        "contractVersion": "world-adapter/v8",
+        "requestId": "query-reconnected",
+        "result": {
+          "contractVersion": "canvas/v7",
+          "transactionId": "house",
+          "operationDigest": "0000000000000000000000000000000000000000000000000000000000000000",
+          "transactionPayloadDigest": "61351fcd755fc4eaa715d05a77af6ecede3c222b5d78f26d2b34cf7612994abe",
+          "status": "VERIFIED",
+          "previousWorldRevision": "scope-state:ef7a5ed806a9f86b1326e5ef72103c587d80452ed2c5e18707b5cedb1ae8da31",
+          "observedWorldRevision": "scope-state:6424a99cc3b40a57e3c388adc8aae9fefa71764dd0692c16b59f02f2c606b117",
+          "readbackDigest": "6424a99cc3b40a57e3c388adc8aae9fefa71764dd0692c16b59f02f2c606b117",
+          "restoreStatus": "NOT_REQUIRED",
+          "error": null,
+          "localContext": {
+            "worldRef": "fixture-world-A",
+            "connectionRef": "fixture-connection-1",
+            "connectionIncarnationRef": "fixture-incarnation-1",
+            "selectionRevision": "selection-1"
+          },
+          "guardRefusal": null,
+          "applyFailure": null
+        },
+        "error": null,
+        "currentLocalContext": {
+          "worldRef": "fixture-world-A",
+          "connectionRef": "fixture-connection-1",
+          "connectionIncarnationRef": "fixture-incarnation-2",
+          "selectionRevision": "selection-2"
+        },
+        "receiptDigest": "8738979eb78236f13803f638e49d428b873bd1c624c7ddcfc71b663f7594f7f0"
+      }
+    },
+    {
+      "wire": "world-adapter/v8",
+      "operation": "QueryTransaction",
+      "title": "tampered receiptDigest",
+      "code": "NON_CANONICAL_AMBIGUITY",
+      "request": {
+        "contractVersion": "world-adapter/v8",
+        "sessionRef": "fixture-session-S1",
+        "requestId": "query-reconnected",
+        "worldRef": "fixture-world-A",
+        "transactionId": "house",
+        "transactionPayloadDigest": "61351fcd755fc4eaa715d05a77af6ecede3c222b5d78f26d2b34cf7612994abe",
+        "localContext": {
+          "worldRef": "fixture-world-A",
+          "connectionRef": "fixture-connection-1",
+          "connectionIncarnationRef": "fixture-incarnation-2",
+          "selectionRevision": "selection-2"
+        }
+      },
+      "response": {
+        "contractVersion": "world-adapter/v8",
+        "requestId": "query-reconnected",
+        "result": {
+          "contractVersion": "canvas/v7",
+          "transactionId": "house",
+          "operationDigest": "90f83d4d7fb4bf3a742aed41bd2c31d86c4ef4de9f11303b236722c2f445e763",
+          "transactionPayloadDigest": "61351fcd755fc4eaa715d05a77af6ecede3c222b5d78f26d2b34cf7612994abe",
+          "status": "VERIFIED",
+          "previousWorldRevision": "scope-state:ef7a5ed806a9f86b1326e5ef72103c587d80452ed2c5e18707b5cedb1ae8da31",
+          "observedWorldRevision": "scope-state:6424a99cc3b40a57e3c388adc8aae9fefa71764dd0692c16b59f02f2c606b117",
+          "readbackDigest": "6424a99cc3b40a57e3c388adc8aae9fefa71764dd0692c16b59f02f2c606b117",
+          "restoreStatus": "NOT_REQUIRED",
+          "error": null,
+          "localContext": {
+            "worldRef": "fixture-world-A",
+            "connectionRef": "fixture-connection-1",
+            "connectionIncarnationRef": "fixture-incarnation-1",
+            "selectionRevision": "selection-1"
+          },
+          "guardRefusal": null,
+          "applyFailure": null
+        },
+        "error": null,
+        "currentLocalContext": {
+          "worldRef": "fixture-world-A",
+          "connectionRef": "fixture-connection-1",
+          "connectionIncarnationRef": "fixture-incarnation-2",
+          "selectionRevision": "selection-2"
+        },
+        "receiptDigest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      }
+    },
+    {
+      "wire": "world-adapter/v8",
+      "operation": "QueryTransaction",
+      "title": "receipt of another transaction",
+      "code": "TRANSACTION_CONFLICT",
+      "request": {
+        "contractVersion": "world-adapter/v8",
+        "sessionRef": "fixture-session-S1",
+        "requestId": "query-reconnected",
+        "worldRef": "fixture-world-A",
+        "transactionId": "other-transaction",
+        "transactionPayloadDigest": "61351fcd755fc4eaa715d05a77af6ecede3c222b5d78f26d2b34cf7612994abe",
+        "localContext": {
+          "worldRef": "fixture-world-A",
+          "connectionRef": "fixture-connection-1",
+          "connectionIncarnationRef": "fixture-incarnation-2",
+          "selectionRevision": "selection-2"
+        }
+      },
+      "response": {
+        "contractVersion": "world-adapter/v8",
+        "requestId": "query-reconnected",
+        "result": {
+          "contractVersion": "canvas/v7",
+          "transactionId": "house",
+          "operationDigest": "90f83d4d7fb4bf3a742aed41bd2c31d86c4ef4de9f11303b236722c2f445e763",
+          "transactionPayloadDigest": "61351fcd755fc4eaa715d05a77af6ecede3c222b5d78f26d2b34cf7612994abe",
+          "status": "VERIFIED",
+          "previousWorldRevision": "scope-state:ef7a5ed806a9f86b1326e5ef72103c587d80452ed2c5e18707b5cedb1ae8da31",
+          "observedWorldRevision": "scope-state:6424a99cc3b40a57e3c388adc8aae9fefa71764dd0692c16b59f02f2c606b117",
+          "readbackDigest": "6424a99cc3b40a57e3c388adc8aae9fefa71764dd0692c16b59f02f2c606b117",
+          "restoreStatus": "NOT_REQUIRED",
+          "error": null,
+          "localContext": {
+            "worldRef": "fixture-world-A",
+            "connectionRef": "fixture-connection-1",
+            "connectionIncarnationRef": "fixture-incarnation-1",
+            "selectionRevision": "selection-1"
+          },
+          "guardRefusal": null,
+          "applyFailure": null
+        },
+        "error": null,
+        "currentLocalContext": {
+          "worldRef": "fixture-world-A",
+          "connectionRef": "fixture-connection-1",
+          "connectionIncarnationRef": "fixture-incarnation-2",
+          "selectionRevision": "selection-2"
+        },
+        "receiptDigest": "8738979eb78236f13803f638e49d428b873bd1c624c7ddcfc71b663f7594f7f0"
+      }
+    },
+    {
+      "wire": "world-adapter/v8",
+      "operation": "QueryTransaction",
+      "title": "receipt of another prepared payload",
+      "code": "TRANSACTION_CONFLICT",
+      "request": {
+        "contractVersion": "world-adapter/v8",
+        "sessionRef": "fixture-session-S1",
+        "requestId": "query-reconnected",
+        "worldRef": "fixture-world-A",
+        "transactionId": "house",
+        "transactionPayloadDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "localContext": {
+          "worldRef": "fixture-world-A",
+          "connectionRef": "fixture-connection-1",
+          "connectionIncarnationRef": "fixture-incarnation-2",
+          "selectionRevision": "selection-2"
+        }
+      },
+      "response": {
+        "contractVersion": "world-adapter/v8",
+        "requestId": "query-reconnected",
+        "result": {
+          "contractVersion": "canvas/v7",
+          "transactionId": "house",
+          "operationDigest": "90f83d4d7fb4bf3a742aed41bd2c31d86c4ef4de9f11303b236722c2f445e763",
+          "transactionPayloadDigest": "61351fcd755fc4eaa715d05a77af6ecede3c222b5d78f26d2b34cf7612994abe",
+          "status": "VERIFIED",
+          "previousWorldRevision": "scope-state:ef7a5ed806a9f86b1326e5ef72103c587d80452ed2c5e18707b5cedb1ae8da31",
+          "observedWorldRevision": "scope-state:6424a99cc3b40a57e3c388adc8aae9fefa71764dd0692c16b59f02f2c606b117",
+          "readbackDigest": "6424a99cc3b40a57e3c388adc8aae9fefa71764dd0692c16b59f02f2c606b117",
+          "restoreStatus": "NOT_REQUIRED",
+          "error": null,
+          "localContext": {
+            "worldRef": "fixture-world-A",
+            "connectionRef": "fixture-connection-1",
+            "connectionIncarnationRef": "fixture-incarnation-1",
+            "selectionRevision": "selection-1"
+          },
+          "guardRefusal": null,
+          "applyFailure": null
+        },
+        "error": null,
+        "currentLocalContext": {
+          "worldRef": "fixture-world-A",
+          "connectionRef": "fixture-connection-1",
+          "connectionIncarnationRef": "fixture-incarnation-2",
+          "selectionRevision": "selection-2"
+        },
+        "receiptDigest": "8738979eb78236f13803f638e49d428b873bd1c624c7ddcfc71b663f7594f7f0"
+      }
+    },
+    {
+      "wire": "world-adapter/v8",
+      "operation": "QueryTransaction",
+      "title": "currentLocalContext without receiptDigest",
+      "code": "SCHEMA_INVALID",
+      "request": {
+        "contractVersion": "world-adapter/v8",
+        "sessionRef": "fixture-session-S1",
+        "requestId": "query-reconnected",
+        "worldRef": "fixture-world-A",
+        "transactionId": "house",
+        "transactionPayloadDigest": "61351fcd755fc4eaa715d05a77af6ecede3c222b5d78f26d2b34cf7612994abe",
+        "localContext": {
+          "worldRef": "fixture-world-A",
+          "connectionRef": "fixture-connection-1",
+          "connectionIncarnationRef": "fixture-incarnation-2",
+          "selectionRevision": "selection-2"
+        }
+      },
+      "response": {
+        "contractVersion": "world-adapter/v8",
+        "requestId": "query-reconnected",
+        "result": {
+          "contractVersion": "canvas/v7",
+          "transactionId": "house",
+          "operationDigest": "90f83d4d7fb4bf3a742aed41bd2c31d86c4ef4de9f11303b236722c2f445e763",
+          "transactionPayloadDigest": "61351fcd755fc4eaa715d05a77af6ecede3c222b5d78f26d2b34cf7612994abe",
+          "status": "VERIFIED",
+          "previousWorldRevision": "scope-state:ef7a5ed806a9f86b1326e5ef72103c587d80452ed2c5e18707b5cedb1ae8da31",
+          "observedWorldRevision": "scope-state:6424a99cc3b40a57e3c388adc8aae9fefa71764dd0692c16b59f02f2c606b117",
+          "readbackDigest": "6424a99cc3b40a57e3c388adc8aae9fefa71764dd0692c16b59f02f2c606b117",
+          "restoreStatus": "NOT_REQUIRED",
+          "error": null,
+          "localContext": {
+            "worldRef": "fixture-world-A",
+            "connectionRef": "fixture-connection-1",
+            "connectionIncarnationRef": "fixture-incarnation-1",
+            "selectionRevision": "selection-1"
+          },
+          "guardRefusal": null,
+          "applyFailure": null
+        },
+        "error": null,
+        "currentLocalContext": {
+          "worldRef": "fixture-world-A",
+          "connectionRef": "fixture-connection-1",
+          "connectionIncarnationRef": "fixture-incarnation-2",
+          "selectionRevision": "selection-2"
+        }
+      }
+    },
+    {
+      "wire": "world-adapter/v8",
+      "operation": "QueryTransaction",
+      "title": "receiptDigest without currentLocalContext",
+      "code": "SCHEMA_INVALID",
+      "request": {
+        "contractVersion": "world-adapter/v8",
+        "sessionRef": "fixture-session-S1",
+        "requestId": "query-reconnected",
+        "worldRef": "fixture-world-A",
+        "transactionId": "house",
+        "transactionPayloadDigest": "61351fcd755fc4eaa715d05a77af6ecede3c222b5d78f26d2b34cf7612994abe",
+        "localContext": {
+          "worldRef": "fixture-world-A",
+          "connectionRef": "fixture-connection-1",
+          "connectionIncarnationRef": "fixture-incarnation-2",
+          "selectionRevision": "selection-2"
+        }
+      },
+      "response": {
+        "contractVersion": "world-adapter/v8",
+        "requestId": "query-reconnected",
+        "result": {
+          "contractVersion": "canvas/v7",
+          "transactionId": "house",
+          "operationDigest": "90f83d4d7fb4bf3a742aed41bd2c31d86c4ef4de9f11303b236722c2f445e763",
+          "transactionPayloadDigest": "61351fcd755fc4eaa715d05a77af6ecede3c222b5d78f26d2b34cf7612994abe",
+          "status": "VERIFIED",
+          "previousWorldRevision": "scope-state:ef7a5ed806a9f86b1326e5ef72103c587d80452ed2c5e18707b5cedb1ae8da31",
+          "observedWorldRevision": "scope-state:6424a99cc3b40a57e3c388adc8aae9fefa71764dd0692c16b59f02f2c606b117",
+          "readbackDigest": "6424a99cc3b40a57e3c388adc8aae9fefa71764dd0692c16b59f02f2c606b117",
+          "restoreStatus": "NOT_REQUIRED",
+          "error": null,
+          "localContext": {
+            "worldRef": "fixture-world-A",
+            "connectionRef": "fixture-connection-1",
+            "connectionIncarnationRef": "fixture-incarnation-1",
+            "selectionRevision": "selection-1"
+          },
+          "guardRefusal": null,
+          "applyFailure": null
+        },
+        "error": null,
+        "receiptDigest": "8738979eb78236f13803f638e49d428b873bd1c624c7ddcfc71b663f7594f7f0"
+      }
+    },
+    {
+      "wire": "world-adapter/v8",
+      "operation": "QueryTransaction",
+      "title": "pair beside an error",
+      "code": "SCHEMA_INVALID",
+      "request": {
+        "contractVersion": "world-adapter/v8",
+        "sessionRef": "fixture-session-S1",
+        "requestId": "query-reconnected",
+        "worldRef": "fixture-world-A",
+        "transactionId": "house",
+        "transactionPayloadDigest": "61351fcd755fc4eaa715d05a77af6ecede3c222b5d78f26d2b34cf7612994abe",
+        "localContext": {
+          "worldRef": "fixture-world-A",
+          "connectionRef": "fixture-connection-1",
+          "connectionIncarnationRef": "fixture-incarnation-2",
+          "selectionRevision": "selection-2"
+        }
+      },
+      "response": {
+        "contractVersion": "world-adapter/v8",
+        "requestId": "query-reconnected",
+        "result": null,
+        "error": {
+          "code": "ADAPTER_UNAVAILABLE",
+          "phase": "validate",
+          "retryability": "AFTER_NEW_FACTS",
+          "mutationState": "NONE",
+          "transactionRef": null,
+          "causeCode": null,
+          "reason": "REQUIRED_FACT_UNKNOWN"
+        },
+        "currentLocalContext": {
+          "worldRef": "fixture-world-A",
+          "connectionRef": "fixture-connection-1",
+          "connectionIncarnationRef": "fixture-incarnation-2",
+          "selectionRevision": "selection-2"
+        },
+        "receiptDigest": "8738979eb78236f13803f638e49d428b873bd1c624c7ddcfc71b663f7594f7f0"
+      }
+    },
+    {
+      "wire": "world-adapter/v8",
+      "operation": "QueryTransaction",
+      "title": "null is not a form of absence",
+      "code": "SCHEMA_INVALID",
+      "request": {
+        "contractVersion": "world-adapter/v8",
+        "sessionRef": "fixture-session-S1",
+        "requestId": "query-reconnected",
+        "worldRef": "fixture-world-A",
+        "transactionId": "house",
+        "transactionPayloadDigest": "61351fcd755fc4eaa715d05a77af6ecede3c222b5d78f26d2b34cf7612994abe",
+        "localContext": {
+          "worldRef": "fixture-world-A",
+          "connectionRef": "fixture-connection-1",
+          "connectionIncarnationRef": "fixture-incarnation-2",
+          "selectionRevision": "selection-2"
+        }
+      },
+      "response": {
+        "contractVersion": "world-adapter/v8",
+        "requestId": "query-reconnected",
+        "result": {
+          "contractVersion": "canvas/v7",
+          "transactionId": "house",
+          "operationDigest": "90f83d4d7fb4bf3a742aed41bd2c31d86c4ef4de9f11303b236722c2f445e763",
+          "transactionPayloadDigest": "61351fcd755fc4eaa715d05a77af6ecede3c222b5d78f26d2b34cf7612994abe",
+          "status": "VERIFIED",
+          "previousWorldRevision": "scope-state:ef7a5ed806a9f86b1326e5ef72103c587d80452ed2c5e18707b5cedb1ae8da31",
+          "observedWorldRevision": "scope-state:6424a99cc3b40a57e3c388adc8aae9fefa71764dd0692c16b59f02f2c606b117",
+          "readbackDigest": "6424a99cc3b40a57e3c388adc8aae9fefa71764dd0692c16b59f02f2c606b117",
+          "restoreStatus": "NOT_REQUIRED",
+          "error": null,
+          "localContext": {
+            "worldRef": "fixture-world-A",
+            "connectionRef": "fixture-connection-1",
+            "connectionIncarnationRef": "fixture-incarnation-1",
+            "selectionRevision": "selection-1"
+          },
+          "guardRefusal": null,
+          "applyFailure": null
+        },
+        "error": null,
+        "currentLocalContext": null,
+        "receiptDigest": "8738979eb78236f13803f638e49d428b873bd1c624c7ddcfc71b663f7594f7f0"
+      }
+    }
+  ]
+}

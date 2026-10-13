@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import canonicalize from 'canonicalize';
 import { digestValue, requestDigest, validateBoundResponse, validateResponse,
- validateCommitReadback, requireGeometryProfile, readHistoricalReceipt } from 'hanaworlds-contracts';
+ validateCommitReadback, requireGeometryProfile, readHistoricalReceipt } from './protocol/local/index.mjs';
 import { withDerivedReadback } from './state-profile.mjs';
 const same = (a, b) => canonicalize(a) === canonicalize(b);
 const D = (kind, value) => digestValue(kind, value).sha256;

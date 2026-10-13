@@ -1,32 +1,25 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
-import { fileURLToPath } from 'node:url';
-import { contractHandshake, version, operationContracts, schemaBundle,
-  validateType, protocolRequirement, checkProtocolCompatibility } from 'hanaworlds-contracts';
+import { operationContracts, schemaBundle,
+  validateType, protocolRequirement, checkProtocolCompatibility } from '../src/protocol/local/index.mjs';
 import { CanvasV5, canvasProtocolHandshake, ADAPTER_CELL_REQUIREMENT,
   ADAPTER_REGION_REQUIREMENT } from '../src/index.mjs';
 
-// canvas-11 scoped undo: remote annotated tag v2.12.0 (peeled commit), checked at admission.
-const release = { tag: 'v2.12.0', version: '2.12.0',
-  revision: '33c34372fd5092a83b6f3cc81c086470fa76d794' };
-const repository = 'git+https://github.com/yzsnstotz/hanaworlds-contracts.git';
 const root = new URL('../', import.meta.url);
 const json = async url => JSON.parse(await readFile(url, 'utf8'));
 const manifest = await json(new URL('package.json', root));
 const lock = await json(new URL('package-lock.json', root));
-const installed = await json(new URL(import.meta.resolve('hanaworlds-contracts/package.json')));
-const dependency = `${repository}#${release.tag}`;
-assert.match(dependency, /#v2\.\d+\.\d+$/);
-assert.equal(manifest.devDependencies['hanaworlds-contracts'], dependency, 'exact public git tag required');
-assert.equal(lock.packages[''].devDependencies['hanaworlds-contracts'], dependency, 'root lock drift');
-assert.equal(lock.packages['node_modules/hanaworlds-contracts'].version, release.version);
-assert.equal(lock.packages['node_modules/hanaworlds-contracts'].resolved
-  .replace('git+ssh://git@github.com/', 'git+https://github.com/'),
-  `${repository}#${release.revision}`, 'published tag commit required');
-assert.equal(installed.version, release.version, 'installed package drift');
-assert.equal(version, release.version, 'SDK version drift');
-assert.equal(contractHandshake.contracts, `hanaworlds-contracts@${release.version}`);
+const protocol = await json(new URL('scripts/protocol-source.json', root));
+assert.equal(protocol.owner, manifest.name);
+assert.deepEqual(protocol.documents, ['C-canvas@2', 'C-world-adapter@2', 'C-world-facts@2']);
+for (const section of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'])
+  for (const name of Object.keys(manifest[section] ?? {}))
+    assert.ok(name !== 'hanaworlds-contracts' && name !== 'cordis', `external supplier/runtime in ${section}`);
+assert.ok(!JSON.stringify(lock).includes('hanaworlds-contracts'), 'external supplier in lock graph');
+assert.ok(!Object.hasOwn(lock.packages, 'node_modules/cordis'), 'old framework in lock graph');
+for (const [path, digest] of Object.entries(protocol.files))
+  assert.equal(createHash('sha256').update(await readFile(new URL(path, root))).digest('hex'), digest, `owned protocol drift: ${path}`);
 for (const [wire, operations] of Object.entries({
   'canvas/v7': ['SelectWorldConnection', 'ReadWorldSelectionContext', 'ReserveWorldRetirement',
     'HistoryQuery', 'InspectPlacementRegion', 'AnalyzeAffectedObjects', 'ApplyRecoverableCommit', 'Undo', 'Redo'],
@@ -60,17 +53,15 @@ for (const banned of ['display-fixture', 'displayFixture', 'SAMPLE_KEY', '查看
   assert.ok(!bundle.includes(banned), `published client contains ${banned}`);
 
 
-for (const section of ['dependencies', 'peerDependencies', 'optionalDependencies'])
-  assert.ok(!manifest[section]?.['hanaworlds-contracts'], `production supplier in ${section}`);
-assert.equal(lock.packages['node_modules/hanaworlds-contracts'].dev, true);
 const generated = await json(new URL('lib/build-source.json', root));
-assert.equal(generated.supplier.tag, dependency);
-assert.equal(generated.supplier.version, release.version);
-assert.equal(generated.supplier.revision, release.revision);
-assert.equal(generated.supplier.packageSHA256, createHash('sha256').update(await readFile(new URL(import.meta.resolve('hanaworlds-contracts/package.json')))).digest('hex'));
+assert.equal(generated.format, 'canvas-build-source/v2');
+assert.equal(generated.supplier.name, manifest.name);
+assert.equal(generated.supplier.protocolSourceSHA256, createHash('sha256').update(await readFile(new URL('scripts/protocol-source.json', root))).digest('hex'));
 for (const [path, digest] of Object.entries({ ...generated.inputs, ...generated.artifacts }))
   assert.equal(createHash('sha256').update(await readFile(new URL(path, root))).digest('hex'), digest, `build source drift: ${path}`);
-assert.ok(Object.keys(generated.inputs).some(p => p.startsWith('node_modules/hanaworlds-contracts/dist/')));
-console.log(JSON.stringify({ result: 'BASELINE_CONSISTENT', ...release, dependency,
-  installed: fileURLToPath(new URL(import.meta.resolve('hanaworlds-contracts/package.json'))),
+assert.ok(Object.keys(generated.inputs).some(p => p.startsWith('src/protocol/')));
+assert.ok(!Object.keys(generated.inputs).some(p => p.includes('node_modules/hanaworlds-contracts/') || p.includes('node_modules/cordis/')));
+assert.ok(Object.hasOwn(generated.inputs, 'src/client.jsx'), 'client input provenance required');
+assert.ok(Object.hasOwn(generated.artifacts, 'types/index.d.ts'), 'public type provenance required');
+console.log(JSON.stringify({ result: 'DOCUMENT_PROTOCOL_AND_SOURCE_CONSISTENT', documents: protocol.documents,
   bundleSHA256: createHash('sha256').update(bundle).digest('hex') }));

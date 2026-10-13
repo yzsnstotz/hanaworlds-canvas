@@ -1,9 +1,9 @@
-/** Declaration-only Contracts consumption: TypeScript consumers install the exact public
- * v2.12.0 git tag as a devDependency. JS artifacts embed runtime validation and require no
- * Contracts package. Cross-provider errors are consumed through validated public Error
- * envelopes, never through a shared private SDK constructor or singleton. */
+/** Canvas-owned document protocol structures and declarations. Normal build embeds
+ * schema/validators; consumers need only the declared official runtime dependencies.
+ * Cross-provider errors use public JSON envelopes. */
 import type { ContractHandshake, OperationMap, ProtocolHandshake, RegionSnapshotContent,
-  RegionSnapshotRef, RegionSummary } from 'hanaworlds-contracts';
+  RegionSnapshotRef, RegionSummary, MaterialSourceConnection, GridUnit, Frame, Partition,
+  RegionSize, Ref, Digest } from './protocol/index.js';
 import type { NativeFactsPort, WorldFactsPort } from './native-facts.js';
 import type Schema from '@deepseek-ai/schemastery';
 export type { NativeFactsPort, NativeFactsScopedState, WorldFactsPort } from './native-facts.js';
@@ -21,11 +21,11 @@ export interface CanvasHostContext {
   parallel?<K extends keyof CanvasSelectionEvents>(name: K, event: CanvasSelectionEvents[K]): Promise<void>;
 }
 export interface CanvasSelectionEvents {
-  WorldConnectionSelectionChanged: import('hanaworlds-contracts').WorldConnectionSelectionChanged;
-  ActiveWorldChanged: import('hanaworlds-contracts').ActiveWorldChanged;
-  TransactionVerified: import('hanaworlds-contracts').TransactionVerified;
-  HistoryPositionChanged: import('hanaworlds-contracts').HistoryPositionChanged;
-  AffectedObjectNotificationRequired: import('hanaworlds-contracts').AffectedObjectNotificationRequired;
+  WorldConnectionSelectionChanged: import('./protocol/index.js').WorldConnectionSelectionChanged;
+  ActiveWorldChanged: import('./protocol/index.js').ActiveWorldChanged;
+  TransactionVerified: import('./protocol/index.js').TransactionVerified;
+  HistoryPositionChanged: import('./protocol/index.js').HistoryPositionChanged;
+  AffectedObjectNotificationRequired: import('./protocol/index.js').AffectedObjectNotificationRequired;
 }
 export type CanvasSelectionEvent = CanvasSelectionEvents[keyof CanvasSelectionEvents];
 declare module '@deepseek-ai/cordis' {
@@ -74,13 +74,15 @@ export class CanvasV5 implements CanvasV5ProtocolSource {
   /** Exact pending History outcome; it never reapplies or forces Restore. */
   resolvePendingHistory(request: { sessionRef: string; transactionId: string }): Promise<{
     transactionId: string; status: string; recoveryPending?: boolean;
-    receipt: import("hanaworlds-contracts").ReceiptProjection; response: unknown;
+    receipt: import("./protocol/index.js").ReceiptProjection; response: unknown;
   }>;
   /** G3 write-before guard on the per-cell port; throws a public decode error when incompatible. */
-  adapterCompatible(): ReturnType<typeof import('hanaworlds-contracts').checkProtocolCompatibility>;
+  adapterCompatible(): ReturnType<typeof import('./protocol/index.js').checkProtocolCompatibility>;
   call<N extends keyof OperationMap['canvas/v7']>(operation: N,
     request: unknown): Promise<OperationMap['canvas/v7'][N]['response']>;
   readObjectsHistory(sessionRef: string | null): Promise<ObjectsHistoryDisplay>;
+  /** Read the current registered world's complete public facts and Canvas history without writes. */
+  readToolSummary(request: CanvasToolSummaryRequest): Promise<CanvasToolSummary>;
   /** Data-free notice after each durable commit that changes this Session's panel; ends on abort. */
   watchObjectsHistory(sessionRef: string, signal?: AbortSignal):
     AsyncGenerator<{ worldRef: string | null; registryRevision: string | null }, void, undefined>;
@@ -101,33 +103,33 @@ export interface RecoveryRow {
   transactionId: string; mode: 'CELL' | 'REGION'; phase: string; recoveryPending: boolean;
   /** CELL: RESTORE_FAILED (canvas/v7 receipt, manual recovery) or RECOVERY_PENDING (unknown). */
   receiptStatus: 'RESTORE_FAILED' | 'RECOVERY_PENDING' | null;
-  guardRefusal: import('hanaworlds-contracts').GuardRefusal | null;
+  guardRefusal: import('./protocol/index.js').GuardRefusal | null;
   restoreCode: string | null; causeCode: string | null;
   /** NONE is proved by this transaction's public Abort receipt; an uncertain reply stays UNKNOWN. */
-  mutationState: import('hanaworlds-contracts').MutationState;
+  mutationState: import('./protocol/index.js').MutationState;
   abortConfirmation: { transactionId: string; status: 'ABORTED_PREPARED'; mutationState: 'NONE' } | null;
-  restoreFailure?: { error: import('hanaworlds-contracts').Error; guardRefusal: import('hanaworlds-contracts').GuardRefusal | null } | null;
-  sourceValidationFailure?: { error: import('hanaworlds-contracts').Error; guardRefusal: import('hanaworlds-contracts').GuardRefusal | null } | null;
-  originalFailure: { error: import('hanaworlds-contracts').Error;
-    guardRefusal: import('hanaworlds-contracts').GuardRefusal | null } | null;
+  restoreFailure?: { error: import('./protocol/index.js').Error; guardRefusal: import('./protocol/index.js').GuardRefusal | null } | null;
+  sourceValidationFailure?: { error: import('./protocol/index.js').Error; guardRefusal: import('./protocol/index.js').GuardRefusal | null } | null;
+  originalFailure: { error: import('./protocol/index.js').Error;
+    guardRefusal: import('./protocol/index.js').GuardRefusal | null } | null;
   /** Failure of the later exact query, Abort or readback, distinct from originalFailure. */
   queryFailure: string | null;
 }
 export type EngineGuardOperation = 'ApplyRecoverableCommit' | 'Undo' | 'Redo' |
   'ApplyRegionCommit' | 'UndoRegionCommit' | 'UndoScopedRegionCommit' | 'RecoverRegion';
-type GuardRequirement = { guard: import('hanaworlds-contracts').EngineGuard;
-  stage: import('hanaworlds-contracts').EngineGuardStage };
+type GuardRequirement = { guard: import('./protocol/index.js').EngineGuard;
+  stage: import('./protocol/index.js').EngineGuardStage };
 /** Contracts engine-guards/v1 guard x stage requirements of each Canvas write operation. */
 export const ENGINE_GUARD_REQUIREMENTS: Readonly<Record<EngineGuardOperation,
   readonly Readonly<GuardRequirement>[]>>;
 /** Uncovered requirements of `operation` against a declaration, as GUARD_UNAVAILABLE refusals. */
-export function unmetGuards(declaration: import('hanaworlds-contracts').EngineGuardDeclaration | null,
-  operation: EngineGuardOperation): import('hanaworlds-contracts').GuardRefusal[];
+export function unmetGuards(declaration: import('./protocol/index.js').EngineGuardDeclaration | null,
+  operation: EngineGuardOperation): import('./protocol/index.js').GuardRefusal[];
 export interface EngineSafetyReadback {
   sessionRef: string; bound: boolean;
-  declaration: import('hanaworlds-contracts').EngineGuardDeclaration | null;
+  declaration: import('./protocol/index.js').EngineGuardDeclaration | null;
   operations: { operation: EngineGuardOperation; required: GuardRequirement[];
-    unmet: import('hanaworlds-contracts').GuardRefusal[]; status: 'COVERED' | 'CAPABILITY_UNAVAILABLE' }[];
+    unmet: import('./protocol/index.js').GuardRefusal[]; status: 'COVERED' | 'CAPABILITY_UNAVAILABLE' }[];
 }
 /** Data directory name under `<dsh home>/data` for the v2 store; older data is never read. */
 export const STORE_ROOT: 'hanaworlds-canvas-v2';
@@ -145,8 +147,8 @@ export const canvasProtocolHandshake: ProtocolHandshake;
 export const REGION_WIRE: 'canvas-region/v3';
 export const REGION_ADAPTER: 'world-adapter-region/v3';
 export const CANVAS_REGION_CAPABILITIES: readonly string[];
-export const ADAPTER_REGION_REQUIREMENT: import('hanaworlds-contracts').ProtocolRequirement;
-export const ADAPTER_CELL_REQUIREMENT: import('hanaworlds-contracts').ProtocolRequirement;
+export const ADAPTER_REGION_REQUIREMENT: import('./protocol/index.js').ProtocolRequirement;
+export const ADAPTER_CELL_REQUIREMENT: import('./protocol/index.js').ProtocolRequirement;
 export const SNAPSHOT_COMPRESSION: 'gzip';
 export function regionToolDescription(capabilities?: any): Record<string, unknown>;
 export function encodeSnapshot(content: RegionSnapshotContent, before: RegionSummary):
@@ -178,7 +180,7 @@ export interface ConfigObservation {
   contracts: string; domain: ConfigDomain | null; sessionRefs: string[];
   sources: { catalogue: { status: string; digest?: string; cause?: string };
     writeProfile: { status: string; sourceRevision?: string; cause?: string } } | null;
-  profiles: { compilationConfig: ConfigProfileObservation<import('hanaworlds-contracts').CompilationConfig> };
+  profiles: { compilationConfig: ConfigProfileObservation<import('./protocol/index.js').CompilationConfig> };
   observationDigest: string; observedSequence: number; observedAt: string;
 }
 export interface ConfigSupplyReport {
@@ -194,7 +196,7 @@ export class CanvasConfigSupply {
   constructor(canvas: CanvasV5);
   read(worldRef: string): Promise<ConfigSupplyReport>;
   readCompilerConfig(worldRef: string): Promise<{
-    compilationConfig: import('hanaworlds-contracts').CompilationConfig; compilerRevision: string }>;
+    compilationConfig: import('./protocol/index.js').CompilationConfig; compilerRevision: string }>;
 }
 export const SUPPLY_PROFILE: 'canvas-stage1-config-supply/v2';
 export function assembleProfile(name: 'compilationConfig',
@@ -217,4 +219,40 @@ export interface ObjectsHistoryDisplay {
   history: { transactionId: string; objectRef: string; objectName: string | null;
     sequence: number; committedAt: string | null; mode: 'CELL' | 'REGION' | null;
     affectedCells: number | null; status: 'COMMITTED' | 'UNDONE' }[];
+}
+
+/** C-world-facts@2 source identity comes from the actual registered provider instance. */
+export interface FactsProviderIdentity { readonly providerRef: Ref; readonly providerRevision: Ref }
+export interface FactSource {
+  readonly kind: 'LOADED_WORLD_DECLARATION' | 'NATIVE_OBSERVATION';
+  readonly factRef: Ref;
+  readonly revision: Ref;
+}
+export interface Sourced<T> { readonly value: T; readonly source: FactSource }
+export interface CanvasToolFacts {
+  readonly toolRef: Ref;
+  readonly purpose: Sourced<string>;
+  readonly typicalScale: Sourced<{ readonly size: RegionSize; readonly unit: Ref }>;
+}
+export interface CanvasFactsScope extends MaterialSourceConnection {}
+export interface CanvasSourceFacts {
+  readonly profileVersion: 'canvas-source-facts/v1';
+  readonly connection: MaterialSourceConnection;
+  readonly provider: FactsProviderIdentity;
+  readonly tools: readonly CanvasToolFacts[];
+  readonly unit: Sourced<GridUnit>;
+  readonly frame: Sourced<Frame>;
+  readonly partition: Sourced<Partition>;
+  readonly sourceRevision: Digest;
+}
+export interface CanvasToolSummaryRequest {
+  readonly sessionRef: Ref;
+  readonly expectedConnection?: MaterialSourceConnection;
+  readonly expectedProvider?: FactsProviderIdentity;
+}
+export interface CanvasToolSummary {
+  readonly profileVersion: 'canvas-tool-summary/v1';
+  readonly sessionRef: Ref;
+  readonly source: CanvasSourceFacts;
+  readonly objectsHistory: ObjectsHistoryDisplay;
 }

@@ -2,8 +2,7 @@ import { mkdir, open, readFile, rename, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
-// Canvas 1.x store (contracts major 1). A 0.x store lives in another root and is never read,
-// migrated or made compatible.
+// Canvas-owned current store, schema 7.
 export const STORE_FILE = 'canvas-v7.json';
 const fresh = () => ({ schemaVersion: 7, sessions: {}, connections: {},
   connectionInventories: {}, objects: {},

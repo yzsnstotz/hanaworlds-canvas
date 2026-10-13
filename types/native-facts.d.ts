@@ -1,8 +1,7 @@
-import type { Ref, Positions, StateProfile, ScopedCells } from 'hanaworlds-contracts';
+import type { CanvasFactsScope, CanvasSourceFacts } from './index.js';
+import type { Ref, Positions, StateProfile, ScopedCells } from './protocol/index.js';
 
-/** The existing Canvas-owned injection method's complete raw return. This is
- * not ScopedWorldBinding, a new Contracts wire, or a request/response envelope.
- */
+/** Documented C-world-facts@2 Host read, preserving opaque source digests. */
 export interface NativeFactsScopedState {
   readonly worldRef: Ref;
   readonly stateProfile: StateProfile;
@@ -16,5 +15,7 @@ export interface NativeFactsPort {
 export interface WorldFactsPort {
   readonly protocolHandshake?: unknown;
   readonly contractHandshake?: unknown;
+  readScopedState?: NativeFactsPort['readScopedState'];
+  readCanvasFacts?(scope: CanvasFactsScope): Promise<CanvasSourceFacts>;
   call?(operation: 'ReadCatalogue' | 'ReadWriteProfile', request: unknown): Promise<unknown>;
 }

@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { canonicalJSON, digestValue, validateBoundResponse, validateResponse, validateType,
-  worldErrorContext } from 'hanaworlds-contracts';
+  worldErrorContext } from '../src/protocol/local/index.mjs';
 import { CanvasV5, CanvasStore, CanvasRegionV1, apply } from '../src/index.mjs';
 import { withTargetWorld } from '../src/world-error.mjs';
 import { undoFailureLabel } from '../src/display-view.mjs';

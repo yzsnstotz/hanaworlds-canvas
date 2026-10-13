@@ -3,9 +3,9 @@
 Canvas owns local world selection, registered object footprints and transaction history.
 The single Cordis entry is `src/index.mjs`; the DSH panel is `lib/client.js`.
 
-Contracts is pinned to the formal release
-`git+https://github.com/yzsnstotz/hanaworlds-contracts.git#v2.12.0`,
-commit `33c34372fd5092a83b6f3cc81c086470fa76d794`.
+Canvas owns the structures, schemas and validators for project document contracts
+C-canvas@2, C-world-adapter@2 and C-world-facts@2 in `src/protocol` and `types/protocol`.
+The source manifest is `scripts/protocol-source.json`; no external contract package is needed.
 Run `npm ci`, `npm run build`, `npm run verify:contracts`, `npm run typecheck`, and `npm test`.
 The test command runs every retained test file, including Gateway/Remote, host storage,
 selection, per-cell apply/history and region rollback/recovery.
@@ -17,7 +17,9 @@ with their published write-path capability tokens. Service keys remain
 `hanaworldsWorldAdapterRegionV1`, and the `hanaworldsWorkshopV3` session port.
 Configuration facts come from the world source's C-world-facts port `hanaworldsWorldFacts`
 (`world-facts/v1` ReadCatalogue + ReadWriteProfile, the same key the desktop bridge reads);
-`hanaworldsLuantiNativeFacts` is used only for per-cell `readScopedState`.
+`hanaworldsWorldFacts.readScopedState(connectionRef, positions)` supplies the documented
+read-only scoped state through Canvas's active official Cordis context. Missing, malformed,
+inactive or replaced peers refuse with named errors; digests remain opaque.
 Region ownership is read by role: the Adapter must cover every capability Contracts assigns
 to `owner: world-source`; Canvas advertises the capabilities scoped to `canvas-region/v3`.
 
@@ -54,7 +56,7 @@ context, or a pre-2.8.0 answer without `currentLocalContext`/`receiptDigest` sta
 with the cause named. A stored Abort request from the earlier context is not re-issued.
 
 The fresh store is `<DSH home>/data/hanaworlds-canvas-v2/canvas-v7.json`, schema 7.
-Older stores are not read or migrated. Compiler configuration is forwarded unchanged from
+Compiler configuration is forwarded unchanged from
 the world source's `ReadWriteProfile.compilationConfig` (opaque `writeBackend
 {profileId, revision}` included), checked against the current connection and the
 `ReadCatalogue` digest; an undeclared backend, absent port, peer error, corrupt or stale
@@ -66,9 +68,7 @@ a data-free notice after every durable commit changing that Session's objects, h
 footprints, pending rows or bound world (cell, region, Undo/Redo, recovery), and re-reads; a
 build made from Workshop or skills appears without a manual refresh. A broken stream is shown
 with its cause and the manual refresh remains. It has no display-fixture sample toggle. Test peer implementations
-and the public NativeFacts fixture are explicitly SOURCE/FIXTURE. Independent legacy
-pages, examples, probes and old evidence are archived in the canvas-01 run directory.
-These checks do not establish a real-world GUI result or owner ACCEPTED.
+and the public NativeFacts fixture are explicitly SOURCE/FIXTURE. These checks do not establish a real-world GUI result or owner ACCEPTED.
 
 Storage startup failures are logged with the original error and exposed as
 `status().storageFailure = {code, message}` with `storage = UNAVAILABLE`.
@@ -94,10 +94,34 @@ its full-block validator remain available unchanged.
 
 The formal objects/history panel offers scoped region Undo independently of Redo;
 region Redo is explicitly unavailable. Existing history without trusted scope evidence
-is refused by name, never migrated or guessed. Uncertain post-dispatch transport,
+is refused by name, without guessed state. Uncertain post-dispatch transport,
 binding and lighting answers stay UNKNOWN until scoped rollback/readback proves the
 same attempt's state. Exact initial and rollback source failures remain separately
 available in pending recovery; a rollback NONE never proves whole-transaction NONE.
 Reopened recovery preserves outside current and refuses unproved in-scope values.
 SOURCE/FIXTURE tests, including residual-eight, are distinct from
 REAL_ENGINE_WORLD_WRITE, REAL_HOST_WORLD_UI and I-K3-REGION-01. None imply owner ACCEPTED.
+
+The client optionally accepts `{panelId: 'a-nonempty-key'}` at its public apply entry.
+It registers that same key in official `main` and `sidebar.panellist`. Navigation reads
+the live registry and uses `layout.selectPanel`; consumers do not infer an internal id.
+Default registration and old calls stay unchanged. Layout rejects missing/stale targets.
+
+## Current world tool summary
+
+The registered `hanaworldsCanvasV5` service exposes
+`readToolSummary({sessionRef, expectedConnection?, expectedProvider?})` as a local
+Host method. `expectedConnection` requires worldRef, connectionRef and
+connectionIncarnationRef; `expectedProvider` requires providerRef and
+providerRevision. Comparisons do not grant source permissions or change selection.
+
+The `canvas-tool-summary/v1` result preserves the complete `CanvasSourceFacts`
+read from the official current `hanaworldsWorldFacts.readCanvasFacts(scope)` port
+and Canvas's existing `ObjectsHistoryDisplay`. Every tool purpose and typical
+size carries its original source; units retain their explicit physical conversion
+or null, and Frame carries origin, axes, handedness and transform revision.
+Partition remains a native sourced observation and sourceRevision binds the
+complete canonical source body. Canvas never infers these fields from objects,
+transport budgets, fixed geometry or engine files. Provider replacement, invalid
+scope, missing facts or invalid payload refuses with the documented public JSON
+error and mutationState NONE. Reads do not commit observations or history.

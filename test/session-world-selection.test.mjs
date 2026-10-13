@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { canonicalJSON, contractProtocols, validateCanvasEvent, version } from 'hanaworlds-contracts';
+import { canonicalJSON, contractProtocols, validateCanvasEvent, version } from '../src/protocol/local/index.mjs';
 import { CanvasV5, CanvasStore } from '../src/index.mjs';
 import { g3CellHandshake } from './support/g3-adapter-handshake.mjs';
 import { createUndoExample } from './support/undo-example.mjs';

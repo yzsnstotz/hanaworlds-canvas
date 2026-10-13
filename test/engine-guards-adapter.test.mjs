@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateType } from 'hanaworlds-contracts';
+import { validateType } from '../src/protocol/local/index.mjs';
 import { unmetGuards } from '../src/index.mjs';
 
 /*

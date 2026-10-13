@@ -1,0 +1,827 @@
+{
+ "profileVersion": "skill-site-rules/v1",
+ "evidence": "FIXTURE · public conformance cases for skill-proposed, player-confirmed SiteRules, the SafetyProfile derived only from the confirmed intent, the removal of player geometry and the named site-rule capabilities (light, region entrance) and the engine-guard declarations, refusals and restore-failure receipts (G1-G3). Rule values here are test inputs, not product values or defaults. Every case is applied to fixtures/main (per-cell) or fixtures/region (region) with all digests rebound.",
+ "ruleSets": {
+  "strict": {
+   "requireEntranceConnectivity": false,
+   "entranceClearance": null,
+   "hazardPolicy": {
+    "forbidLiquid": true,
+    "maximumDamagePerSecond": 0
+   },
+   "optionalLightRule": null
+  },
+  "permissive": {
+   "requireEntranceConnectivity": false,
+   "entranceClearance": null,
+   "hazardPolicy": {
+    "forbidLiquid": false,
+    "maximumDamagePerSecond": 1000000
+   },
+   "optionalLightRule": null
+  },
+  "entrance": {
+   "requireEntranceConnectivity": true,
+   "entranceClearance": {
+    "width": 1,
+    "height": 2,
+    "depth": 1,
+    "unit": "node"
+   },
+   "hazardPolicy": {
+    "forbidLiquid": true,
+    "maximumDamagePerSecond": 0
+   },
+   "optionalLightRule": null
+  },
+  "entranceWithoutClearance": {
+   "requireEntranceConnectivity": true,
+   "entranceClearance": null,
+   "hazardPolicy": {
+    "forbidLiquid": true,
+    "maximumDamagePerSecond": 0
+   },
+   "optionalLightRule": null
+  },
+  "light": {
+   "requireEntranceConnectivity": false,
+   "entranceClearance": null,
+   "hazardPolicy": {
+    "forbidLiquid": true,
+    "maximumDamagePerSecond": 0
+   },
+   "optionalLightRule": {
+    "minimumLight": 0.5,
+    "sourceRevision": "skill-light-1"
+   }
+  }
+ },
+ "perCell": {
+  "accept": [
+   "strict",
+   "permissive",
+   "entrance"
+  ],
+  "reject": [
+   {
+    "title": "SafetyProfile field differs from the confirmed rule",
+    "rules": "strict",
+    "tamper": {
+     "hazardPolicy": {
+      "forbidLiquid": false,
+      "maximumDamagePerSecond": 0
+     }
+    },
+    "error": {
+     "code": "INTENT_UNCONFIRMED",
+     "reason": "PAYLOAD_CHANGED"
+    }
+   },
+   {
+    "title": "SafetyProfile entrance flag differs from the confirmed rule",
+    "rules": "strict",
+    "tamper": {
+     "requireEntranceConnectivity": true
+    },
+    "error": {
+     "code": "INTENT_UNCONFIRMED",
+     "reason": "PAYLOAD_CHANGED"
+    }
+   },
+   {
+    "title": "body clearance invariant cannot be switched off",
+    "rules": "strict",
+    "tamper": {
+     "requireBodyClearance": false
+    },
+    "error": {
+     "code": "CAPABILITY_UNAVAILABLE",
+     "reason": "POLICY_UNAVAILABLE"
+    }
+   },
+   {
+    "title": "rule changed after confirmation (old intent digest)",
+    "rules": "strict",
+    "changeAfterConfirmation": {
+     "hazardPolicy": {
+      "forbidLiquid": true,
+      "maximumDamagePerSecond": 2
+     }
+    },
+    "error": {
+     "code": "NON_CANONICAL_AMBIGUITY",
+     "reason": "PAYLOAD_CHANGED"
+    }
+   },
+   {
+    "title": "stated light rule without a light-checking capability",
+    "rules": "light",
+    "error": {
+     "code": "CAPABILITY_UNAVAILABLE",
+     "reason": "REQUIRED_FACT_UNKNOWN"
+    },
+    "capability": "painter/v6:light-rule"
+   },
+   {
+    "title": "entrance required without a confirmed clearance",
+    "rules": "entranceWithoutClearance",
+    "error": {
+     "code": "INTENT_UNCONFIRMED",
+     "reason": "REQUIRED_FACT_UNKNOWN"
+    }
+   },
+   {
+    "title": "confirmed portal ref that the target facts do not contain (no portal producer)",
+    "rules": "entrance",
+    "entrancePortalRefs": [
+     "portal-missing"
+    ],
+    "error": {
+     "code": "TARGET_FACTS_INCOMPLETE",
+     "reason": "REQUIRED_FACT_UNKNOWN"
+    }
+   }
+  ],
+  "decodeReject": [
+   {
+    "title": "ConfirmedIntent without siteRules",
+    "path": "intent.confirmedIntent",
+    "remove": "siteRules",
+    "error": {
+     "code": "SCHEMA_INVALID"
+    }
+   },
+   {
+    "title": "ConfirmedIntent siteRules null",
+    "path": "intent.confirmedIntent",
+    "set": {
+     "siteRules": null
+    },
+    "error": {
+     "code": "SCHEMA_INVALID"
+    }
+   },
+   {
+    "title": "unknown key inside SiteRules",
+    "path": "intent.confirmedIntent.siteRules",
+    "set": {
+     "default": true
+    },
+    "error": {
+     "code": "UNKNOWN_REQUIRED_FIELD",
+     "reason": "UNKNOWN_FIELD"
+    }
+   },
+   {
+    "title": "non-integer clearance",
+    "path": "intent.confirmedIntent.siteRules",
+    "set": {
+     "entranceClearance": {
+      "width": 1.5,
+      "height": 2,
+      "depth": 1,
+      "unit": "node"
+     }
+    },
+    "error": {
+     "code": "SCHEMA_INVALID"
+    }
+   },
+   {
+    "title": "clearance unit other than node",
+    "path": "intent.confirmedIntent.siteRules",
+    "set": {
+     "entranceClearance": {
+      "width": 1,
+      "height": 2,
+      "depth": 1,
+      "unit": "meter"
+     }
+    },
+    "error": {
+     "code": "SCHEMA_INVALID"
+    }
+   },
+   {
+    "title": "avatarDimensions on SafetyProfile v4",
+    "path": "safetyProfile",
+    "set": {
+     "avatarDimensions": {
+      "width": 1,
+      "height": 2,
+      "depth": 1,
+      "unit": "node"
+     }
+    },
+    "error": {
+     "code": "UNKNOWN_REQUIRED_FIELD",
+     "reason": "UNKNOWN_FIELD"
+    }
+   },
+   {
+    "title": "bodyOccupiedPositions on RegionInspection",
+    "path": "regionInspection",
+    "set": {
+     "bodyOccupiedPositions": []
+    },
+    "error": {
+     "code": "UNKNOWN_REQUIRED_FIELD",
+     "reason": "UNKNOWN_FIELD"
+    }
+   }
+  ],
+  "witnessReject": [
+   {
+    "title": "entrance witness clearance differs from the confirmed clearance",
+    "rules": "entrance",
+    "clearance": {
+     "width": 2,
+     "height": 2,
+     "depth": 1,
+     "unit": "node"
+    },
+    "error": {
+     "code": "TRANSACTION_CONFLICT",
+     "reason": "PAYLOAD_CHANGED"
+    }
+   },
+   {
+    "title": "entrance witness names an unconfirmed portal",
+    "rules": "entrance",
+    "portalRef": "portal-x",
+    "error": {
+     "code": "TRANSACTION_CONFLICT",
+     "reason": "PAYLOAD_CHANGED"
+    }
+   },
+   {
+    "title": "avatarDimensions on BodyWitness",
+    "rules": "strict",
+    "bodyExtra": {
+     "avatarDimensions": {
+      "width": 1,
+      "height": 2,
+      "depth": 1,
+      "unit": "node"
+     }
+    },
+    "error": {
+     "code": "UNKNOWN_REQUIRED_FIELD",
+     "reason": "UNKNOWN_FIELD"
+    }
+   },
+   {
+    "title": "bodyOccupiedPositions on BodyWitness",
+    "rules": "strict",
+    "bodyExtra": {
+     "bodyOccupiedPositions": []
+    },
+    "error": {
+     "code": "UNKNOWN_REQUIRED_FIELD",
+     "reason": "UNKNOWN_FIELD"
+    }
+   }
+  ]
+ },
+ "region": {
+  "accept": [
+   "strict",
+   "permissive"
+  ],
+  "reject": [
+   {
+    "title": "entrance required on the region path (no entrance check)",
+    "rules": "entrance",
+    "error": {
+     "code": "CAPABILITY_UNAVAILABLE",
+     "reason": "REQUIRED_FACT_UNKNOWN"
+    },
+    "capability": "painter-region/v3:entrance-rule"
+   },
+   {
+    "title": "stated light rule on the region path",
+    "rules": "light",
+    "error": {
+     "code": "CAPABILITY_UNAVAILABLE",
+     "reason": "REQUIRED_FACT_UNKNOWN"
+    },
+    "capability": "painter/v6:light-rule"
+   },
+   {
+    "title": "palette node over the confirmed damage limit",
+    "rules": "strict",
+    "damagingPaletteNode": 4,
+    "error": {
+     "code": "SAFETY_INVARIANT_FAILED",
+     "reason": "REQUIRED_FACT_UNKNOWN"
+    }
+   }
+  ],
+  "acceptDamaging": {
+   "title": "the same damaging node within a confirmed open limit",
+   "rules": "permissive",
+   "damagingPaletteNode": 4
+  }
+ },
+ "capabilities": {
+  "ids": [
+   "painter/v6:light-rule",
+   "painter-region/v3:entrance-rule"
+  ],
+  "absentError": {
+   "code": "CAPABILITY_UNAVAILABLE",
+   "phase": "validate",
+   "retryability": "AFTER_NEW_FACTS",
+   "mutationState": "NONE",
+   "causeCode": null,
+   "reason": "REQUIRED_FACT_UNKNOWN"
+  }
+ },
+ "engineGuards": {
+  "note": "Test inputs. The declaration mirrors a partial engine on purpose: PLAYER_ENCLOSURE does not cover region writes or restore, CELL_PROTECTION is ANONYMOUS and not at INSPECT_REGION.",
+  "declaration": {
+   "profileVersion": "engine-guards/v1",
+   "coverage": [
+    {
+     "guard": "BODY_CLEARANCE",
+     "stages": [
+      "INSPECT_REGION",
+      "PREPARE_RECOVERABLE",
+      "APPLY_COMPILED",
+      "APPLY_HISTORY",
+      "RESTORE",
+      "REGION_APPLY",
+      "REGION_RESTORE"
+     ],
+     "protectionPrincipal": null
+    },
+    {
+     "guard": "CELL_PROTECTION",
+     "stages": [
+      "PREPARE_RECOVERABLE",
+      "APPLY_COMPILED",
+      "APPLY_HISTORY",
+      "RESTORE",
+      "REGION_APPLY"
+     ],
+     "protectionPrincipal": "ANONYMOUS"
+    },
+    {
+     "guard": "PLAYER_ENCLOSURE",
+     "stages": [
+      "PREPARE_RECOVERABLE",
+      "APPLY_COMPILED",
+      "APPLY_HISTORY"
+     ],
+     "protectionPrincipal": null
+    }
+   ]
+  },
+  "covered": [
+   {
+    "guard": "BODY_CLEARANCE",
+    "stage": "RESTORE"
+   },
+   {
+    "guard": "PLAYER_ENCLOSURE",
+    "stage": "APPLY_COMPILED"
+   },
+   {
+    "guard": "CELL_PROTECTION",
+    "stage": "REGION_APPLY"
+   },
+   {
+    "guard": "CELL_PROTECTION",
+    "stage": "APPLY_COMPILED",
+    "protectionPrincipal": "ANONYMOUS"
+   }
+  ],
+  "uncovered": [
+   {
+    "guard": "PLAYER_ENCLOSURE",
+    "stage": "REGION_APPLY"
+   },
+   {
+    "guard": "PLAYER_ENCLOSURE",
+    "stage": "RESTORE"
+   },
+   {
+    "guard": "PLAYER_ENCLOSURE",
+    "stage": "REGION_RESTORE"
+   },
+   {
+    "guard": "CELL_PROTECTION",
+    "stage": "INSPECT_REGION"
+   },
+   {
+    "guard": "CELL_PROTECTION",
+    "stage": "REGION_RESTORE"
+   },
+   {
+    "guard": "CELL_PROTECTION",
+    "stage": "APPLY_COMPILED",
+    "protectionPrincipal": "ACTING_PRINCIPAL"
+   }
+  ],
+  "preflightError": {
+   "code": "CAPABILITY_UNAVAILABLE",
+   "phase": "validate",
+   "retryability": "AFTER_NEW_FACTS",
+   "mutationState": "NONE",
+   "causeCode": null,
+   "reason": "REQUIRED_FACT_UNKNOWN"
+  },
+  "declarationReject": [
+   {
+    "title": "guards out of order",
+    "coverage": [
+     1,
+     0,
+     2
+    ]
+   },
+   {
+    "title": "a guard missing",
+    "coverage": [
+     0,
+     1
+    ]
+   },
+   {
+    "title": "a guard twice",
+    "coverage": [
+     0,
+     0,
+     2
+    ]
+   },
+   {
+    "title": "principal on a non-protection guard",
+    "patch": {
+     "index": 0,
+     "protectionPrincipal": "ANONYMOUS"
+    }
+   },
+   {
+    "title": "protection without a principal",
+    "patch": {
+     "index": 1,
+     "protectionPrincipal": null
+    }
+   },
+   {
+    "title": "principal with no covered stage",
+    "patch": {
+     "index": 1,
+     "stages": []
+    }
+   },
+   {
+    "title": "duplicate stage",
+    "patch": {
+     "index": 2,
+     "stages": [
+      "APPLY_COMPILED",
+      "APPLY_COMPILED"
+     ]
+    }
+   },
+   {
+    "title": "stages out of order",
+    "patch": {
+     "index": 2,
+     "stages": [
+      "APPLY_COMPILED",
+      "PREPARE_RECOVERABLE"
+     ]
+    }
+   },
+   {
+    "title": "unknown stage",
+    "patch": {
+     "index": 2,
+     "stages": [
+      "COMMIT"
+     ]
+    }
+   }
+  ],
+  "named": [
+   {
+    "name": "BODY_OCCUPIED",
+    "refusal": {
+     "guard": "BODY_CLEARANCE",
+     "stage": "APPLY_COMPILED",
+     "finding": "BODY_OCCUPIED"
+    },
+    "error": {
+     "code": "SAFETY_INVARIANT_FAILED",
+     "phase": "apply",
+     "retryability": "AFTER_NEW_FACTS",
+     "mutationState": "NONE",
+     "causeCode": null,
+     "reason": "INVALID_GEOMETRY"
+    }
+   },
+   {
+    "name": "PROTECTED_CELL",
+    "refusal": {
+     "guard": "CELL_PROTECTION",
+     "stage": "REGION_APPLY",
+     "finding": "PROTECTED_CELL"
+    },
+    "error": {
+     "code": "SAFETY_INVARIANT_FAILED",
+     "phase": "apply",
+     "retryability": "AFTER_NEW_FACTS",
+     "mutationState": "NONE",
+     "causeCode": null,
+     "reason": "SCOPE_DENIED"
+    }
+   },
+   {
+    "name": "PLAYER_ENCLOSED",
+    "refusal": {
+     "guard": "PLAYER_ENCLOSURE",
+     "stage": "PREPARE_RECOVERABLE",
+     "finding": "PLAYER_ENCLOSED"
+    },
+    "error": {
+     "code": "SAFETY_INVARIANT_FAILED",
+     "phase": "validate",
+     "retryability": "AFTER_NEW_FACTS",
+     "mutationState": "NONE",
+     "causeCode": null,
+     "reason": "INVALID_GEOMETRY"
+    }
+   },
+   {
+    "name": "RESTORE_GUARD_UNAVAILABLE",
+    "refusal": {
+     "guard": "BODY_CLEARANCE",
+     "stage": "RESTORE",
+     "finding": "GUARD_UNAVAILABLE"
+    },
+    "cause": "READBACK_MISMATCH",
+    "error": {
+     "code": "RESTORE_FAILED",
+     "phase": "restore",
+     "retryability": "AFTER_MANUAL_RECOVERY",
+     "mutationState": "PARTIAL",
+     "causeCode": "READBACK_MISMATCH",
+     "reason": "RESTORE_ERROR"
+    }
+   }
+  ],
+  "refusalReject": [
+   {
+    "title": "violation finding of another guard",
+    "refusal": {
+     "guard": "CELL_PROTECTION",
+     "stage": "APPLY_COMPILED",
+     "finding": "BODY_OCCUPIED"
+    }
+   }
+  ],
+  "restoreFailedReceipt": {
+   "applyRefusal": {
+    "guard": "PLAYER_ENCLOSURE",
+    "stage": "APPLY_COMPILED",
+    "finding": "PLAYER_ENCLOSED"
+   },
+   "restoreRefusal": {
+    "guard": "BODY_CLEARANCE",
+    "stage": "RESTORE",
+    "finding": "BODY_OCCUPIED"
+   },
+   "restoreStatus": "FAILED"
+  },
+  "restoreFailedReceiptReject": [
+   {
+    "title": "restore failure without the apply failure that caused it",
+    "drop": "applyFailure"
+   },
+   {
+    "title": "causeCode differs from the kept apply failure",
+    "causeCode": "READBACK_MISMATCH"
+   },
+   {
+    "title": "a refused restore never reports a verified restore",
+    "restoreStatus": "VERIFIED_RESTORED"
+   },
+   {
+    "title": "a refused restore is never retryable without manual recovery",
+    "retryability": "AFTER_NEW_FACTS"
+   },
+   {
+    "title": "applyFailure on a receipt that is not RESTORE_FAILED",
+    "status": "ROLLED_BACK"
+   }
+  ],
+  "regionRestore": {
+   "note": "WriteRegion RESTORE is stateless: the engine reports a refused restore in the engine form (no cause, nothing written). Canvas owns the transaction: a rollback becomes RESTORE_FAILED pending with applyFailure; an Undo stays the engine-form refusal.",
+   "engine": [
+    {
+     "name": "REGION_RESTORE body",
+     "refusal": {
+      "guard": "BODY_CLEARANCE",
+      "stage": "REGION_RESTORE",
+      "finding": "BODY_OCCUPIED"
+     },
+     "error": {
+      "code": "SAFETY_INVARIANT_FAILED",
+      "phase": "restore",
+      "retryability": "AFTER_NEW_FACTS",
+      "mutationState": "NONE",
+      "causeCode": null,
+      "reason": "INVALID_GEOMETRY"
+     }
+    },
+    {
+     "name": "REGION_RESTORE protection",
+     "refusal": {
+      "guard": "CELL_PROTECTION",
+      "stage": "REGION_RESTORE",
+      "finding": "PROTECTED_CELL"
+     },
+     "error": {
+      "code": "SAFETY_INVARIANT_FAILED",
+      "phase": "restore",
+      "retryability": "AFTER_NEW_FACTS",
+      "mutationState": "NONE",
+      "causeCode": null,
+      "reason": "SCOPE_DENIED"
+     }
+    },
+    {
+     "name": "REGION_RESTORE guard unavailable",
+     "refusal": {
+      "guard": "PLAYER_ENCLOSURE",
+      "stage": "REGION_RESTORE",
+      "finding": "GUARD_UNAVAILABLE"
+     },
+     "error": {
+      "code": "CAPABILITY_UNAVAILABLE",
+      "phase": "restore",
+      "retryability": "AFTER_NEW_FACTS",
+      "mutationState": "NONE",
+      "causeCode": null,
+      "reason": "REQUIRED_FACT_UNKNOWN"
+     }
+    }
+   ],
+   "rollbackApplyRefusal": {
+    "guard": "CELL_PROTECTION",
+    "stage": "REGION_APPLY",
+    "finding": "PROTECTED_CELL"
+   },
+   "reject": [
+    {
+     "title": "engine form claims a partial write",
+     "mutationState": "PARTIAL"
+    },
+    {
+     "title": "engine form with a manual-recovery retryability but no cause",
+     "retryability": "AFTER_MANUAL_RECOVERY"
+    },
+    {
+     "title": "engine form with the wrong reason for its finding",
+     "reason": "PAYLOAD_CHANGED"
+    }
+   ]
+  },
+  "relay": {
+   "note": "Every public response that can carry an engine guard decision toward the skill, wire by wire. The closure test requires exactly this set of responses to have guardRefusal.",
+   "responses": [
+    [
+     "world-adapter/v8",
+     "PrepareRecoverableTransaction",
+     "ScopedPrepareResponse"
+    ],
+    [
+     "world-adapter/v8",
+     "ApplyCompiledTransaction",
+     "ScopedApplyResponse"
+    ],
+    [
+     "world-adapter/v8",
+     "RestoreTransaction",
+     "RestoreTransactionResponse"
+    ],
+    [
+     "world-adapter/v8",
+     "PrepareHistoryTransaction",
+     "PrepareHistoryTransactionResponse"
+    ],
+    [
+     "world-adapter/v8",
+     "ApplyHistoryTransaction",
+     "ApplyHistoryTransactionResponse"
+    ],
+    [
+     "world-adapter/v8",
+     "InspectRegion",
+     "InspectRegionResponse"
+    ],
+    [
+     "world-adapter-region/v3",
+     "WriteRegion",
+     "WriteRegionResponse"
+    ],
+    [
+     "canvas/v7",
+     "ApplyRecoverableCommit",
+     "RecoverableCommitAppliedReceipt"
+    ],
+    [
+     "canvas/v7",
+     "Undo",
+     "UndoReceipt"
+    ],
+    [
+     "canvas/v7",
+     "Redo",
+     "RedoReceipt"
+    ],
+    [
+     "canvas/v7",
+     "RecoverPendingUndo",
+     "CanvasUndoRecoveryResponse"
+    ],
+    [
+     "canvas/v7",
+     "ReadPendingUndoResult",
+     "CanvasUndoRecoveryResponse"
+    ],
+    [
+     "canvas/v7",
+     "InspectPlacementRegion",
+     "PlacementRegionInspection"
+    ],
+    [
+     "canvas-region/v3",
+     "ApplyRegionCommit",
+     "ApplyRegionCommitResponse"
+    ],
+    [
+     "canvas-region/v3",
+     "UndoRegionCommit",
+     "UndoRegionCommitResponse"
+    ],
+    [
+     "session/v5",
+     "AdvanceCurrentBuild",
+     "AdvanceCurrentBuildResponse"
+    ],
+    [
+     "session/v5",
+     "UndoCurrentBuild",
+     "UndoCurrentBuildResponse"
+    ],
+    [
+     "session/v5",
+     "RecoverPendingUndo",
+     "SessionRecoverPendingUndoResponse"
+    ]
+   ],
+   "cases": [
+    {
+     "title": "Canvas pre-flight: enclosure not covered for a per-cell apply",
+     "refusal": {
+      "guard": "PLAYER_ENCLOSURE",
+      "stage": "APPLY_COMPILED",
+      "finding": "GUARD_UNAVAILABLE"
+     },
+     "preflight": true
+    },
+    {
+     "title": "Canvas pre-flight: protection not covered at inspection",
+     "refusal": {
+      "guard": "CELL_PROTECTION",
+      "stage": "INSPECT_REGION",
+      "finding": "GUARD_UNAVAILABLE"
+     },
+     "preflight": true
+    },
+    {
+     "title": "relayed engine violation at apply",
+     "refusal": {
+      "guard": "BODY_CLEARANCE",
+      "stage": "APPLY_COMPILED",
+      "finding": "BODY_OCCUPIED"
+     },
+     "preflight": false
+    },
+    {
+     "title": "relayed engine-form refusal of an Undo restore",
+     "refusal": {
+      "guard": "CELL_PROTECTION",
+      "stage": "RESTORE",
+      "finding": "PROTECTED_CELL"
+     },
+     "preflight": false
+    }
+   ]
+  }
+ }
+}

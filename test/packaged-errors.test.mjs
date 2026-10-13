@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ContractError, validateType } from 'hanaworlds-contracts';
+import { ContractError, validateType } from '../src/protocol/local/index.mjs';
 import { CanvasConfigSupply } from 'hanaworlds-canvas';
 import { validateNativeFactsScopedState } from 'hanaworlds-canvas/examples/native-facts-consumer.mjs';
 
-test('independent packaged consumer publishes errors validated by a separate development SDK', () => {
+test('independent packaged consumer publishes errors validated by a independent Canvas-owned document validator', () => {
   assert.throws(() => validateNativeFactsScopedState({ cells: [] }), error => {
-    assert.equal(error instanceof ContractError, false, 'private SDK constructors must be independent');
+    assert.equal(error instanceof ContractError, false, 'private validator constructors must be independent');
     const failure = validateType('Error', error.publicError);
     assert.equal(failure.code, 'SCHEMA_INVALID');
     assert.equal(failure.mutationState, 'NONE');
