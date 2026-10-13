@@ -115,9 +115,11 @@ async function analyze(env, { transactionId = id('transaction'), position = [20,
     operationDigest: D('operations', operations), expectedRevision: await env.host.canvas.readWorldRevision(undoWorldRef),
     expectedRegistryRevision: listed.registryRevision, expectedSelectionRevision: current.selectionRevision,
     localContext: clone(current.localContext) };
-  const analysis = success(await call(env, 'AnalyzeAffectedObjects', request), 'AnalyzeAffectedObjects');
+  const response = await call(env, 'AnalyzeAffectedObjects', request);
+  const analysis = success(response, 'AnalyzeAffectedObjects');
   return { transactionId, operations, operationDigest: request.operationDigest, analysis,
-    analysisDigest: D('affected-analysis', analysis), localContext: clone(current.localContext) };
+    analysisDigest: D('affected-analysis', analysis), localContext: clone(current.localContext),
+    trigger: { operation: 'AnalyzeAffectedObjects', request: clone(request), response } };
 }
 function decisionRequest(input, decision = 'NO_NOTIFICATION', expectedDecisionRevision = null) {
   return { ...base, requestId: id('decision'), transactionId: input.transactionId,
@@ -125,8 +127,43 @@ function decisionRequest(input, decision = 'NO_NOTIFICATION', expectedDecisionRe
     analysisRevision: input.analysisDigest, decision, expectedDecisionRevision,
     localContext: clone(input.localContext) };
 }
-async function decide(env, input, kind = 'NO_NOTIFICATION') {
-  const request = decisionRequest(input, kind);
+function automaticDecisionEvent(env, input) {
+  // Q185 / C-canvas v5: derive the CAS only from the correlated public event,
+  // never from a private token, invented revision or alternate decision namespace.
+  const { request, response } = input.trigger;
+  assert.equal(request.sessionRef, base.sessionRef);
+  assert.equal(request.worldRef, base.worldRef);
+  assert.equal(request.transactionId, input.transactionId);
+  assert.deepEqual(request.localContext, input.localContext);
+  const current = env.host.canvas.current(request.sessionRef);
+  assert.equal(current.activeWorldRef, request.worldRef);
+  assert.deepEqual(current.localContext, request.localContext);
+  assert.deepEqual(response.result, input.analysis);
+  assert.equal(input.analysis.worldRef, request.worldRef);
+  assert.equal(input.analysis.worldRevision, request.expectedRevision);
+  assert.equal(input.analysis.registryRevision, request.expectedRegistryRevision);
+  assert.equal(input.analysis.selectionRevision, request.expectedSelectionRevision);
+  assert.equal(input.analysis.selectionRevision, request.localContext.selectionRevision);
+  assert.deepEqual(input.analysis.orderedSelectedRefs, current.orderedSelectedObjectRefs);
+  assert.equal(input.analysis.operationDigest, D('operations', request.operations));
+  assert.equal(input.analysisDigest, D('affected-analysis', response.result));
+  const events = env.events.filter(event => event.event === 'AffectedObjectNotificationRequired' &&
+    event.receipt?.requestId === request.requestId);
+  assert.equal(events.length, 1, 'The current public Analyzer must emit its one actual complete auto-BLOCK receipt');
+  const event = events[0];
+  validateResponse('canvas/v7', 'DecideAffectedObjectNotification', event.receipt);
+  const revision = event.receipt.result?.decisionRevision;
+  assert.equal(typeof revision, 'string'); assert.ok(revision.length);
+  assert.deepEqual(event, { contractVersion: 'canvas/v7', event: 'AffectedObjectNotificationRequired',
+    operation: 'DecideAffectedObjectNotification', receipt: { contractVersion: 'canvas/v7',
+      requestId: request.requestId, result: { transactionId: request.transactionId,
+        analysisDigest: input.analysisDigest, decisionRevision: revision, decisionKind: 'BLOCK_AND_NOTIFY',
+        affectedObjectRefs: clone(input.analysis.affectedObjectRefs),
+        orderedSelectedRefs: clone(input.analysis.orderedSelectedRefs) }, error: null } });
+  return event;
+}
+async function decide(env, input, kind = 'NO_NOTIFICATION', expectedDecisionRevision = null) {
+  const request = decisionRequest(input, kind, expectedDecisionRevision);
   const decision = success(await call(env, 'DecideAffectedObjectNotification', request), 'DecideAffectedObjectNotification');
   assert.equal(decision.transactionId, input.transactionId);
   assert.equal(decision.analysisDigest, input.analysisDigest);
@@ -173,14 +210,29 @@ for (const operation of ['NameObject', 'RenameObject']) {
     const response = await call(env, operation, request), named = success(response, operation);
     assert.equal(named.displayName, request.name); assert.equal(named.objectRef, request.objectRef);
     assert.notEqual(named.registryRevision, request.expectedRegistryRevision);
+    assert.notEqual(named.objectRevision, request.expectedRevision);
+    assert.notEqual(named.nameRevision, before.canvas.objects[request.worldRef][request.objectRef].nameRevision);
     assert.equal((await env.host.canvas.readObjectsHistory(undoSessionRef)).objects.find(x => x.objectRef === request.objectRef).name, request.name);
-    assert.deepEqual((await observed(env)).view.history, before.view.history);
-    assert.deepEqual((await observed(env)).world, before.world); assert.equal(writeCount(env), count);
     const after = await observed(env);
+    assert.deepEqual(after.canvas.history, before.canvas.history, 'Every persisted history entry must remain unchanged');
+    assert.deepEqual(after.canvas.transactions, before.canvas.transactions);
+    assert.deepEqual(after.canvas.pending, before.canvas.pending);
+    assert.deepEqual(after.canvas.sessions, before.canvas.sessions);
+    assert.deepEqual(after.view, { ...before.view,
+      objects: before.view.objects.map(object => object.objectRef === request.objectRef ?
+        { ...object, name: named.displayName } : object),
+      history: before.view.history.map(entry => entry.objectRef === request.objectRef ?
+        { ...entry, objectName: named.displayName } : entry) },
+    'All public fields stay equal except the target object current name and its history labels');
+    assert.equal(after.canvas.objects[request.worldRef][request.objectRef].objectRevision, named.objectRevision);
+    assert.equal(after.canvas.objects[request.worldRef][request.objectRef].nameRevision, named.nameRevision);
+    assert.equal(after.canvas.registryRevisions[request.worldRef], named.registryRevision);
+    assert.deepEqual(after.world, before.world); assert.equal(writeCount(env), count);
     assert.deepEqual(await call(env, operation, request), response); assert.deepEqual(await observed(env), after);
     await reopen(env);
     assert.deepEqual(await call(env, operation, request), response);
     assert.equal((await env.host.canvas.readObjectsHistory(undoSessionRef)).objects.find(x => x.objectRef === request.objectRef).name, request.name);
+    assert.deepEqual(await observed(env), after); assert.equal(writeCount(env), count);
   });
   for (const invalid of ['object', 'registry', 'context']) component(`${operation} refuses changed ${invalid} CAS with zero effects`, async env => {
     const request = await nameRequest(env, operation);
@@ -288,7 +340,14 @@ component('decision rejects a forged full affected/selected collection, current-
 for (const kind of ['BLOCK_AND_NOTIFY', 'CONTINUE', 'CANCEL']) component(`${kind} never becomes overlapping-object write authorization`, async env => {
   const input = await analyze(env, { position: [8, 2, 8] });
   assert.ok(input.analysis.affectedObjectRefs.length > 0);
-  const grant = await decide(env, input, kind);
+  const event = automaticDecisionEvent(env, input);
+  const previousRevision = event.receipt.result.decisionRevision;
+  await rejectWithoutEffects(env, 'DecideAffectedObjectNotification', decisionRequest(input, kind, null), 'STALE_REVISION');
+  const grant = await decide(env, input, kind, previousRevision);
+  assert.equal(grant.request.expectedDecisionRevision, previousRevision);
+  assert.equal(grant.request.analysisRevision, D('affected-analysis', input.trigger.response.result));
+  assert.deepEqual(grant.request.analysis, input.trigger.response.result);
+  assert.notEqual(grant.decision.decisionRevision, previousRevision);
   await rejectWithoutEffects(env, 'ApplyRecoverableCommit', applyRequest(input, grant.decision.decisionRevision));
 });
 component('public decision refuses stale generation and conflicting payload replay without moving state', async env => {
