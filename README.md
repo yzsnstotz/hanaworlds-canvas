@@ -136,8 +136,9 @@ By default, evidence and fresh production projects live in
 `~/.cache/hanaworlds-canvas/package-boundary`, outside the development source tree
 so Node cannot find its development dependencies through parent directories.
 `CANVAS_BOUNDARY_EVIDENCE` may select another location outside that tree. Child npm
-pack preserves the explicitly selected `npm_config_cache`/`NPM_CONFIG_CACHE`, or
-uses an isolated cache within its evidence directory; pnpm security policies remain at their defaults.
+pack uses a writable cache owned by each isolated proof, overriding both inherited
+npm cache spellings. `command-context.json` records that location and the normal
+pack command; pnpm security policies remain at their defaults.
 
 Public declarations resolve to Canvas-owned local types. Cross-provider errors are
 consumed by their documented JSON fields, without shared private exception identity.

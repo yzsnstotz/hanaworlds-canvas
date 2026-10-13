@@ -16,13 +16,17 @@ assert.ok(!resolve(evidenceRoot).startsWith(resolve(root) + '/') && resolve(evid
 await mkdir(evidenceRoot, { recursive: true });
 const directory = await mkdtemp(join(evidenceRoot, 'run-'));
 const config = join(directory, 'empty-config'); await mkdir(config);
-// Preserve the explicitly selected writable cache in lifecycle children.
-// Package-manager security settings stay at their defaults.
+// The proof owns a writable cache, independent of inherited machine/worker caches.
+// Both npm spellings must agree in lifecycle children. Security settings stay default.
+const cache = join(directory, 'npm-cache');
+await mkdir(cache);
 const env = { PATH: process.env.PATH, HOME: process.env.HOME, TMPDIR: join(directory, 'temp'),
   XDG_CONFIG_HOME: config, XDG_STATE_HOME: join(directory, 'state'), CI: 'true',
-  npm_config_cache: process.env.npm_config_cache ?? process.env.NPM_CONFIG_CACHE ?? join(directory, 'npm-cache'),
-  NPM_CONFIG_CACHE: process.env.NPM_CONFIG_CACHE ?? process.env.npm_config_cache ?? join(directory, 'npm-cache') };
+  npm_config_cache: cache, NPM_CONFIG_CACHE: cache };
 await mkdir(env.TMPDIR);
+await writeFile(join(directory,'command-context.json'),JSON.stringify({cache,
+  pack:['npm','pack','--json','--pack-destination',directory],
+  securityPolicy:'DEFAULT_UNCHANGED'},null,2));
 function command(binary, args, cwd, name, extra = {}, expectSuccess = true) {
   const result = spawnSync(binary, args, { cwd, env: { ...env, ...extra }, encoding: 'utf8' });
   const output = (result.stdout ?? '') + (result.stderr ?? '');
