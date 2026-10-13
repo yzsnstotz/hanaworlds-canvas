@@ -1852,7 +1852,7 @@
           "affectedObjectRefs": []
         },
         "analysisDigest": "239e1fc59159d54f5d3a6b680bea43b9121a11dd049b99a956490d9606a3795b",
-        "analysisRevision": "revision-1",
+        "analysisRevision": "239e1fc59159d54f5d3a6b680bea43b9121a11dd049b99a956490d9606a3795b",
         "decision": "NO_NOTIFICATION",
         "expectedDecisionRevision": "revision-1",
         "localContext": {
@@ -1892,7 +1892,7 @@
           "affectedObjectRefs": []
         },
         "analysisDigest": "239e1fc59159d54f5d3a6b680bea43b9121a11dd049b99a956490d9606a3795b",
-        "analysisRevision": "revision-1",
+        "analysisRevision": "239e1fc59159d54f5d3a6b680bea43b9121a11dd049b99a956490d9606a3795b",
         "decision": "NO_NOTIFICATION",
         "expectedDecisionRevision": "revision-1",
         "localContext": {
@@ -1971,7 +1971,7 @@
         {
           "path": "/request/analysisRevision",
           "kind": "Revision",
-          "example": "revision-1"
+          "example": "239e1fc59159d54f5d3a6b680bea43b9121a11dd049b99a956490d9606a3795b"
         },
         {
           "path": "/request/expectedDecisionRevision",
@@ -2064,7 +2064,7 @@
           ]
         },
         "operationDigest": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f",
-        "analysisDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "analysisDigest": "da65ab336b2332db52898fedb11855769fdd04236774956ea7fb69e2841f37d5",
         "decisionRevision": "revision-1",
         "expectedWorldRevision": "world-1",
         "expectedObjectRevisions": {},
@@ -2132,7 +2132,7 @@
           ]
         },
         "operationDigest": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f",
-        "analysisDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "analysisDigest": "da65ab336b2332db52898fedb11855769fdd04236774956ea7fb69e2841f37d5",
         "decisionRevision": "revision-1",
         "expectedWorldRevision": "world-1",
         "expectedObjectRevisions": {},
@@ -2230,7 +2230,7 @@
         {
           "path": "/request/analysisDigest",
           "kind": "Digest",
-          "example": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          "example": "da65ab336b2332db52898fedb11855769fdd04236774956ea7fb69e2841f37d5"
         },
         {
           "path": "/request/decisionRevision",
@@ -2322,7 +2322,494 @@
           "kind": "Ref",
           "example": "sample-ApplyRecoverableCommit"
         }
-      ]
+      ],
+      "prepareChain": {
+        "classification": "COMPLETE_DOCUMENT_DATA_NOT_RUNTIME_EVIDENCE",
+        "requirement": "Execute these public calls on the same actual Session/world/transaction and verify the durable NO_NOTIFICATION revision via the exact decision replay before Apply. Bind only independently observed opaque scalars; never substitute policy, geometry, collections or an unpersisted decision.",
+        "steps": [
+          {
+            "operation": "AnalyzeAffectedObjects",
+            "mode": "ok",
+            "request": {
+              "contractVersion": "canvas/v7",
+              "sessionRef": "fixture-session",
+              "requestId": "sample-ApplyRecoverableCommit:analysis",
+              "worldRef": "fixture-world",
+              "transactionId": "sample-transaction",
+              "operations": {
+                "contractVersion": "operations/v4",
+                "buildDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                "compilerRevision": "sample-compiler-1",
+                "compilationConfigDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "worldRef": "fixture-world",
+                "frameDigest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "catalogueDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                "targetFactsDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+                "effects": [
+                  {
+                    "geometryProfile": "voxel-grid/v1",
+                    "position": [
+                      20,
+                      2,
+                      20
+                    ],
+                    "materialRef": "material:solid",
+                    "orientation": 0
+                  }
+                ]
+              },
+              "operationDigest": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f",
+              "expectedRevision": "world-1",
+              "expectedRegistryRevision": "registry-1",
+              "expectedSelectionRevision": "selection-1",
+              "localContext": {
+                "connectionRef": "local-connection",
+                "connectionIncarnationRef": "socket-open-1",
+                "worldRef": "fixture-world",
+                "selectionRevision": "selection-1"
+              }
+            },
+            "response": {
+              "contractVersion": "canvas/v7",
+              "requestId": "sample-ApplyRecoverableCommit:analysis",
+              "result": {
+                "contractVersion": "canvas/v7",
+                "worldRef": "fixture-world",
+                "worldRevision": "world-1",
+                "registryRevision": "registry-1",
+                "selectionRevision": "selection-1",
+                "operationDigest": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f",
+                "orderedSelectedRefs": [],
+                "affectedObjectRefs": []
+              },
+              "error": null
+            },
+            "events": [],
+            "bindings": [
+              {
+                "path": "/request/sessionRef",
+                "kind": "Ref",
+                "example": "fixture-session"
+              },
+              {
+                "path": "/request/requestId",
+                "kind": "Ref",
+                "example": "sample-ApplyRecoverableCommit:analysis"
+              },
+              {
+                "path": "/request/worldRef",
+                "kind": "Ref",
+                "example": "fixture-world"
+              },
+              {
+                "path": "/request/transactionId",
+                "kind": "Ref",
+                "example": "sample-transaction"
+              },
+              {
+                "path": "/request/operations/buildDigest",
+                "kind": "Digest",
+                "example": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              },
+              {
+                "path": "/request/operations/compilerRevision",
+                "kind": "Revision",
+                "example": "sample-compiler-1"
+              },
+              {
+                "path": "/request/operations/compilationConfigDigest",
+                "kind": "Digest",
+                "example": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+              },
+              {
+                "path": "/request/operations/worldRef",
+                "kind": "Ref",
+                "example": "fixture-world"
+              },
+              {
+                "path": "/request/operations/frameDigest",
+                "kind": "Digest",
+                "example": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+              },
+              {
+                "path": "/request/operations/catalogueDigest",
+                "kind": "Digest",
+                "example": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+              },
+              {
+                "path": "/request/operations/targetFactsDigest",
+                "kind": "Digest",
+                "example": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+              },
+              {
+                "path": "/request/operations/effects/0/materialRef",
+                "kind": "Ref",
+                "example": "material:solid"
+              },
+              {
+                "path": "/request/operationDigest",
+                "kind": "Digest",
+                "example": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f"
+              },
+              {
+                "path": "/request/expectedRevision",
+                "kind": "Revision",
+                "example": "world-1"
+              },
+              {
+                "path": "/request/expectedRegistryRevision",
+                "kind": "Revision",
+                "example": "registry-1"
+              },
+              {
+                "path": "/request/expectedSelectionRevision",
+                "kind": "Revision",
+                "example": "selection-1"
+              },
+              {
+                "path": "/request/localContext/connectionRef",
+                "kind": "Ref",
+                "example": "local-connection"
+              },
+              {
+                "path": "/request/localContext/connectionIncarnationRef",
+                "kind": "Ref",
+                "example": "socket-open-1"
+              },
+              {
+                "path": "/request/localContext/worldRef",
+                "kind": "Ref",
+                "example": "fixture-world"
+              },
+              {
+                "path": "/request/localContext/selectionRevision",
+                "kind": "Revision",
+                "example": "selection-1"
+              },
+              {
+                "path": "/response/requestId",
+                "kind": "Ref",
+                "example": "sample-ApplyRecoverableCommit:analysis"
+              },
+              {
+                "path": "/response/result/worldRef",
+                "kind": "Ref",
+                "example": "fixture-world"
+              },
+              {
+                "path": "/response/result/worldRevision",
+                "kind": "Revision",
+                "example": "world-1"
+              },
+              {
+                "path": "/response/result/registryRevision",
+                "kind": "Revision",
+                "example": "registry-1"
+              },
+              {
+                "path": "/response/result/selectionRevision",
+                "kind": "Revision",
+                "example": "selection-1"
+              },
+              {
+                "path": "/response/result/operationDigest",
+                "kind": "Digest",
+                "example": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f"
+              }
+            ]
+          },
+          {
+            "operation": "DecideAffectedObjectNotification",
+            "mode": "ok",
+            "request": {
+              "contractVersion": "canvas/v7",
+              "sessionRef": "fixture-session",
+              "requestId": "sample-ApplyRecoverableCommit:decision",
+              "worldRef": "fixture-world",
+              "transactionId": "sample-transaction",
+              "analysis": {
+                "contractVersion": "canvas/v7",
+                "worldRef": "fixture-world",
+                "worldRevision": "world-1",
+                "registryRevision": "registry-1",
+                "selectionRevision": "selection-1",
+                "operationDigest": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f",
+                "orderedSelectedRefs": [],
+                "affectedObjectRefs": []
+              },
+              "analysisDigest": "da65ab336b2332db52898fedb11855769fdd04236774956ea7fb69e2841f37d5",
+              "analysisRevision": "da65ab336b2332db52898fedb11855769fdd04236774956ea7fb69e2841f37d5",
+              "decision": "NO_NOTIFICATION",
+              "expectedDecisionRevision": null,
+              "localContext": {
+                "connectionRef": "local-connection",
+                "connectionIncarnationRef": "socket-open-1",
+                "worldRef": "fixture-world",
+                "selectionRevision": "selection-1"
+              }
+            },
+            "response": {
+              "contractVersion": "canvas/v7",
+              "requestId": "sample-ApplyRecoverableCommit:decision",
+              "result": {
+                "transactionId": "sample-transaction",
+                "analysisDigest": "da65ab336b2332db52898fedb11855769fdd04236774956ea7fb69e2841f37d5",
+                "decisionRevision": "revision-1",
+                "decisionKind": "NO_NOTIFICATION",
+                "affectedObjectRefs": [],
+                "orderedSelectedRefs": []
+              },
+              "error": null
+            },
+            "events": [],
+            "bindings": [
+              {
+                "path": "/request/sessionRef",
+                "kind": "Ref",
+                "example": "fixture-session"
+              },
+              {
+                "path": "/request/requestId",
+                "kind": "Ref",
+                "example": "sample-ApplyRecoverableCommit:decision"
+              },
+              {
+                "path": "/request/worldRef",
+                "kind": "Ref",
+                "example": "fixture-world"
+              },
+              {
+                "path": "/request/transactionId",
+                "kind": "Ref",
+                "example": "sample-transaction"
+              },
+              {
+                "path": "/request/analysis/worldRef",
+                "kind": "Ref",
+                "example": "fixture-world"
+              },
+              {
+                "path": "/request/analysis/worldRevision",
+                "kind": "Revision",
+                "example": "world-1"
+              },
+              {
+                "path": "/request/analysis/registryRevision",
+                "kind": "Revision",
+                "example": "registry-1"
+              },
+              {
+                "path": "/request/analysis/selectionRevision",
+                "kind": "Revision",
+                "example": "selection-1"
+              },
+              {
+                "path": "/request/analysis/operationDigest",
+                "kind": "Digest",
+                "example": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f"
+              },
+              {
+                "path": "/request/analysisDigest",
+                "kind": "Digest",
+                "example": "da65ab336b2332db52898fedb11855769fdd04236774956ea7fb69e2841f37d5"
+              },
+              {
+                "path": "/request/analysisRevision",
+                "kind": "Revision",
+                "example": "da65ab336b2332db52898fedb11855769fdd04236774956ea7fb69e2841f37d5"
+              },
+              {
+                "path": "/request/localContext/connectionRef",
+                "kind": "Ref",
+                "example": "local-connection"
+              },
+              {
+                "path": "/request/localContext/connectionIncarnationRef",
+                "kind": "Ref",
+                "example": "socket-open-1"
+              },
+              {
+                "path": "/request/localContext/worldRef",
+                "kind": "Ref",
+                "example": "fixture-world"
+              },
+              {
+                "path": "/request/localContext/selectionRevision",
+                "kind": "Revision",
+                "example": "selection-1"
+              },
+              {
+                "path": "/response/requestId",
+                "kind": "Ref",
+                "example": "sample-ApplyRecoverableCommit:decision"
+              },
+              {
+                "path": "/response/result/transactionId",
+                "kind": "Ref",
+                "example": "sample-transaction"
+              },
+              {
+                "path": "/response/result/analysisDigest",
+                "kind": "Digest",
+                "example": "da65ab336b2332db52898fedb11855769fdd04236774956ea7fb69e2841f37d5"
+              },
+              {
+                "path": "/response/result/decisionRevision",
+                "kind": "Revision",
+                "example": "revision-1"
+              }
+            ]
+          },
+          {
+            "operation": "DecideAffectedObjectNotification",
+            "mode": "replay",
+            "request": {
+              "contractVersion": "canvas/v7",
+              "sessionRef": "fixture-session",
+              "requestId": "sample-ApplyRecoverableCommit:decision",
+              "worldRef": "fixture-world",
+              "transactionId": "sample-transaction",
+              "analysis": {
+                "contractVersion": "canvas/v7",
+                "worldRef": "fixture-world",
+                "worldRevision": "world-1",
+                "registryRevision": "registry-1",
+                "selectionRevision": "selection-1",
+                "operationDigest": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f",
+                "orderedSelectedRefs": [],
+                "affectedObjectRefs": []
+              },
+              "analysisDigest": "da65ab336b2332db52898fedb11855769fdd04236774956ea7fb69e2841f37d5",
+              "analysisRevision": "da65ab336b2332db52898fedb11855769fdd04236774956ea7fb69e2841f37d5",
+              "decision": "NO_NOTIFICATION",
+              "expectedDecisionRevision": null,
+              "localContext": {
+                "connectionRef": "local-connection",
+                "connectionIncarnationRef": "socket-open-1",
+                "worldRef": "fixture-world",
+                "selectionRevision": "selection-1"
+              }
+            },
+            "response": {
+              "contractVersion": "canvas/v7",
+              "requestId": "sample-ApplyRecoverableCommit:decision",
+              "result": {
+                "transactionId": "sample-transaction",
+                "analysisDigest": "da65ab336b2332db52898fedb11855769fdd04236774956ea7fb69e2841f37d5",
+                "decisionRevision": "revision-1",
+                "decisionKind": "NO_NOTIFICATION",
+                "affectedObjectRefs": [],
+                "orderedSelectedRefs": []
+              },
+              "error": null
+            },
+            "events": [],
+            "bindings": [
+              {
+                "path": "/request/sessionRef",
+                "kind": "Ref",
+                "example": "fixture-session"
+              },
+              {
+                "path": "/request/requestId",
+                "kind": "Ref",
+                "example": "sample-ApplyRecoverableCommit:decision"
+              },
+              {
+                "path": "/request/worldRef",
+                "kind": "Ref",
+                "example": "fixture-world"
+              },
+              {
+                "path": "/request/transactionId",
+                "kind": "Ref",
+                "example": "sample-transaction"
+              },
+              {
+                "path": "/request/analysis/worldRef",
+                "kind": "Ref",
+                "example": "fixture-world"
+              },
+              {
+                "path": "/request/analysis/worldRevision",
+                "kind": "Revision",
+                "example": "world-1"
+              },
+              {
+                "path": "/request/analysis/registryRevision",
+                "kind": "Revision",
+                "example": "registry-1"
+              },
+              {
+                "path": "/request/analysis/selectionRevision",
+                "kind": "Revision",
+                "example": "selection-1"
+              },
+              {
+                "path": "/request/analysis/operationDigest",
+                "kind": "Digest",
+                "example": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f"
+              },
+              {
+                "path": "/request/analysisDigest",
+                "kind": "Digest",
+                "example": "da65ab336b2332db52898fedb11855769fdd04236774956ea7fb69e2841f37d5"
+              },
+              {
+                "path": "/request/analysisRevision",
+                "kind": "Revision",
+                "example": "da65ab336b2332db52898fedb11855769fdd04236774956ea7fb69e2841f37d5"
+              },
+              {
+                "path": "/request/localContext/connectionRef",
+                "kind": "Ref",
+                "example": "local-connection"
+              },
+              {
+                "path": "/request/localContext/connectionIncarnationRef",
+                "kind": "Ref",
+                "example": "socket-open-1"
+              },
+              {
+                "path": "/request/localContext/worldRef",
+                "kind": "Ref",
+                "example": "fixture-world"
+              },
+              {
+                "path": "/request/localContext/selectionRevision",
+                "kind": "Revision",
+                "example": "selection-1"
+              },
+              {
+                "path": "/response/requestId",
+                "kind": "Ref",
+                "example": "sample-ApplyRecoverableCommit:decision"
+              },
+              {
+                "path": "/response/result/transactionId",
+                "kind": "Ref",
+                "example": "sample-transaction"
+              },
+              {
+                "path": "/response/result/analysisDigest",
+                "kind": "Digest",
+                "example": "da65ab336b2332db52898fedb11855769fdd04236774956ea7fb69e2841f37d5"
+              },
+              {
+                "path": "/response/result/decisionRevision",
+                "kind": "Revision",
+                "example": "revision-1"
+              }
+            ],
+            "worldWrites": []
+          }
+        ],
+        "bindings": {
+          "analysis": "The complete Analyzer result is the Decision request.analysis. analysisDigest and analysisRevision are the affected-analysis digest of that exact projection, including world/registry/selection generations and both ordered collections.",
+          "decision": "The successful and exact replay Decision envelopes must match completely. Apply uses their actual persisted decisionRevision, same transactionId, analysisDigest and localContext; NO_NOTIFICATION and the empty affected/selected sets are immutable.",
+          "apply": "Apply operations/operationDigest and expectedWorldRevision must equal the analyzed operations/digest/worldRevision; reject any transaction, digest, generation or collection change before world writes."
+        }
+      }
     },
     {
       "id": "Readback",
@@ -13670,32 +14157,42 @@
     {
       "id": "AffectedObjectNotificationRequired-DecideAffectedObjectNotification",
       "name": "AffectedObjectNotificationRequired",
-      "trigger": "DecideAffectedObjectNotification",
-      "runtimeTrigger": "AnalyzeAffectedObjects → durable BLOCK_AND_NOTIFY decision, or direct declared decision call",
+      "trigger": "AnalyzeAffectedObjects",
+      "runtimeTrigger": "AnalyzeAffectedObjects → durable BLOCK_AND_NOTIFY decision; the direct declared decision path is documented separately in scenarios.",
       "emission": "Emit only for successful policy decision BLOCK_AND_NOTIFY on nonselected affected objects; receipt.result carries the displayed immutable affected set/decision revision. NO_NOTIFICATION/CONTINUE/CANCEL do not emit this signal.",
       "success": {
         "request": {
           "contractVersion": "canvas/v7",
           "sessionRef": "fixture-session",
-          "requestId": "sample-DecideAffectedObjectNotification",
+          "requestId": "sample-AnalyzeAffectedObjects",
           "worldRef": "fixture-world",
           "transactionId": "sample-transaction",
-          "analysis": {
-            "contractVersion": "canvas/v7",
+          "operations": {
+            "contractVersion": "operations/v4",
+            "buildDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "compilerRevision": "sample-compiler-1",
+            "compilationConfigDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "worldRef": "fixture-world",
-            "worldRevision": "fixture-world-10",
-            "registryRevision": "registry-1",
-            "selectionRevision": "selection-1",
-            "operationDigest": "803d9463fd8ca341d4b000390295cc04539f8799cf30de7bfa2cf868c2e32dca",
-            "orderedSelectedRefs": [],
-            "affectedObjectRefs": [
-              "sample-other-object"
+            "frameDigest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            "catalogueDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "targetFactsDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            "effects": [
+              {
+                "geometryProfile": "voxel-grid/v1",
+                "position": [
+                  20,
+                  2,
+                  20
+                ],
+                "materialRef": "material:solid",
+                "orientation": 0
+              }
             ]
           },
-          "analysisDigest": "a45daf370a33093db6d520ce90e7d8aaee3e58b44a51eefb7dc0886cf8d6950b",
-          "analysisRevision": "revision-1",
-          "decision": "BLOCK_AND_NOTIFY",
-          "expectedDecisionRevision": "revision-1",
+          "operationDigest": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f",
+          "expectedRevision": "fixture-world-10",
+          "expectedRegistryRevision": "registry-1",
+          "expectedSelectionRevision": "selection-1",
           "localContext": {
             "connectionRef": "local-connection",
             "connectionIncarnationRef": "socket-open-1",
@@ -13705,18 +14202,97 @@
         },
         "response": {
           "contractVersion": "canvas/v7",
-          "requestId": "sample-DecideAffectedObjectNotification",
+          "requestId": "sample-AnalyzeAffectedObjects",
           "result": {
-            "transactionId": "sample-transaction",
-            "analysisDigest": "a45daf370a33093db6d520ce90e7d8aaee3e58b44a51eefb7dc0886cf8d6950b",
-            "decisionRevision": "revision-1",
-            "decisionKind": "BLOCK_AND_NOTIFY",
+            "contractVersion": "canvas/v7",
+            "worldRef": "fixture-world",
+            "worldRevision": "fixture-world-10",
+            "registryRevision": "registry-1",
+            "selectionRevision": "selection-1",
+            "operationDigest": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f",
+            "orderedSelectedRefs": [],
             "affectedObjectRefs": [
               "sample-other-object"
-            ],
-            "orderedSelectedRefs": []
+            ]
           },
           "error": null
+        },
+        "actualTrigger": {
+          "operation": "AnalyzeAffectedObjects",
+          "request": {
+            "contractVersion": "canvas/v7",
+            "sessionRef": "fixture-session",
+            "requestId": "sample-AnalyzeAffectedObjects",
+            "worldRef": "fixture-world",
+            "transactionId": "sample-transaction",
+            "operations": {
+              "contractVersion": "operations/v4",
+              "buildDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "compilerRevision": "sample-compiler-1",
+              "compilationConfigDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "worldRef": "fixture-world",
+              "frameDigest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+              "catalogueDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+              "targetFactsDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+              "effects": [
+                {
+                  "geometryProfile": "voxel-grid/v1",
+                  "position": [
+                    20,
+                    2,
+                    20
+                  ],
+                  "materialRef": "material:solid",
+                  "orientation": 0
+                }
+              ]
+            },
+            "operationDigest": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f",
+            "expectedRevision": "fixture-world-10",
+            "expectedRegistryRevision": "registry-1",
+            "expectedSelectionRevision": "selection-1",
+            "localContext": {
+              "connectionRef": "local-connection",
+              "connectionIncarnationRef": "socket-open-1",
+              "worldRef": "fixture-world",
+              "selectionRevision": "selection-1"
+            }
+          },
+          "response": {
+            "contractVersion": "canvas/v7",
+            "requestId": "sample-AnalyzeAffectedObjects",
+            "result": {
+              "contractVersion": "canvas/v7",
+              "worldRef": "fixture-world",
+              "worldRevision": "fixture-world-10",
+              "registryRevision": "registry-1",
+              "selectionRevision": "selection-1",
+              "operationDigest": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f",
+              "orderedSelectedRefs": [],
+              "affectedObjectRefs": [
+                "sample-other-object"
+              ]
+            },
+            "error": null
+          }
+        },
+        "internalDecision": {
+          "operation": "DecideAffectedObjectNotification",
+          "response": {
+            "contractVersion": "canvas/v7",
+            "requestId": "sample-AnalyzeAffectedObjects",
+            "result": {
+              "transactionId": "sample-transaction",
+              "analysisDigest": "23b2f055886ebfd0166bbaf913c1bfebb5c228840f28691a819bf4f3449e5bea",
+              "decisionRevision": "revision-1",
+              "decisionKind": "BLOCK_AND_NOTIFY",
+              "affectedObjectRefs": [
+                "sample-other-object"
+              ],
+              "orderedSelectedRefs": []
+            },
+            "error": null
+          }
         },
         "events": [
           {
@@ -13725,10 +14301,10 @@
             "operation": "DecideAffectedObjectNotification",
             "receipt": {
               "contractVersion": "canvas/v7",
-              "requestId": "sample-DecideAffectedObjectNotification",
+              "requestId": "sample-AnalyzeAffectedObjects",
               "result": {
                 "transactionId": "sample-transaction",
-                "analysisDigest": "a45daf370a33093db6d520ce90e7d8aaee3e58b44a51eefb7dc0886cf8d6950b",
+                "analysisDigest": "23b2f055886ebfd0166bbaf913c1bfebb5c228840f28691a819bf4f3449e5bea",
                 "decisionRevision": "revision-1",
                 "decisionKind": "BLOCK_AND_NOTIFY",
                 "affectedObjectRefs": [
@@ -13745,23 +14321,35 @@
         "request": {
           "contractVersion": "canvas/v7",
           "sessionRef": "fixture-session",
-          "requestId": "sample-DecideAffectedObjectNotification",
+          "requestId": "sample-AnalyzeAffectedObjects",
           "worldRef": "fixture-world",
           "transactionId": "sample-transaction",
-          "analysis": {
-            "contractVersion": "canvas/v7",
+          "operations": {
+            "contractVersion": "operations/v4",
+            "buildDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "compilerRevision": "sample-compiler-1",
+            "compilationConfigDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "worldRef": "fixture-world",
-            "worldRevision": "fixture-world-10",
-            "registryRevision": "registry-1",
-            "selectionRevision": "selection-1",
-            "operationDigest": "803d9463fd8ca341d4b000390295cc04539f8799cf30de7bfa2cf868c2e32dca",
-            "orderedSelectedRefs": [],
-            "affectedObjectRefs": []
+            "frameDigest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            "catalogueDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "targetFactsDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            "effects": [
+              {
+                "geometryProfile": "voxel-grid/v1",
+                "position": [
+                  20,
+                  2,
+                  20
+                ],
+                "materialRef": "material:solid",
+                "orientation": 0
+              }
+            ]
           },
-          "analysisDigest": "239e1fc59159d54f5d3a6b680bea43b9121a11dd049b99a956490d9606a3795b",
-          "analysisRevision": "revision-1",
-          "decision": "NO_NOTIFICATION",
-          "expectedDecisionRevision": "revision-1",
+          "operationDigest": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f",
+          "expectedRevision": "fixture-world-10",
+          "expectedRegistryRevision": "registry-1",
+          "expectedSelectionRevision": "selection-1",
           "localContext": {
             "connectionRef": "local-connection",
             "connectionIncarnationRef": "socket-open-1",
@@ -13772,7 +14360,7 @@
         },
         "response": {
           "contractVersion": "canvas/v7",
-          "requestId": "sample-DecideAffectedObjectNotification",
+          "requestId": "sample-AnalyzeAffectedObjects",
           "result": null,
           "error": {
             "code": "UNKNOWN_REQUIRED_FIELD",
@@ -13784,31 +14372,98 @@
             "reason": "UNKNOWN_FIELD"
           }
         },
+        "actualTrigger": {
+          "operation": "AnalyzeAffectedObjects",
+          "request": {
+            "contractVersion": "canvas/v7",
+            "sessionRef": "fixture-session",
+            "requestId": "sample-AnalyzeAffectedObjects",
+            "worldRef": "fixture-world",
+            "transactionId": "sample-transaction",
+            "operations": {
+              "contractVersion": "operations/v4",
+              "buildDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "compilerRevision": "sample-compiler-1",
+              "compilationConfigDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "worldRef": "fixture-world",
+              "frameDigest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+              "catalogueDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+              "targetFactsDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+              "effects": [
+                {
+                  "geometryProfile": "voxel-grid/v1",
+                  "position": [
+                    20,
+                    2,
+                    20
+                  ],
+                  "materialRef": "material:solid",
+                  "orientation": 0
+                }
+              ]
+            },
+            "operationDigest": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f",
+            "expectedRevision": "fixture-world-10",
+            "expectedRegistryRevision": "registry-1",
+            "expectedSelectionRevision": "selection-1",
+            "localContext": {
+              "connectionRef": "local-connection",
+              "connectionIncarnationRef": "socket-open-1",
+              "worldRef": "fixture-world",
+              "selectionRevision": "selection-1"
+            },
+            "unexpectedRequired": "must-refuse"
+          },
+          "response": {
+            "contractVersion": "canvas/v7",
+            "requestId": "sample-AnalyzeAffectedObjects",
+            "result": null,
+            "error": {
+              "code": "UNKNOWN_REQUIRED_FIELD",
+              "phase": "decode",
+              "retryability": "NEVER",
+              "mutationState": "NONE",
+              "transactionRef": null,
+              "causeCode": null,
+              "reason": "UNKNOWN_FIELD"
+            }
+          }
+        },
         "events": []
       },
       "replay": {
         "request": {
           "contractVersion": "canvas/v7",
           "sessionRef": "fixture-session",
-          "requestId": "sample-DecideAffectedObjectNotification",
+          "requestId": "sample-AnalyzeAffectedObjects",
           "worldRef": "fixture-world",
           "transactionId": "sample-transaction",
-          "analysis": {
-            "contractVersion": "canvas/v7",
+          "operations": {
+            "contractVersion": "operations/v4",
+            "buildDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "compilerRevision": "sample-compiler-1",
+            "compilationConfigDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "worldRef": "fixture-world",
-            "worldRevision": "fixture-world-10",
-            "registryRevision": "registry-1",
-            "selectionRevision": "selection-1",
-            "operationDigest": "803d9463fd8ca341d4b000390295cc04539f8799cf30de7bfa2cf868c2e32dca",
-            "orderedSelectedRefs": [],
-            "affectedObjectRefs": [
-              "sample-other-object"
+            "frameDigest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            "catalogueDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "targetFactsDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            "effects": [
+              {
+                "geometryProfile": "voxel-grid/v1",
+                "position": [
+                  20,
+                  2,
+                  20
+                ],
+                "materialRef": "material:solid",
+                "orientation": 0
+              }
             ]
           },
-          "analysisDigest": "a45daf370a33093db6d520ce90e7d8aaee3e58b44a51eefb7dc0886cf8d6950b",
-          "analysisRevision": "revision-1",
-          "decision": "BLOCK_AND_NOTIFY",
-          "expectedDecisionRevision": "revision-1",
+          "operationDigest": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f",
+          "expectedRevision": "fixture-world-10",
+          "expectedRegistryRevision": "registry-1",
+          "expectedSelectionRevision": "selection-1",
           "localContext": {
             "connectionRef": "local-connection",
             "connectionIncarnationRef": "socket-open-1",
@@ -13818,19 +14473,99 @@
         },
         "response": {
           "contractVersion": "canvas/v7",
-          "requestId": "sample-DecideAffectedObjectNotification",
+          "requestId": "sample-AnalyzeAffectedObjects",
           "result": {
-            "transactionId": "sample-transaction",
-            "analysisDigest": "a45daf370a33093db6d520ce90e7d8aaee3e58b44a51eefb7dc0886cf8d6950b",
-            "decisionRevision": "revision-1",
-            "decisionKind": "BLOCK_AND_NOTIFY",
+            "contractVersion": "canvas/v7",
+            "worldRef": "fixture-world",
+            "worldRevision": "fixture-world-10",
+            "registryRevision": "registry-1",
+            "selectionRevision": "selection-1",
+            "operationDigest": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f",
+            "orderedSelectedRefs": [],
             "affectedObjectRefs": [
               "sample-other-object"
-            ],
-            "orderedSelectedRefs": []
+            ]
           },
           "error": null
         },
+        "actualTrigger": {
+          "operation": "AnalyzeAffectedObjects",
+          "request": {
+            "contractVersion": "canvas/v7",
+            "sessionRef": "fixture-session",
+            "requestId": "sample-AnalyzeAffectedObjects",
+            "worldRef": "fixture-world",
+            "transactionId": "sample-transaction",
+            "operations": {
+              "contractVersion": "operations/v4",
+              "buildDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "compilerRevision": "sample-compiler-1",
+              "compilationConfigDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "worldRef": "fixture-world",
+              "frameDigest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+              "catalogueDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+              "targetFactsDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+              "effects": [
+                {
+                  "geometryProfile": "voxel-grid/v1",
+                  "position": [
+                    20,
+                    2,
+                    20
+                  ],
+                  "materialRef": "material:solid",
+                  "orientation": 0
+                }
+              ]
+            },
+            "operationDigest": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f",
+            "expectedRevision": "fixture-world-10",
+            "expectedRegistryRevision": "registry-1",
+            "expectedSelectionRevision": "selection-1",
+            "localContext": {
+              "connectionRef": "local-connection",
+              "connectionIncarnationRef": "socket-open-1",
+              "worldRef": "fixture-world",
+              "selectionRevision": "selection-1"
+            }
+          },
+          "response": {
+            "contractVersion": "canvas/v7",
+            "requestId": "sample-AnalyzeAffectedObjects",
+            "result": {
+              "contractVersion": "canvas/v7",
+              "worldRef": "fixture-world",
+              "worldRevision": "fixture-world-10",
+              "registryRevision": "registry-1",
+              "selectionRevision": "selection-1",
+              "operationDigest": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f",
+              "orderedSelectedRefs": [],
+              "affectedObjectRefs": [
+                "sample-other-object"
+              ]
+            },
+            "error": null
+          }
+        },
+        "internalDecision": {
+          "operation": "DecideAffectedObjectNotification",
+          "response": {
+            "contractVersion": "canvas/v7",
+            "requestId": "sample-AnalyzeAffectedObjects",
+            "result": {
+              "transactionId": "sample-transaction",
+              "analysisDigest": "23b2f055886ebfd0166bbaf913c1bfebb5c228840f28691a819bf4f3449e5bea",
+              "decisionRevision": "revision-1",
+              "decisionKind": "BLOCK_AND_NOTIFY",
+              "affectedObjectRefs": [
+                "sample-other-object"
+              ],
+              "orderedSelectedRefs": []
+            },
+            "error": null
+          }
+        },
+        "internalDecisionSource": "PRIOR_DURABLE_RECEIPT_NOT_ANALYZER_RETURN",
         "events": []
       },
       "bindings": [
@@ -13842,7 +14577,7 @@
         {
           "path": "/request/requestId",
           "kind": "Ref",
-          "example": "sample-DecideAffectedObjectNotification"
+          "example": "sample-AnalyzeAffectedObjects"
         },
         {
           "path": "/request/worldRef",
@@ -13855,49 +14590,64 @@
           "example": "sample-transaction"
         },
         {
-          "path": "/request/analysis/worldRef",
+          "path": "/request/operations/buildDigest",
+          "kind": "Digest",
+          "example": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        {
+          "path": "/request/operations/compilerRevision",
+          "kind": "Revision",
+          "example": "sample-compiler-1"
+        },
+        {
+          "path": "/request/operations/compilationConfigDigest",
+          "kind": "Digest",
+          "example": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+          "path": "/request/operations/worldRef",
           "kind": "Ref",
           "example": "fixture-world"
         },
         {
-          "path": "/request/analysis/worldRevision",
+          "path": "/request/operations/frameDigest",
+          "kind": "Digest",
+          "example": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        },
+        {
+          "path": "/request/operations/catalogueDigest",
+          "kind": "Digest",
+          "example": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        },
+        {
+          "path": "/request/operations/targetFactsDigest",
+          "kind": "Digest",
+          "example": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        },
+        {
+          "path": "/request/operations/effects/0/materialRef",
+          "kind": "Ref",
+          "example": "material:solid"
+        },
+        {
+          "path": "/request/operationDigest",
+          "kind": "Digest",
+          "example": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f"
+        },
+        {
+          "path": "/request/expectedRevision",
           "kind": "Revision",
           "example": "fixture-world-10"
         },
         {
-          "path": "/request/analysis/registryRevision",
+          "path": "/request/expectedRegistryRevision",
           "kind": "Revision",
           "example": "registry-1"
         },
         {
-          "path": "/request/analysis/selectionRevision",
+          "path": "/request/expectedSelectionRevision",
           "kind": "Revision",
           "example": "selection-1"
-        },
-        {
-          "path": "/request/analysis/operationDigest",
-          "kind": "Digest",
-          "example": "803d9463fd8ca341d4b000390295cc04539f8799cf30de7bfa2cf868c2e32dca"
-        },
-        {
-          "path": "/request/analysis/affectedObjectRefs/0",
-          "kind": "Ref",
-          "example": "sample-other-object"
-        },
-        {
-          "path": "/request/analysisDigest",
-          "kind": "Digest",
-          "example": "a45daf370a33093db6d520ce90e7d8aaee3e58b44a51eefb7dc0886cf8d6950b"
-        },
-        {
-          "path": "/request/analysisRevision",
-          "kind": "Revision",
-          "example": "revision-1"
-        },
-        {
-          "path": "/request/expectedDecisionRevision",
-          "kind": "Revision",
-          "example": "revision-1"
         },
         {
           "path": "/request/localContext/connectionRef",
@@ -13922,32 +14672,37 @@
         {
           "path": "/response/requestId",
           "kind": "Ref",
-          "example": "sample-DecideAffectedObjectNotification"
+          "example": "sample-AnalyzeAffectedObjects"
         },
         {
-          "path": "/response/result/transactionId",
+          "path": "/response/result/worldRef",
           "kind": "Ref",
-          "example": "sample-transaction"
+          "example": "fixture-world"
         },
         {
-          "path": "/response/result/analysisDigest",
-          "kind": "Digest",
-          "example": "a45daf370a33093db6d520ce90e7d8aaee3e58b44a51eefb7dc0886cf8d6950b"
-        },
-        {
-          "path": "/response/result/decisionRevision",
+          "path": "/response/result/worldRevision",
           "kind": "Revision",
-          "example": "revision-1"
+          "example": "fixture-world-10"
         },
         {
-          "path": "/response/result/affectedObjectRefs/0",
-          "kind": "Ref",
-          "example": "sample-other-object"
+          "path": "/response/result/registryRevision",
+          "kind": "Revision",
+          "example": "registry-1"
+        },
+        {
+          "path": "/response/result/selectionRevision",
+          "kind": "Revision",
+          "example": "selection-1"
+        },
+        {
+          "path": "/response/result/operationDigest",
+          "kind": "Digest",
+          "example": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f"
         },
         {
           "path": "/events/0/receipt/requestId",
           "kind": "Ref",
-          "example": "sample-DecideAffectedObjectNotification"
+          "example": "sample-AnalyzeAffectedObjects"
         },
         {
           "path": "/events/0/receipt/result/transactionId",
@@ -13957,7 +14712,7 @@
         {
           "path": "/events/0/receipt/result/analysisDigest",
           "kind": "Digest",
-          "example": "a45daf370a33093db6d520ce90e7d8aaee3e58b44a51eefb7dc0886cf8d6950b"
+          "example": "23b2f055886ebfd0166bbaf913c1bfebb5c228840f28691a819bf4f3449e5bea"
         },
         {
           "path": "/events/0/receipt/result/decisionRevision",
@@ -13966,6 +14721,38 @@
         },
         {
           "path": "/events/0/receipt/result/affectedObjectRefs/0",
+          "kind": "Ref",
+          "example": "sample-other-object"
+        },
+        {
+          "path": "/response/result/affectedObjectRefs/0",
+          "kind": "Ref",
+          "example": "sample-other-object"
+        }
+      ],
+      "internalDecisionBindings": [
+        {
+          "path": "/response/requestId",
+          "kind": "Ref",
+          "example": "sample-AnalyzeAffectedObjects"
+        },
+        {
+          "path": "/response/result/transactionId",
+          "kind": "Ref",
+          "example": "sample-transaction"
+        },
+        {
+          "path": "/response/result/analysisDigest",
+          "kind": "Digest",
+          "example": "23b2f055886ebfd0166bbaf913c1bfebb5c228840f28691a819bf4f3449e5bea"
+        },
+        {
+          "path": "/response/result/decisionRevision",
+          "kind": "Revision",
+          "example": "revision-1"
+        },
+        {
+          "path": "/response/result/affectedObjectRefs/0",
           "kind": "Ref",
           "example": "sample-other-object"
         }
@@ -14007,7 +14794,7 @@
             ]
           },
           "operationDigest": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f",
-          "analysisDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "analysisDigest": "da65ab336b2332db52898fedb11855769fdd04236774956ea7fb69e2841f37d5",
           "decisionRevision": "revision-1",
           "expectedWorldRevision": "world-1",
           "expectedObjectRevisions": {},
@@ -14109,7 +14896,7 @@
             ]
           },
           "operationDigest": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f",
-          "analysisDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "analysisDigest": "da65ab336b2332db52898fedb11855769fdd04236774956ea7fb69e2841f37d5",
           "decisionRevision": "revision-1",
           "expectedWorldRevision": "world-1",
           "expectedObjectRevisions": {},
@@ -14170,7 +14957,7 @@
             ]
           },
           "operationDigest": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f",
-          "analysisDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "analysisDigest": "da65ab336b2332db52898fedb11855769fdd04236774956ea7fb69e2841f37d5",
           "decisionRevision": "revision-1",
           "expectedWorldRevision": "world-1",
           "expectedObjectRevisions": {},
@@ -14280,7 +15067,7 @@
         {
           "path": "/request/analysisDigest",
           "kind": "Digest",
-          "example": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          "example": "da65ab336b2332db52898fedb11855769fdd04236774956ea7fb69e2841f37d5"
         },
         {
           "path": "/request/decisionRevision",
@@ -14422,7 +15209,494 @@
           "kind": "Revision",
           "example": "selection-1"
         }
-      ]
+      ],
+      "prepareChain": {
+        "classification": "COMPLETE_DOCUMENT_DATA_NOT_RUNTIME_EVIDENCE",
+        "requirement": "Execute these public calls on the same actual Session/world/transaction and verify the durable NO_NOTIFICATION revision via the exact decision replay before Apply. Bind only independently observed opaque scalars; never substitute policy, geometry, collections or an unpersisted decision.",
+        "steps": [
+          {
+            "operation": "AnalyzeAffectedObjects",
+            "mode": "ok",
+            "request": {
+              "contractVersion": "canvas/v7",
+              "sessionRef": "fixture-session",
+              "requestId": "sample-ApplyRecoverableCommit:analysis",
+              "worldRef": "fixture-world",
+              "transactionId": "sample-transaction",
+              "operations": {
+                "contractVersion": "operations/v4",
+                "buildDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                "compilerRevision": "sample-compiler-1",
+                "compilationConfigDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "worldRef": "fixture-world",
+                "frameDigest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "catalogueDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                "targetFactsDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+                "effects": [
+                  {
+                    "geometryProfile": "voxel-grid/v1",
+                    "position": [
+                      20,
+                      2,
+                      20
+                    ],
+                    "materialRef": "material:solid",
+                    "orientation": 0
+                  }
+                ]
+              },
+              "operationDigest": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f",
+              "expectedRevision": "world-1",
+              "expectedRegistryRevision": "registry-1",
+              "expectedSelectionRevision": "selection-1",
+              "localContext": {
+                "connectionRef": "local-connection",
+                "connectionIncarnationRef": "socket-open-1",
+                "worldRef": "fixture-world",
+                "selectionRevision": "selection-1"
+              }
+            },
+            "response": {
+              "contractVersion": "canvas/v7",
+              "requestId": "sample-ApplyRecoverableCommit:analysis",
+              "result": {
+                "contractVersion": "canvas/v7",
+                "worldRef": "fixture-world",
+                "worldRevision": "world-1",
+                "registryRevision": "registry-1",
+                "selectionRevision": "selection-1",
+                "operationDigest": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f",
+                "orderedSelectedRefs": [],
+                "affectedObjectRefs": []
+              },
+              "error": null
+            },
+            "events": [],
+            "bindings": [
+              {
+                "path": "/request/sessionRef",
+                "kind": "Ref",
+                "example": "fixture-session"
+              },
+              {
+                "path": "/request/requestId",
+                "kind": "Ref",
+                "example": "sample-ApplyRecoverableCommit:analysis"
+              },
+              {
+                "path": "/request/worldRef",
+                "kind": "Ref",
+                "example": "fixture-world"
+              },
+              {
+                "path": "/request/transactionId",
+                "kind": "Ref",
+                "example": "sample-transaction"
+              },
+              {
+                "path": "/request/operations/buildDigest",
+                "kind": "Digest",
+                "example": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              },
+              {
+                "path": "/request/operations/compilerRevision",
+                "kind": "Revision",
+                "example": "sample-compiler-1"
+              },
+              {
+                "path": "/request/operations/compilationConfigDigest",
+                "kind": "Digest",
+                "example": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+              },
+              {
+                "path": "/request/operations/worldRef",
+                "kind": "Ref",
+                "example": "fixture-world"
+              },
+              {
+                "path": "/request/operations/frameDigest",
+                "kind": "Digest",
+                "example": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+              },
+              {
+                "path": "/request/operations/catalogueDigest",
+                "kind": "Digest",
+                "example": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+              },
+              {
+                "path": "/request/operations/targetFactsDigest",
+                "kind": "Digest",
+                "example": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+              },
+              {
+                "path": "/request/operations/effects/0/materialRef",
+                "kind": "Ref",
+                "example": "material:solid"
+              },
+              {
+                "path": "/request/operationDigest",
+                "kind": "Digest",
+                "example": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f"
+              },
+              {
+                "path": "/request/expectedRevision",
+                "kind": "Revision",
+                "example": "world-1"
+              },
+              {
+                "path": "/request/expectedRegistryRevision",
+                "kind": "Revision",
+                "example": "registry-1"
+              },
+              {
+                "path": "/request/expectedSelectionRevision",
+                "kind": "Revision",
+                "example": "selection-1"
+              },
+              {
+                "path": "/request/localContext/connectionRef",
+                "kind": "Ref",
+                "example": "local-connection"
+              },
+              {
+                "path": "/request/localContext/connectionIncarnationRef",
+                "kind": "Ref",
+                "example": "socket-open-1"
+              },
+              {
+                "path": "/request/localContext/worldRef",
+                "kind": "Ref",
+                "example": "fixture-world"
+              },
+              {
+                "path": "/request/localContext/selectionRevision",
+                "kind": "Revision",
+                "example": "selection-1"
+              },
+              {
+                "path": "/response/requestId",
+                "kind": "Ref",
+                "example": "sample-ApplyRecoverableCommit:analysis"
+              },
+              {
+                "path": "/response/result/worldRef",
+                "kind": "Ref",
+                "example": "fixture-world"
+              },
+              {
+                "path": "/response/result/worldRevision",
+                "kind": "Revision",
+                "example": "world-1"
+              },
+              {
+                "path": "/response/result/registryRevision",
+                "kind": "Revision",
+                "example": "registry-1"
+              },
+              {
+                "path": "/response/result/selectionRevision",
+                "kind": "Revision",
+                "example": "selection-1"
+              },
+              {
+                "path": "/response/result/operationDigest",
+                "kind": "Digest",
+                "example": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f"
+              }
+            ]
+          },
+          {
+            "operation": "DecideAffectedObjectNotification",
+            "mode": "ok",
+            "request": {
+              "contractVersion": "canvas/v7",
+              "sessionRef": "fixture-session",
+              "requestId": "sample-ApplyRecoverableCommit:decision",
+              "worldRef": "fixture-world",
+              "transactionId": "sample-transaction",
+              "analysis": {
+                "contractVersion": "canvas/v7",
+                "worldRef": "fixture-world",
+                "worldRevision": "world-1",
+                "registryRevision": "registry-1",
+                "selectionRevision": "selection-1",
+                "operationDigest": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f",
+                "orderedSelectedRefs": [],
+                "affectedObjectRefs": []
+              },
+              "analysisDigest": "da65ab336b2332db52898fedb11855769fdd04236774956ea7fb69e2841f37d5",
+              "analysisRevision": "da65ab336b2332db52898fedb11855769fdd04236774956ea7fb69e2841f37d5",
+              "decision": "NO_NOTIFICATION",
+              "expectedDecisionRevision": null,
+              "localContext": {
+                "connectionRef": "local-connection",
+                "connectionIncarnationRef": "socket-open-1",
+                "worldRef": "fixture-world",
+                "selectionRevision": "selection-1"
+              }
+            },
+            "response": {
+              "contractVersion": "canvas/v7",
+              "requestId": "sample-ApplyRecoverableCommit:decision",
+              "result": {
+                "transactionId": "sample-transaction",
+                "analysisDigest": "da65ab336b2332db52898fedb11855769fdd04236774956ea7fb69e2841f37d5",
+                "decisionRevision": "revision-1",
+                "decisionKind": "NO_NOTIFICATION",
+                "affectedObjectRefs": [],
+                "orderedSelectedRefs": []
+              },
+              "error": null
+            },
+            "events": [],
+            "bindings": [
+              {
+                "path": "/request/sessionRef",
+                "kind": "Ref",
+                "example": "fixture-session"
+              },
+              {
+                "path": "/request/requestId",
+                "kind": "Ref",
+                "example": "sample-ApplyRecoverableCommit:decision"
+              },
+              {
+                "path": "/request/worldRef",
+                "kind": "Ref",
+                "example": "fixture-world"
+              },
+              {
+                "path": "/request/transactionId",
+                "kind": "Ref",
+                "example": "sample-transaction"
+              },
+              {
+                "path": "/request/analysis/worldRef",
+                "kind": "Ref",
+                "example": "fixture-world"
+              },
+              {
+                "path": "/request/analysis/worldRevision",
+                "kind": "Revision",
+                "example": "world-1"
+              },
+              {
+                "path": "/request/analysis/registryRevision",
+                "kind": "Revision",
+                "example": "registry-1"
+              },
+              {
+                "path": "/request/analysis/selectionRevision",
+                "kind": "Revision",
+                "example": "selection-1"
+              },
+              {
+                "path": "/request/analysis/operationDigest",
+                "kind": "Digest",
+                "example": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f"
+              },
+              {
+                "path": "/request/analysisDigest",
+                "kind": "Digest",
+                "example": "da65ab336b2332db52898fedb11855769fdd04236774956ea7fb69e2841f37d5"
+              },
+              {
+                "path": "/request/analysisRevision",
+                "kind": "Revision",
+                "example": "da65ab336b2332db52898fedb11855769fdd04236774956ea7fb69e2841f37d5"
+              },
+              {
+                "path": "/request/localContext/connectionRef",
+                "kind": "Ref",
+                "example": "local-connection"
+              },
+              {
+                "path": "/request/localContext/connectionIncarnationRef",
+                "kind": "Ref",
+                "example": "socket-open-1"
+              },
+              {
+                "path": "/request/localContext/worldRef",
+                "kind": "Ref",
+                "example": "fixture-world"
+              },
+              {
+                "path": "/request/localContext/selectionRevision",
+                "kind": "Revision",
+                "example": "selection-1"
+              },
+              {
+                "path": "/response/requestId",
+                "kind": "Ref",
+                "example": "sample-ApplyRecoverableCommit:decision"
+              },
+              {
+                "path": "/response/result/transactionId",
+                "kind": "Ref",
+                "example": "sample-transaction"
+              },
+              {
+                "path": "/response/result/analysisDigest",
+                "kind": "Digest",
+                "example": "da65ab336b2332db52898fedb11855769fdd04236774956ea7fb69e2841f37d5"
+              },
+              {
+                "path": "/response/result/decisionRevision",
+                "kind": "Revision",
+                "example": "revision-1"
+              }
+            ]
+          },
+          {
+            "operation": "DecideAffectedObjectNotification",
+            "mode": "replay",
+            "request": {
+              "contractVersion": "canvas/v7",
+              "sessionRef": "fixture-session",
+              "requestId": "sample-ApplyRecoverableCommit:decision",
+              "worldRef": "fixture-world",
+              "transactionId": "sample-transaction",
+              "analysis": {
+                "contractVersion": "canvas/v7",
+                "worldRef": "fixture-world",
+                "worldRevision": "world-1",
+                "registryRevision": "registry-1",
+                "selectionRevision": "selection-1",
+                "operationDigest": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f",
+                "orderedSelectedRefs": [],
+                "affectedObjectRefs": []
+              },
+              "analysisDigest": "da65ab336b2332db52898fedb11855769fdd04236774956ea7fb69e2841f37d5",
+              "analysisRevision": "da65ab336b2332db52898fedb11855769fdd04236774956ea7fb69e2841f37d5",
+              "decision": "NO_NOTIFICATION",
+              "expectedDecisionRevision": null,
+              "localContext": {
+                "connectionRef": "local-connection",
+                "connectionIncarnationRef": "socket-open-1",
+                "worldRef": "fixture-world",
+                "selectionRevision": "selection-1"
+              }
+            },
+            "response": {
+              "contractVersion": "canvas/v7",
+              "requestId": "sample-ApplyRecoverableCommit:decision",
+              "result": {
+                "transactionId": "sample-transaction",
+                "analysisDigest": "da65ab336b2332db52898fedb11855769fdd04236774956ea7fb69e2841f37d5",
+                "decisionRevision": "revision-1",
+                "decisionKind": "NO_NOTIFICATION",
+                "affectedObjectRefs": [],
+                "orderedSelectedRefs": []
+              },
+              "error": null
+            },
+            "events": [],
+            "bindings": [
+              {
+                "path": "/request/sessionRef",
+                "kind": "Ref",
+                "example": "fixture-session"
+              },
+              {
+                "path": "/request/requestId",
+                "kind": "Ref",
+                "example": "sample-ApplyRecoverableCommit:decision"
+              },
+              {
+                "path": "/request/worldRef",
+                "kind": "Ref",
+                "example": "fixture-world"
+              },
+              {
+                "path": "/request/transactionId",
+                "kind": "Ref",
+                "example": "sample-transaction"
+              },
+              {
+                "path": "/request/analysis/worldRef",
+                "kind": "Ref",
+                "example": "fixture-world"
+              },
+              {
+                "path": "/request/analysis/worldRevision",
+                "kind": "Revision",
+                "example": "world-1"
+              },
+              {
+                "path": "/request/analysis/registryRevision",
+                "kind": "Revision",
+                "example": "registry-1"
+              },
+              {
+                "path": "/request/analysis/selectionRevision",
+                "kind": "Revision",
+                "example": "selection-1"
+              },
+              {
+                "path": "/request/analysis/operationDigest",
+                "kind": "Digest",
+                "example": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f"
+              },
+              {
+                "path": "/request/analysisDigest",
+                "kind": "Digest",
+                "example": "da65ab336b2332db52898fedb11855769fdd04236774956ea7fb69e2841f37d5"
+              },
+              {
+                "path": "/request/analysisRevision",
+                "kind": "Revision",
+                "example": "da65ab336b2332db52898fedb11855769fdd04236774956ea7fb69e2841f37d5"
+              },
+              {
+                "path": "/request/localContext/connectionRef",
+                "kind": "Ref",
+                "example": "local-connection"
+              },
+              {
+                "path": "/request/localContext/connectionIncarnationRef",
+                "kind": "Ref",
+                "example": "socket-open-1"
+              },
+              {
+                "path": "/request/localContext/worldRef",
+                "kind": "Ref",
+                "example": "fixture-world"
+              },
+              {
+                "path": "/request/localContext/selectionRevision",
+                "kind": "Revision",
+                "example": "selection-1"
+              },
+              {
+                "path": "/response/requestId",
+                "kind": "Ref",
+                "example": "sample-ApplyRecoverableCommit:decision"
+              },
+              {
+                "path": "/response/result/transactionId",
+                "kind": "Ref",
+                "example": "sample-transaction"
+              },
+              {
+                "path": "/response/result/analysisDigest",
+                "kind": "Digest",
+                "example": "da65ab336b2332db52898fedb11855769fdd04236774956ea7fb69e2841f37d5"
+              },
+              {
+                "path": "/response/result/decisionRevision",
+                "kind": "Revision",
+                "example": "revision-1"
+              }
+            ],
+            "worldWrites": []
+          }
+        ],
+        "bindings": {
+          "analysis": "The complete Analyzer result is the Decision request.analysis. analysisDigest and analysisRevision are the affected-analysis digest of that exact projection, including world/registry/selection generations and both ordered collections.",
+          "decision": "The successful and exact replay Decision envelopes must match completely. Apply uses their actual persisted decisionRevision, same transactionId, analysisDigest and localContext; NO_NOTIFICATION and the empty affected/selected sets are immutable.",
+          "apply": "Apply operations/operationDigest and expectedWorldRevision must equal the analyzed operations/digest/worldRevision; reject any transaction, digest, generation or collection change before world writes."
+        }
+      }
     },
     {
       "id": "HistoryPositionChanged-Undo",
@@ -15930,7 +17204,8 @@
         "code": "canvas/undo-rejected",
         "details": {
           "reason": "OBJECT_NOT_FOUND"
-        }
+        },
+        "message": "Canvas has no such object in this Session world."
       },
       "sideEffects": "Host队列按已发布当前行构造事务，不接受renderer代际；成功从实际store重读view",
       "bindings": [
@@ -16054,7 +17329,8 @@
         "code": "canvas/redo-rejected",
         "details": {
           "reason": "OBJECT_NOT_FOUND"
-        }
+        },
+        "message": "Canvas has no such object in this Session world."
       },
       "sideEffects": "同undo的Host队列，完整VERIFIED后实际读回view",
       "bindings": [
@@ -19145,6 +20421,963 @@
           "path": "/response/error/worldRef",
           "kind": "Ref",
           "example": "fixture-world"
+        }
+      ]
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "AffectedObjectNotificationRequired-direct-decision",
+      "name": "AffectedObjectNotificationRequired",
+      "trigger": "DecideAffectedObjectNotification",
+      "runtimeTrigger": "Direct public DecideAffectedObjectNotification only; complete Decision response is the event receipt. Analyzer trigger and replay are documented separately.",
+      "emission": "Emit only for successful policy decision BLOCK_AND_NOTIFY on nonselected affected objects; receipt.result carries the displayed immutable affected set/decision revision. NO_NOTIFICATION/CONTINUE/CANCEL do not emit this signal.",
+      "success": {
+        "request": {
+          "contractVersion": "canvas/v7",
+          "sessionRef": "fixture-session",
+          "requestId": "sample-DecideAffectedObjectNotification",
+          "worldRef": "fixture-world",
+          "transactionId": "sample-transaction",
+          "analysis": {
+            "contractVersion": "canvas/v7",
+            "worldRef": "fixture-world",
+            "worldRevision": "fixture-world-10",
+            "registryRevision": "registry-1",
+            "selectionRevision": "selection-1",
+            "operationDigest": "803d9463fd8ca341d4b000390295cc04539f8799cf30de7bfa2cf868c2e32dca",
+            "orderedSelectedRefs": [],
+            "affectedObjectRefs": [
+              "sample-other-object"
+            ]
+          },
+          "analysisDigest": "a45daf370a33093db6d520ce90e7d8aaee3e58b44a51eefb7dc0886cf8d6950b",
+          "analysisRevision": "a45daf370a33093db6d520ce90e7d8aaee3e58b44a51eefb7dc0886cf8d6950b",
+          "decision": "BLOCK_AND_NOTIFY",
+          "expectedDecisionRevision": "revision-1",
+          "localContext": {
+            "connectionRef": "local-connection",
+            "connectionIncarnationRef": "socket-open-1",
+            "worldRef": "fixture-world",
+            "selectionRevision": "selection-1"
+          }
+        },
+        "response": {
+          "contractVersion": "canvas/v7",
+          "requestId": "sample-DecideAffectedObjectNotification",
+          "result": {
+            "transactionId": "sample-transaction",
+            "analysisDigest": "a45daf370a33093db6d520ce90e7d8aaee3e58b44a51eefb7dc0886cf8d6950b",
+            "decisionRevision": "revision-1",
+            "decisionKind": "BLOCK_AND_NOTIFY",
+            "affectedObjectRefs": [
+              "sample-other-object"
+            ],
+            "orderedSelectedRefs": []
+          },
+          "error": null
+        },
+        "events": [
+          {
+            "contractVersion": "canvas/v7",
+            "event": "AffectedObjectNotificationRequired",
+            "operation": "DecideAffectedObjectNotification",
+            "receipt": {
+              "contractVersion": "canvas/v7",
+              "requestId": "sample-DecideAffectedObjectNotification",
+              "result": {
+                "transactionId": "sample-transaction",
+                "analysisDigest": "a45daf370a33093db6d520ce90e7d8aaee3e58b44a51eefb7dc0886cf8d6950b",
+                "decisionRevision": "revision-1",
+                "decisionKind": "BLOCK_AND_NOTIFY",
+                "affectedObjectRefs": [
+                  "sample-other-object"
+                ],
+                "orderedSelectedRefs": []
+              },
+              "error": null
+            }
+          }
+        ]
+      },
+      "refusal": {
+        "request": {
+          "contractVersion": "canvas/v7",
+          "sessionRef": "fixture-session",
+          "requestId": "sample-DecideAffectedObjectNotification",
+          "worldRef": "fixture-world",
+          "transactionId": "sample-transaction",
+          "analysis": {
+            "contractVersion": "canvas/v7",
+            "worldRef": "fixture-world",
+            "worldRevision": "fixture-world-10",
+            "registryRevision": "registry-1",
+            "selectionRevision": "selection-1",
+            "operationDigest": "803d9463fd8ca341d4b000390295cc04539f8799cf30de7bfa2cf868c2e32dca",
+            "orderedSelectedRefs": [],
+            "affectedObjectRefs": [
+              "sample-other-object"
+            ]
+          },
+          "analysisDigest": "a45daf370a33093db6d520ce90e7d8aaee3e58b44a51eefb7dc0886cf8d6950b",
+          "analysisRevision": "a45daf370a33093db6d520ce90e7d8aaee3e58b44a51eefb7dc0886cf8d6950b",
+          "decision": "BLOCK_AND_NOTIFY",
+          "expectedDecisionRevision": "revision-1",
+          "localContext": {
+            "connectionRef": "local-connection",
+            "connectionIncarnationRef": "socket-open-1",
+            "worldRef": "fixture-world",
+            "selectionRevision": "selection-1"
+          },
+          "unexpectedRequired": "must-refuse"
+        },
+        "response": {
+          "contractVersion": "canvas/v7",
+          "requestId": "sample-DecideAffectedObjectNotification",
+          "result": null,
+          "error": {
+            "code": "UNKNOWN_REQUIRED_FIELD",
+            "phase": "decode",
+            "retryability": "NEVER",
+            "mutationState": "NONE",
+            "transactionRef": null,
+            "causeCode": null,
+            "reason": "UNKNOWN_FIELD"
+          }
+        },
+        "events": []
+      },
+      "replay": {
+        "request": {
+          "contractVersion": "canvas/v7",
+          "sessionRef": "fixture-session",
+          "requestId": "sample-DecideAffectedObjectNotification",
+          "worldRef": "fixture-world",
+          "transactionId": "sample-transaction",
+          "analysis": {
+            "contractVersion": "canvas/v7",
+            "worldRef": "fixture-world",
+            "worldRevision": "fixture-world-10",
+            "registryRevision": "registry-1",
+            "selectionRevision": "selection-1",
+            "operationDigest": "803d9463fd8ca341d4b000390295cc04539f8799cf30de7bfa2cf868c2e32dca",
+            "orderedSelectedRefs": [],
+            "affectedObjectRefs": [
+              "sample-other-object"
+            ]
+          },
+          "analysisDigest": "a45daf370a33093db6d520ce90e7d8aaee3e58b44a51eefb7dc0886cf8d6950b",
+          "analysisRevision": "a45daf370a33093db6d520ce90e7d8aaee3e58b44a51eefb7dc0886cf8d6950b",
+          "decision": "BLOCK_AND_NOTIFY",
+          "expectedDecisionRevision": "revision-1",
+          "localContext": {
+            "connectionRef": "local-connection",
+            "connectionIncarnationRef": "socket-open-1",
+            "worldRef": "fixture-world",
+            "selectionRevision": "selection-1"
+          }
+        },
+        "response": {
+          "contractVersion": "canvas/v7",
+          "requestId": "sample-DecideAffectedObjectNotification",
+          "result": {
+            "transactionId": "sample-transaction",
+            "analysisDigest": "a45daf370a33093db6d520ce90e7d8aaee3e58b44a51eefb7dc0886cf8d6950b",
+            "decisionRevision": "revision-1",
+            "decisionKind": "BLOCK_AND_NOTIFY",
+            "affectedObjectRefs": [
+              "sample-other-object"
+            ],
+            "orderedSelectedRefs": []
+          },
+          "error": null
+        },
+        "events": []
+      },
+      "bindings": [
+        {
+          "path": "/request/sessionRef",
+          "kind": "Ref",
+          "example": "fixture-session"
+        },
+        {
+          "path": "/request/requestId",
+          "kind": "Ref",
+          "example": "sample-DecideAffectedObjectNotification"
+        },
+        {
+          "path": "/request/worldRef",
+          "kind": "Ref",
+          "example": "fixture-world"
+        },
+        {
+          "path": "/request/transactionId",
+          "kind": "Ref",
+          "example": "sample-transaction"
+        },
+        {
+          "path": "/request/analysis/worldRef",
+          "kind": "Ref",
+          "example": "fixture-world"
+        },
+        {
+          "path": "/request/analysis/worldRevision",
+          "kind": "Revision",
+          "example": "fixture-world-10"
+        },
+        {
+          "path": "/request/analysis/registryRevision",
+          "kind": "Revision",
+          "example": "registry-1"
+        },
+        {
+          "path": "/request/analysis/selectionRevision",
+          "kind": "Revision",
+          "example": "selection-1"
+        },
+        {
+          "path": "/request/analysis/operationDigest",
+          "kind": "Digest",
+          "example": "803d9463fd8ca341d4b000390295cc04539f8799cf30de7bfa2cf868c2e32dca"
+        },
+        {
+          "path": "/request/analysis/affectedObjectRefs/0",
+          "kind": "Ref",
+          "example": "sample-other-object"
+        },
+        {
+          "path": "/request/analysisDigest",
+          "kind": "Digest",
+          "example": "a45daf370a33093db6d520ce90e7d8aaee3e58b44a51eefb7dc0886cf8d6950b"
+        },
+        {
+          "path": "/request/analysisRevision",
+          "kind": "Revision",
+          "example": "a45daf370a33093db6d520ce90e7d8aaee3e58b44a51eefb7dc0886cf8d6950b"
+        },
+        {
+          "path": "/request/expectedDecisionRevision",
+          "kind": "Revision",
+          "example": "revision-1"
+        },
+        {
+          "path": "/request/localContext/connectionRef",
+          "kind": "Ref",
+          "example": "local-connection"
+        },
+        {
+          "path": "/request/localContext/connectionIncarnationRef",
+          "kind": "Ref",
+          "example": "socket-open-1"
+        },
+        {
+          "path": "/request/localContext/worldRef",
+          "kind": "Ref",
+          "example": "fixture-world"
+        },
+        {
+          "path": "/request/localContext/selectionRevision",
+          "kind": "Revision",
+          "example": "selection-1"
+        },
+        {
+          "path": "/response/requestId",
+          "kind": "Ref",
+          "example": "sample-DecideAffectedObjectNotification"
+        },
+        {
+          "path": "/response/result/transactionId",
+          "kind": "Ref",
+          "example": "sample-transaction"
+        },
+        {
+          "path": "/response/result/analysisDigest",
+          "kind": "Digest",
+          "example": "a45daf370a33093db6d520ce90e7d8aaee3e58b44a51eefb7dc0886cf8d6950b"
+        },
+        {
+          "path": "/response/result/decisionRevision",
+          "kind": "Revision",
+          "example": "revision-1"
+        },
+        {
+          "path": "/response/result/affectedObjectRefs/0",
+          "kind": "Ref",
+          "example": "sample-other-object"
+        },
+        {
+          "path": "/events/0/receipt/requestId",
+          "kind": "Ref",
+          "example": "sample-DecideAffectedObjectNotification"
+        },
+        {
+          "path": "/events/0/receipt/result/transactionId",
+          "kind": "Ref",
+          "example": "sample-transaction"
+        },
+        {
+          "path": "/events/0/receipt/result/analysisDigest",
+          "kind": "Digest",
+          "example": "a45daf370a33093db6d520ce90e7d8aaee3e58b44a51eefb7dc0886cf8d6950b"
+        },
+        {
+          "path": "/events/0/receipt/result/decisionRevision",
+          "kind": "Revision",
+          "example": "revision-1"
+        },
+        {
+          "path": "/events/0/receipt/result/affectedObjectRefs/0",
+          "kind": "Ref",
+          "example": "sample-other-object"
+        }
+      ],
+      "kind": "DIRECT_DECISION",
+      "wire": "canvas/v7",
+      "operation": "DecideAffectedObjectNotification"
+    },
+    {
+      "id": "ApplyRecoverableCommit-null-decision",
+      "kind": "APPLY_NULL_DECISION",
+      "wire": "canvas/v7",
+      "operation": "ApplyRecoverableCommit",
+      "trigger": "ApplyRecoverableCommit",
+      "classification": "COMPLETE_DOCUMENT_DATA_NOT_RUNTIME_EVIDENCE",
+      "prepareChain": {
+        "classification": "COMPLETE_DOCUMENT_DATA_NOT_RUNTIME_EVIDENCE",
+        "requirement": "Obtain the full public no-conflict Analyzer result for this transaction before the existing null-decision path. It is not a replacement for the non-null public persisted NO_NOTIFICATION chain.",
+        "steps": [
+          {
+            "operation": "AnalyzeAffectedObjects",
+            "mode": "ok",
+            "request": {
+              "contractVersion": "canvas/v7",
+              "sessionRef": "fixture-session",
+              "requestId": "sample-ApplyRecoverableCommit:analysis",
+              "worldRef": "fixture-world",
+              "transactionId": "sample-transaction",
+              "operations": {
+                "contractVersion": "operations/v4",
+                "buildDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                "compilerRevision": "sample-compiler-1",
+                "compilationConfigDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "worldRef": "fixture-world",
+                "frameDigest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "catalogueDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                "targetFactsDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+                "effects": [
+                  {
+                    "geometryProfile": "voxel-grid/v1",
+                    "position": [
+                      20,
+                      2,
+                      20
+                    ],
+                    "materialRef": "material:solid",
+                    "orientation": 0
+                  }
+                ]
+              },
+              "operationDigest": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f",
+              "expectedRevision": "world-1",
+              "expectedRegistryRevision": "registry-1",
+              "expectedSelectionRevision": "selection-1",
+              "localContext": {
+                "connectionRef": "local-connection",
+                "connectionIncarnationRef": "socket-open-1",
+                "worldRef": "fixture-world",
+                "selectionRevision": "selection-1"
+              }
+            },
+            "response": {
+              "contractVersion": "canvas/v7",
+              "requestId": "sample-ApplyRecoverableCommit:analysis",
+              "result": {
+                "contractVersion": "canvas/v7",
+                "worldRef": "fixture-world",
+                "worldRevision": "world-1",
+                "registryRevision": "registry-1",
+                "selectionRevision": "selection-1",
+                "operationDigest": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f",
+                "orderedSelectedRefs": [],
+                "affectedObjectRefs": []
+              },
+              "error": null
+            },
+            "events": [],
+            "bindings": [
+              {
+                "path": "/request/sessionRef",
+                "kind": "Ref",
+                "example": "fixture-session"
+              },
+              {
+                "path": "/request/requestId",
+                "kind": "Ref",
+                "example": "sample-ApplyRecoverableCommit:analysis"
+              },
+              {
+                "path": "/request/worldRef",
+                "kind": "Ref",
+                "example": "fixture-world"
+              },
+              {
+                "path": "/request/transactionId",
+                "kind": "Ref",
+                "example": "sample-transaction"
+              },
+              {
+                "path": "/request/operations/buildDigest",
+                "kind": "Digest",
+                "example": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              },
+              {
+                "path": "/request/operations/compilerRevision",
+                "kind": "Revision",
+                "example": "sample-compiler-1"
+              },
+              {
+                "path": "/request/operations/compilationConfigDigest",
+                "kind": "Digest",
+                "example": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+              },
+              {
+                "path": "/request/operations/worldRef",
+                "kind": "Ref",
+                "example": "fixture-world"
+              },
+              {
+                "path": "/request/operations/frameDigest",
+                "kind": "Digest",
+                "example": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+              },
+              {
+                "path": "/request/operations/catalogueDigest",
+                "kind": "Digest",
+                "example": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+              },
+              {
+                "path": "/request/operations/targetFactsDigest",
+                "kind": "Digest",
+                "example": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+              },
+              {
+                "path": "/request/operations/effects/0/materialRef",
+                "kind": "Ref",
+                "example": "material:solid"
+              },
+              {
+                "path": "/request/operationDigest",
+                "kind": "Digest",
+                "example": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f"
+              },
+              {
+                "path": "/request/expectedRevision",
+                "kind": "Revision",
+                "example": "world-1"
+              },
+              {
+                "path": "/request/expectedRegistryRevision",
+                "kind": "Revision",
+                "example": "registry-1"
+              },
+              {
+                "path": "/request/expectedSelectionRevision",
+                "kind": "Revision",
+                "example": "selection-1"
+              },
+              {
+                "path": "/request/localContext/connectionRef",
+                "kind": "Ref",
+                "example": "local-connection"
+              },
+              {
+                "path": "/request/localContext/connectionIncarnationRef",
+                "kind": "Ref",
+                "example": "socket-open-1"
+              },
+              {
+                "path": "/request/localContext/worldRef",
+                "kind": "Ref",
+                "example": "fixture-world"
+              },
+              {
+                "path": "/request/localContext/selectionRevision",
+                "kind": "Revision",
+                "example": "selection-1"
+              },
+              {
+                "path": "/response/requestId",
+                "kind": "Ref",
+                "example": "sample-ApplyRecoverableCommit:analysis"
+              },
+              {
+                "path": "/response/result/worldRef",
+                "kind": "Ref",
+                "example": "fixture-world"
+              },
+              {
+                "path": "/response/result/worldRevision",
+                "kind": "Revision",
+                "example": "world-1"
+              },
+              {
+                "path": "/response/result/registryRevision",
+                "kind": "Revision",
+                "example": "registry-1"
+              },
+              {
+                "path": "/response/result/selectionRevision",
+                "kind": "Revision",
+                "example": "selection-1"
+              },
+              {
+                "path": "/response/result/operationDigest",
+                "kind": "Digest",
+                "example": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f"
+              }
+            ]
+          }
+        ]
+      },
+      "success": {
+        "request": {
+          "contractVersion": "canvas/v7",
+          "sessionRef": "fixture-session",
+          "requestId": "sample-ApplyRecoverableCommit",
+          "worldRef": "fixture-world",
+          "transactionId": "sample-transaction",
+          "operations": {
+            "contractVersion": "operations/v4",
+            "buildDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "compilerRevision": "sample-compiler-1",
+            "compilationConfigDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "worldRef": "fixture-world",
+            "frameDigest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            "catalogueDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "targetFactsDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            "effects": [
+              {
+                "geometryProfile": "voxel-grid/v1",
+                "position": [
+                  20,
+                  2,
+                  20
+                ],
+                "materialRef": "material:solid",
+                "orientation": 0
+              }
+            ]
+          },
+          "operationDigest": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f",
+          "analysisDigest": "da65ab336b2332db52898fedb11855769fdd04236774956ea7fb69e2841f37d5",
+          "decisionRevision": null,
+          "expectedWorldRevision": "world-1",
+          "expectedObjectRevisions": {},
+          "guarantee": "RECOVERABLE_VERIFIED",
+          "regionInspectionBinding": null,
+          "localContext": {
+            "connectionRef": "local-connection",
+            "connectionIncarnationRef": "socket-open-1",
+            "worldRef": "fixture-world",
+            "selectionRevision": "selection-1"
+          }
+        },
+        "response": {
+          "contractVersion": "canvas/v7",
+          "requestId": "sample-ApplyRecoverableCommit",
+          "result": {
+            "contractVersion": "canvas/v7",
+            "transactionId": "sample-transaction",
+            "operationDigest": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f",
+            "transactionPayloadDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "status": "VERIFIED",
+            "previousWorldRevision": "world-1",
+            "observedWorldRevision": "world-2",
+            "readbackDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "restoreStatus": "NOT_REQUIRED",
+            "error": null,
+            "localContext": {
+              "connectionRef": "local-connection",
+              "connectionIncarnationRef": "socket-open-1",
+              "worldRef": "fixture-world",
+              "selectionRevision": "selection-1"
+            },
+            "guardRefusal": null,
+            "applyFailure": null
+          },
+          "error": null,
+          "guardRefusal": null
+        },
+        "events": [
+          {
+            "contractVersion": "canvas/v7",
+            "event": "TransactionVerified",
+            "operation": "Readback",
+            "receipt": {
+              "contractVersion": "canvas/v7",
+              "requestId": "sample-ApplyRecoverableCommit",
+              "result": {
+                "contractVersion": "canvas/v7",
+                "transactionId": "sample-transaction",
+                "operationDigest": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f",
+                "transactionPayloadDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+                "status": "VERIFIED",
+                "previousWorldRevision": "world-1",
+                "observedWorldRevision": "world-2",
+                "readbackDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                "restoreStatus": "NOT_REQUIRED",
+                "error": null,
+                "localContext": {
+                  "connectionRef": "local-connection",
+                  "connectionIncarnationRef": "socket-open-1",
+                  "worldRef": "fixture-world",
+                  "selectionRevision": "selection-1"
+                },
+                "guardRefusal": null,
+                "applyFailure": null
+              },
+              "error": null
+            }
+          }
+        ]
+      },
+      "refusal": {
+        "request": {
+          "contractVersion": "canvas/v7",
+          "sessionRef": "fixture-session",
+          "requestId": "sample-ApplyRecoverableCommit",
+          "worldRef": "fixture-world",
+          "transactionId": "sample-transaction",
+          "operations": {
+            "contractVersion": "operations/v4",
+            "buildDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "compilerRevision": "sample-compiler-1",
+            "compilationConfigDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "worldRef": "fixture-world",
+            "frameDigest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            "catalogueDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "targetFactsDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            "effects": [
+              {
+                "geometryProfile": "voxel-grid/v1",
+                "position": [
+                  20,
+                  2,
+                  20
+                ],
+                "materialRef": "material:solid",
+                "orientation": 0
+              }
+            ]
+          },
+          "operationDigest": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f",
+          "analysisDigest": "da65ab336b2332db52898fedb11855769fdd04236774956ea7fb69e2841f37d5",
+          "decisionRevision": null,
+          "expectedWorldRevision": "world-1",
+          "expectedObjectRevisions": {},
+          "guarantee": "RECOVERABLE_VERIFIED",
+          "regionInspectionBinding": null,
+          "localContext": {
+            "connectionRef": "local-connection",
+            "connectionIncarnationRef": "socket-open-1",
+            "worldRef": "fixture-world",
+            "selectionRevision": "selection-1"
+          },
+          "unexpectedRequired": "must-refuse"
+        },
+        "response": {
+          "contractVersion": "canvas/v7",
+          "requestId": "sample-ApplyRecoverableCommit",
+          "result": null,
+          "error": {
+            "code": "UNKNOWN_REQUIRED_FIELD",
+            "phase": "decode",
+            "retryability": "NEVER",
+            "mutationState": "NONE",
+            "transactionRef": null,
+            "causeCode": null,
+            "reason": "UNKNOWN_FIELD"
+          },
+          "guardRefusal": null
+        },
+        "events": []
+      },
+      "replay": {
+        "request": {
+          "contractVersion": "canvas/v7",
+          "sessionRef": "fixture-session",
+          "requestId": "sample-ApplyRecoverableCommit",
+          "worldRef": "fixture-world",
+          "transactionId": "sample-transaction",
+          "operations": {
+            "contractVersion": "operations/v4",
+            "buildDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "compilerRevision": "sample-compiler-1",
+            "compilationConfigDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "worldRef": "fixture-world",
+            "frameDigest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            "catalogueDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "targetFactsDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            "effects": [
+              {
+                "geometryProfile": "voxel-grid/v1",
+                "position": [
+                  20,
+                  2,
+                  20
+                ],
+                "materialRef": "material:solid",
+                "orientation": 0
+              }
+            ]
+          },
+          "operationDigest": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f",
+          "analysisDigest": "da65ab336b2332db52898fedb11855769fdd04236774956ea7fb69e2841f37d5",
+          "decisionRevision": null,
+          "expectedWorldRevision": "world-1",
+          "expectedObjectRevisions": {},
+          "guarantee": "RECOVERABLE_VERIFIED",
+          "regionInspectionBinding": null,
+          "localContext": {
+            "connectionRef": "local-connection",
+            "connectionIncarnationRef": "socket-open-1",
+            "worldRef": "fixture-world",
+            "selectionRevision": "selection-1"
+          }
+        },
+        "response": {
+          "contractVersion": "canvas/v7",
+          "requestId": "sample-ApplyRecoverableCommit",
+          "result": {
+            "contractVersion": "canvas/v7",
+            "transactionId": "sample-transaction",
+            "operationDigest": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f",
+            "transactionPayloadDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "status": "VERIFIED",
+            "previousWorldRevision": "world-1",
+            "observedWorldRevision": "world-2",
+            "readbackDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "restoreStatus": "NOT_REQUIRED",
+            "error": null,
+            "localContext": {
+              "connectionRef": "local-connection",
+              "connectionIncarnationRef": "socket-open-1",
+              "worldRef": "fixture-world",
+              "selectionRevision": "selection-1"
+            },
+            "guardRefusal": null,
+            "applyFailure": null
+          },
+          "error": null,
+          "guardRefusal": null
+        },
+        "events": []
+      },
+      "bindings": [
+        {
+          "path": "/request/sessionRef",
+          "kind": "Ref",
+          "example": "fixture-session"
+        },
+        {
+          "path": "/request/requestId",
+          "kind": "Ref",
+          "example": "sample-ApplyRecoverableCommit"
+        },
+        {
+          "path": "/request/worldRef",
+          "kind": "Ref",
+          "example": "fixture-world"
+        },
+        {
+          "path": "/request/transactionId",
+          "kind": "Ref",
+          "example": "sample-transaction"
+        },
+        {
+          "path": "/request/operations/buildDigest",
+          "kind": "Digest",
+          "example": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        {
+          "path": "/request/operations/compilerRevision",
+          "kind": "Revision",
+          "example": "sample-compiler-1"
+        },
+        {
+          "path": "/request/operations/compilationConfigDigest",
+          "kind": "Digest",
+          "example": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+          "path": "/request/operations/worldRef",
+          "kind": "Ref",
+          "example": "fixture-world"
+        },
+        {
+          "path": "/request/operations/frameDigest",
+          "kind": "Digest",
+          "example": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        },
+        {
+          "path": "/request/operations/catalogueDigest",
+          "kind": "Digest",
+          "example": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        },
+        {
+          "path": "/request/operations/targetFactsDigest",
+          "kind": "Digest",
+          "example": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        },
+        {
+          "path": "/request/operations/effects/0/materialRef",
+          "kind": "Ref",
+          "example": "material:solid"
+        },
+        {
+          "path": "/request/operationDigest",
+          "kind": "Digest",
+          "example": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f"
+        },
+        {
+          "path": "/request/analysisDigest",
+          "kind": "Digest",
+          "example": "da65ab336b2332db52898fedb11855769fdd04236774956ea7fb69e2841f37d5"
+        },
+        {
+          "path": "/request/expectedWorldRevision",
+          "kind": "Revision",
+          "example": "world-1"
+        },
+        {
+          "path": "/request/localContext/connectionRef",
+          "kind": "Ref",
+          "example": "local-connection"
+        },
+        {
+          "path": "/request/localContext/connectionIncarnationRef",
+          "kind": "Ref",
+          "example": "socket-open-1"
+        },
+        {
+          "path": "/request/localContext/worldRef",
+          "kind": "Ref",
+          "example": "fixture-world"
+        },
+        {
+          "path": "/request/localContext/selectionRevision",
+          "kind": "Revision",
+          "example": "selection-1"
+        },
+        {
+          "path": "/response/requestId",
+          "kind": "Ref",
+          "example": "sample-ApplyRecoverableCommit"
+        },
+        {
+          "path": "/response/result/transactionId",
+          "kind": "Ref",
+          "example": "sample-transaction"
+        },
+        {
+          "path": "/response/result/operationDigest",
+          "kind": "Digest",
+          "example": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f"
+        },
+        {
+          "path": "/response/result/transactionPayloadDigest",
+          "kind": "Digest",
+          "example": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        },
+        {
+          "path": "/response/result/previousWorldRevision",
+          "kind": "Revision",
+          "example": "world-1"
+        },
+        {
+          "path": "/response/result/observedWorldRevision",
+          "kind": "Revision",
+          "example": "world-2"
+        },
+        {
+          "path": "/response/result/readbackDigest",
+          "kind": "Digest",
+          "example": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        },
+        {
+          "path": "/response/result/localContext/connectionRef",
+          "kind": "Ref",
+          "example": "local-connection"
+        },
+        {
+          "path": "/response/result/localContext/connectionIncarnationRef",
+          "kind": "Ref",
+          "example": "socket-open-1"
+        },
+        {
+          "path": "/response/result/localContext/worldRef",
+          "kind": "Ref",
+          "example": "fixture-world"
+        },
+        {
+          "path": "/response/result/localContext/selectionRevision",
+          "kind": "Revision",
+          "example": "selection-1"
+        },
+        {
+          "path": "/events/0/receipt/requestId",
+          "kind": "Ref",
+          "example": "sample-ApplyRecoverableCommit"
+        },
+        {
+          "path": "/events/0/receipt/result/transactionId",
+          "kind": "Ref",
+          "example": "sample-transaction"
+        },
+        {
+          "path": "/events/0/receipt/result/operationDigest",
+          "kind": "Digest",
+          "example": "162a70aa7e44e06b00ec3b4f40ebdb5a49250a9b17e25f9d0fa12576e61d4a4f"
+        },
+        {
+          "path": "/events/0/receipt/result/transactionPayloadDigest",
+          "kind": "Digest",
+          "example": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        },
+        {
+          "path": "/events/0/receipt/result/previousWorldRevision",
+          "kind": "Revision",
+          "example": "world-1"
+        },
+        {
+          "path": "/events/0/receipt/result/observedWorldRevision",
+          "kind": "Revision",
+          "example": "world-2"
+        },
+        {
+          "path": "/events/0/receipt/result/readbackDigest",
+          "kind": "Digest",
+          "example": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        },
+        {
+          "path": "/events/0/receipt/result/localContext/connectionRef",
+          "kind": "Ref",
+          "example": "local-connection"
+        },
+        {
+          "path": "/events/0/receipt/result/localContext/connectionIncarnationRef",
+          "kind": "Ref",
+          "example": "socket-open-1"
+        },
+        {
+          "path": "/events/0/receipt/result/localContext/worldRef",
+          "kind": "Ref",
+          "example": "fixture-world"
+        },
+        {
+          "path": "/events/0/receipt/result/localContext/selectionRevision",
+          "kind": "Revision",
+          "example": "selection-1"
         }
       ]
     }
