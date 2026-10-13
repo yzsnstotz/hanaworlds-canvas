@@ -1,5 +1,5 @@
 import vm from 'node:vm';
-import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
@@ -23,8 +23,14 @@ export async function openOfficialNavigationFixture() {
   await writeFile(join(directory, 'package.json'), JSON.stringify({ name:'canvas-official-navigation-fixture',
     private:true, type:'module', dependencies }, null, 2));
   try {
+    const cacheDirectory = fileURLToPath(new URL('../../../npm-cache/', import.meta.url));
+    await mkdir(cacheDirectory, { recursive:true });
+    const installEnv = { ...process.env, npm_config_cache:cacheDirectory, NPM_CONFIG_CACHE:cacheDirectory };
+    await writeFile(join(directory, 'install-context.json'), JSON.stringify({
+      command:['npm', 'install', '--no-audit', '--no-fund'], cacheDirectory, dependencies,
+    }, null, 2));
     const child = spawn('npm', ['install', '--no-audit', '--no-fund'], {
-      cwd:directory, env:process.env, stdio:['ignore','pipe','pipe'] });
+      cwd:directory, env:installEnv, stdio:['ignore','pipe','pipe'] });
     const output = [];
     child.stdout.on('data', data => output.push(data));
     child.stderr.on('data', data => output.push(data));
@@ -33,7 +39,7 @@ export async function openOfficialNavigationFixture() {
     assert.equal(code, 0, `Official UI fixture install failed: ${Buffer.concat(output).toString()}`);
     const fixtureRequire = createRequire(join(directory, 'package.json'));
     const runtime = fixtureRequire('@deepseek-ai/cordis');
-    console.log('OFFICIAL_UI_FIXTURE_READY: unmodified 0.2.1-alpha.2; one browser Cordis/React; normal npm install');
+    console.log(`OFFICIAL_UI_FIXTURE_READY: unmodified 0.2.1-alpha.2; one browser Cordis/React; normal npm install; cache=${cacheDirectory}`);
     return {
       directory,
       runtime,
