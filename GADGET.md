@@ -147,8 +147,8 @@ profile 由 Electron 应用管理，通用 `dsh --profile desktop` 启动会被�
 旧放置检查失效，确认前须取得新检查。停止应用后保留该隔离账户自己的
 `data/hanaworlds-canvas-v2/canvas-v7.json`，再次启动读回历史，不导入个人旧数据。
 
-以下启动示例使用已声明的 `HANAWORLDS_DESKTOP` 准备结果；目录与端口由机制
-注入，用户无需填写应用路径、profile 或调试端口。它启动真实已准备的应用，
+以下启动示例使用已声明的 `HANAWORLDS_DESKTOP` 准备结果；目录与端口属于段级启动设定；实现 worker 也可按该公开 prepare 入口在本卡运行目录
+自备隔离资源。这里不承诺程序会自动给每次实现 worker 注入变量。用户无需填写工程路径、profile 或调试端口。它启动真实已准备的应用，
 不构造 Host。前台按 Ctrl+C，或向该 Node 进程发送 SIGTERM，会把 SIGTERM 转交
 给本次应用并等待退出；没有自动重试、强杀或默认端口。
 

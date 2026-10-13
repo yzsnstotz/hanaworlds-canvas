@@ -1,3 +1,4 @@
+import { observePortCall } from './port-observation.mjs';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, open, readFile, rename } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -331,7 +332,8 @@ export class CanvasRegionV1 {
     const request = { contractVersion: ADAPTER, sessionRef: body.sessionRef,
       requestId: `${body.requestId}:current-connection`,
       connectionRef: body.localContext.connectionRef };
-    const response = await this.canvas.adapter.call('ReadLocalConnection', request);
+    const response = await observePortCall(this, 'hanaworldsWorldAdapterV6', 'ReadLocalConnection', request,
+      () => this.canvas.adapter.call('ReadLocalConnection', request));
     validateBoundResponse(ADAPTER, 'ReadLocalConnection', request, response);
     if (response.error || response.result.worldRef !== body.worldRef ||
         response.result.connectionIncarnationRef !== body.localContext.connectionIncarnationRef)
@@ -347,7 +349,8 @@ export class CanvasRegionV1 {
     const request = { contractVersion: REGION_ADAPTER, sessionRef: body.sessionRef,
       requestId: `${body.requestId}:${suffix}`, worldRef: body.worldRef, box, purpose, partition: (await this.#geometry(body)).partition,
       localContext: body.localContext };
-    const response = validateRegionRead(request, await this.regionAdapter.call('ReadRegion', request));
+    const response = validateRegionRead(request, await observePortCall(this,
+      'hanaworldsWorldAdapterRegionV1', 'ReadRegion', request, () => this.regionAdapter.call('ReadRegion', request)));
     if (response.error) throw Object.assign(new Error(response.error.code),
       { publicError: response.error });
     const read = requireKnownRegion(response.result);
@@ -376,7 +379,8 @@ export class CanvasRegionV1 {
       error.scopedWriteAccepted=true;return error;
     };
     try {
-      written = validateRegionWrite(request, await this.regionAdapter.call('WriteRegion', request));
+      written = validateRegionWrite(request, await observePortCall(this,
+        'hanaworldsWorldAdapterRegionV1', 'WriteRegion', request, () => this.regionAdapter.call('WriteRegion', request)));
       const sourceError = written.response.error;
       if (scoped && sourceError &&
           ((sourceError.transactionRef !== null && sourceError.transactionRef !== transactionId) ||

@@ -1,3 +1,4 @@
+import { observeDisplayFailure } from './port-observation.mjs';
 import { createHash, randomUUID } from 'node:crypto';
 import { TypertRemoteService, Remote, RemoteError } from '@deepseek-ai/dsh-typert-protocol';
 import { checkProtocolCompatibility, protocolRequirement } from './protocol/local/index.mjs';
@@ -34,7 +35,8 @@ export class CanvasDisplayService extends TypertRemoteService {
     this.historyQueue = Promise.resolve();
   }
   async read(sessionRef) {
-    return (await readyCanvasFor(this.ctx, 'readObjectsHistory')).readObjectsHistory(sessionRef);
+    try { return await (await readyCanvasFor(this.ctx, 'readObjectsHistory')).readObjectsHistory(sessionRef); }
+    catch (error) { observeDisplayFailure(this, 'read', error); throw error; }
   }
   /**
    * Logical stream: one item after each durable Canvas commit that changes what this Session's
@@ -67,6 +69,7 @@ export class CanvasDisplayService extends TypertRemoteService {
     return this.performHistory('redo', sessionRef, objectRef, historyTransactionId);
   }
   async performHistory(action, sessionRef, objectRef, historyTransactionId) {
+    try {
     const canvas = await readyCanvasFor(this.ctx, 'readHistoryActions');
     const operation = action === 'redo' ? 'Redo' : 'Undo';
     const run = this.historyQueue.then(async () => {
@@ -111,7 +114,8 @@ export class CanvasDisplayService extends TypertRemoteService {
         objectRef, view: await canvas.readObjectsHistory(sessionRef) };
     });
     this.historyQueue = run.catch(() => {});
-    return run;
+    return await run;
+    } catch (error) { observeDisplayFailure(this, action, error); throw error; }
   }
 }
 export const name = 'hanaworlds-canvas-display';

@@ -25,6 +25,7 @@ import { VOXEL_GRID, requireVoxelGrid, positionKey as key, cellPositions, affect
 import { validateScopedState } from './scoped-state.mjs';
 import packageJson from '../package.json' with { type: 'json' };
 import { worldFactsReader } from './world-facts-reader.mjs';
+import { observePortCall, observeEvent } from './port-observation.mjs';
 import { summaryRequest, summarySource, summaryError, scopeKeys } from './tool-summary.mjs';
 
 export { CanvasStore, CanvasRegionV1, CanvasConfigSupply };
@@ -308,7 +309,8 @@ export class CanvasV5 {
     reader.live(); unchanged();
     if (scope.worldRef !== selection.activeWorldRef ||
         scopeKeys.some(key => connection[key] !== scope[key])) throw summaryError('CURRENT_WORLD_MISMATCH');
-    const rawSource = await reader.read(scope);
+    const rawSource = await observePortCall(this, 'hanaworldsWorldFacts', 'readCanvasFacts', scope,
+      () => reader.read(scope));
     reader.live(); unchanged();
     const source = summarySource(rawSource);
     if (!same(source.connection,scope) ||
@@ -482,7 +484,8 @@ export class CanvasV5 {
   }
   async #adapter(operation, body) {
     if (!this.adapter?.call) throw fail('CAPABILITY_UNAVAILABLE', 'REQUIRED_FACT_UNKNOWN');
-    const response = await this.adapter.call(operation, body);
+    const response = await observePortCall(this, 'hanaworldsWorldAdapterV6', operation, body,
+      () => this.adapter.call(operation, body));
     validateBoundResponse(ADAPTER, operation, body, response);
     if (response.error) throw Object.assign(new Error(response.error.code),
       { publicError: response.error, guardRefusal: response.guardRefusal ?? null });
@@ -1363,7 +1366,8 @@ export class CanvasV5 {
       throw fail('CAPABILITY_UNAVAILABLE', 'REQUIRED_FACT_UNKNOWN');
     const request = { contractVersion: SESSION, requestId: `${body.requestId}:session`,
       sessionRef: body.sessionRef };
-    const response = await this.sessions.call('ReadSessionIdentity', request);
+    const response = await observePortCall(this, 'hanaworldsWorkshopV3', 'ReadSessionIdentity', request,
+      () => this.sessions.call('ReadSessionIdentity', request));
     validateBoundResponse(SESSION, 'ReadSessionIdentity', request, response);
     if (response.error) throw Object.assign(new Error(response.error.code),
       { publicError: response.error });
@@ -1505,7 +1509,11 @@ export class CanvasV5 {
     });
     return response;
   }
-  async call(operation, raw) {
+  call(operation, raw) {
+    return observePortCall(this, 'hanaworldsCanvasV5', operation, raw,
+      () => this.#call(operation, raw));
+  }
+  async #call(operation, raw) {
     let body;
     try {
       body = raw instanceof Uint8Array || typeof raw === 'string' ?
@@ -1587,7 +1595,7 @@ export function apply(ctx, config) {
   const service = new CanvasV5({ store: null, config,
     // Cordis parallel dispatch settles every consumer (including async listeners), and its
     // fiber-owned ctx.on subscriptions are removed on disposal. No private bridge import.
-    emitEvent: event => ctx.parallel?.(event.event, event),
+    emitEvent: event => { observeEvent(service, event); return ctx.parallel?.(event.event, event); },
     adapter: {
       get protocolHandshake() { return ctx.get?.('hanaworldsWorldAdapterV6')?.protocolHandshake; },
       // No Adapter service on the Host (world not started) is the world being unavailable,
@@ -1610,7 +1618,8 @@ export function apply(ctx, config) {
       validateType('Ref', connectionRef);
       validateType('Positions', positions);
       if (!positions.length) throw new contractsSdk.ContractError('SCHEMA_INVALID', 'decode', 'INVALID_SHAPE');
-      return Promise.resolve(reader.read(connectionRef, positions)).then(raw => {
+      return Promise.resolve(observePortCall(service, 'hanaworldsWorldFacts', 'readScopedState', { connectionRef, positions },
+        () => reader.read(connectionRef, positions))).then(raw => {
         reader.live();
         return validateScopedState(raw, positions);
       });
@@ -1623,7 +1632,9 @@ export function apply(ctx, config) {
       get contractHandshake() { return ctx.get?.('hanaworldsWorldFacts')?.contractHandshake; },
       get call() {
         const current = ctx.get?.('hanaworldsWorldFacts');
-        return typeof current?.call === 'function' ? (...args) => current.call(...args) : undefined;
+        return typeof current?.call === 'function' ? (operation, request) =>
+          observePortCall(service, 'hanaworldsWorldFacts', operation, request,
+            () => current.call(operation, request)) : undefined;
       } } });
   ctx.provide?.('hanaworldsCanvasV5', service);
   facts = worldFactsReader(ctx, service, () => hostRuntime,
