@@ -5,7 +5,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 export async function buildClientVerification(options = {}) {
-  const output = resolve(options.output ?? options.outfile ?? resolve(root, '../evidence/client-verification/client.js'));
+  const output = resolve(options.output ?? options.outfile ?? resolve(root, '../evidence/d91/client.js'));
   const lib = resolve(root, 'lib');
   if (output === lib || output.startsWith(lib + sep))
     throw new Error('CANVAS_VERIFICATION_OUTPUT_IN_PUBLISHED_LIB');
@@ -17,6 +17,7 @@ export async function buildClientVerification(options = {}) {
     ...examples.events.flatMap(x => ['ok', 'reject', 'replay'].map(mode => ({ id: `event/${x.id}`, mode }))),
     ...examples.business.map(x => ({ id: `business/${x.id}`, mode: 'reject' })),
     ...examples.local.flatMap(x => ['ok', 'reject'].map(mode => ({ id: `local/${x.id}`, mode }))),
+    ...examples.scenarios.flatMap(x => ['ok', 'reject', 'replay'].map(mode => ({ id: `scenario/${x.id}`, mode }))),
     ...['navigation', 'populated-history', 'undo-redo', 'configuration-reload', 'region', 'visible-error', 'unload']
       .map(id => ({ id: `ui/${id}`, mode: 'ok' })),
   ];
@@ -32,7 +33,7 @@ export async function buildClientVerification(options = {}) {
 // expose src/protocol/local. The caller verifies these exact source inputs against
 // the installed artifact's build-source manifest before installing this tool entry.
 export async function buildHostVerification({ output } = {}) {
-  output = resolve(output ?? resolve(root, '../evidence/client-verification/host.mjs'));
+  output = resolve(output ?? resolve(root, '../evidence/d91/host.mjs'));
   if (output === resolve(root, 'lib') || output.startsWith(resolve(root, 'lib') + sep))
     throw new Error('CANVAS_VERIFICATION_OUTPUT_IN_PUBLISHED_LIB');
   await mkdir(dirname(output), { recursive: true });

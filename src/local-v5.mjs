@@ -526,6 +526,219 @@ export class CanvasV5 {
   #affected(worldRef, positions) {
     return affectedObjectRefs(this.store.snapshot.footprints[worldRef], positions, VOXEL_GRID);
   }
+  #currentAnalysis(body, state = this.store.snapshot) {
+    const analysis = state.analyses[body.transactionId];
+    const binding = state.analysisBindings?.[body.transactionId];
+    const session = state.sessions[body.sessionRef];
+    if (!analysis || !session || session.activeWorldRef !== body.worldRef ||
+        !same(session.localContext, body.localContext) || analysis.worldRef !== body.worldRef ||
+        analysis.worldRevision !== state.worldRevisions[body.worldRef] ||
+        analysis.registryRevision !== (state.registryRevisions[body.worldRef] ?? 'registry-0') ||
+        analysis.selectionRevision !== session.selectionRevision ||
+        !same(analysis.orderedSelectedRefs, session.orderedSelectedObjectRefs))
+      throw fail('OTHER_OBJECTS_AFFECTED', 'REVISION_CHANGED');
+    if (binding && (binding.sessionRef !== body.sessionRef || !same(binding.localContext, body.localContext) ||
+        !same(analysis.affectedObjectRefs, affectedObjectRefs(state.footprints[body.worldRef], binding.positions, VOXEL_GRID))))
+      throw fail('OTHER_OBJECTS_AFFECTED', 'SCOPE_DENIED');
+    if (hash('affected-analysis', analysis) !== body.analysisDigest)
+      throw fail('OTHER_OBJECTS_AFFECTED', 'PAYLOAD_CHANGED');
+    return { analysis, binding };
+  }
+  #applyDecision(body, state = this.store.snapshot) {
+    const { analysis, binding } = this.#currentAnalysis(body, state);
+    if (analysis.affectedObjectRefs.length || analysis.operationDigest !== body.operationDigest ||
+        analysis.worldRevision !== body.expectedWorldRevision || body.guarantee !== 'RECOVERABLE_VERIFIED' ||
+        hash('operations', body.operations) !== body.operationDigest)
+      throw fail('OTHER_OBJECTS_AFFECTED', 'SCOPE_DENIED');
+    if (body.decisionRevision !== null) {
+      const decision = state.affectedDecisions?.[body.transactionId];
+      const authority = state.decisionBindings?.[body.transactionId];
+      if (!binding || !authority || authority.sessionRef !== body.sessionRef ||
+          !same(authority.localContext, body.localContext) || authority.analysisRevision !== body.analysisDigest ||
+          decision?.transactionId !== body.transactionId || decision.decisionRevision !== body.decisionRevision ||
+          decision.analysisDigest !== body.analysisDigest || decision.decisionKind !== 'NO_NOTIFICATION' ||
+          !same(decision.orderedSelectedRefs, analysis.orderedSelectedRefs) ||
+          !same(decision.affectedObjectRefs, analysis.affectedObjectRefs))
+        throw fail('OTHER_OBJECTS_AFFECTED', 'SCOPE_DENIED');
+    }
+    return analysis;
+  }
+  async #decide(body) {
+    const { replayKey, prior, admission } = await this.#bound('DecideAffectedObjectNotification', body);
+    if (prior) return prior.response;
+    await this.#identity(body);
+    const check = state => {
+      const { analysis, binding } = this.#currentAnalysis(body, state);
+      if (!binding || !same(body.analysis, analysis) || body.analysisRevision !== body.analysisDigest)
+        throw fail('OTHER_OBJECTS_AFFECTED', 'PAYLOAD_CHANGED');
+      if (state.pending[body.transactionId] || state.transactions[body.transactionId])
+        throw fail('TRANSACTION_CONFLICT', 'REVISION_CHANGED');
+      if (body.expectedDecisionRevision !== (state.affectedDecisions?.[body.transactionId]?.decisionRevision ?? null))
+        throw fail('STALE_REVISION');
+      const unselected = analysis.affectedObjectRefs.filter(ref => !analysis.orderedSelectedRefs.includes(ref));
+      if (body.decision === 'NO_NOTIFICATION' && unselected.length)
+        throw fail('OTHER_OBJECTS_AFFECTED', 'SCOPE_DENIED');
+      return analysis;
+    };
+    const analysis = check(this.store.snapshot);
+    const decision = validateType('AffectedDecision', { transactionId: body.transactionId,
+      analysisDigest: body.analysisDigest, decisionRevision: rev('affected-decision'), decisionKind: body.decision,
+      affectedObjectRefs: [...analysis.affectedObjectRefs], orderedSelectedRefs: [...analysis.orderedSelectedRefs] });
+    const response = respond('DecideAffectedObjectNotification', answer(body, decision));
+    await this.store.commit(state => {
+      check(state);
+      state.affectedDecisions ??= {};
+      state.decisionBindings ??= {};
+      state.affectedDecisions[body.transactionId] = decision;
+      state.decisionBindings[body.transactionId] = { sessionRef: body.sessionRef,
+        localContext: body.localContext, analysisRevision: body.analysisRevision };
+      state.replay[replayKey] = { digest: admission.requestDigest, response };
+    });
+    if (body.decision === 'BLOCK_AND_NOTIFY')
+      await this.publishEvent('AffectedObjectNotificationRequired', 'DecideAffectedObjectNotification', response);
+    return response;
+  }
+  async #createObject(body) {
+    const { replayKey, prior, admission } = await this.#bound('CreateObject', body);
+    if (prior) return prior.response;
+    await this.#identity(body);
+    const check = state => {
+      this.#currentFacts(state, body, body.worldRef);
+      if (body.expectedRevision !== (state.registryRevisions[body.worldRef] ?? 'registry-0')) throw fail('STALE_REVISION');
+      const transaction = state.transactions[body.transactionId];
+      if (transaction?.worldRef !== body.worldRef || transaction.objectRef !== body.objectRef ||
+          transaction.receipt?.status !== 'VERIFIED' || transaction.history?.status !== 'VERIFIED' ||
+          transaction.history.transactionId !== body.transactionId ||
+          !transaction.history.affectedObjectRefs?.includes(body.objectRef) ||
+          transaction.history.receiptDigest !== body.verifiedReceiptDigest ||
+          state.pending[body.transactionId]) throw fail('STALE_TRANSACTION', 'PAYLOAD_CHANGED');
+      validateType('HistoryEntry', transaction.history);
+      if (transaction.kind === 'REGION') {
+        contractsSdk.validateResponse('canvas-region/v3', 'ApplyRegionCommit', {
+          contractVersion: 'canvas-region/v3', requestId: body.requestId, result: transaction.result,
+          error: null, guardRefusal: null, applyFailure: null });
+        if (createHash('sha256').update(canonicalize(transaction.result)).digest('hex') !== body.verifiedReceiptDigest)
+          throw fail('STALE_TRANSACTION', 'PAYLOAD_CHANGED');
+      } else if (hash('receipt', transaction.receipt) !== body.verifiedReceiptDigest)
+        throw fail('STALE_TRANSACTION', 'PAYLOAD_CHANGED');
+      return transaction;
+    };
+    const transaction = check(this.store.snapshot);
+    const current = this.store.snapshot.objects[body.worldRef]?.[body.objectRef];
+    const result = current ?? validateType('ObjectRecord', { worldRef: body.worldRef, objectRef: body.objectRef,
+      objectRevision: rev('object'), displayName: null, nameRevision: null,
+      creationSequence: Object.keys(this.store.snapshot.objects[body.worldRef] ?? {}).length, status: 'READY' });
+    const response = respond('CreateObject', answer(body, result));
+    await this.store.commit(state => {
+      check(state);
+      if (!current) {
+        if (state.objects[body.worldRef]?.[body.objectRef]) throw fail('DUPLICATE_OBJECT_REF', 'REVISION_CHANGED');
+        state.objects[body.worldRef] ??= {};
+        state.footprints[body.worldRef] ??= {};
+        const positions = transaction.after?.coveredPositions ?? transaction.confirmedUndoScope?.positions;
+        if (!positions) throw fail('STALE_TRANSACTION', 'REQUIRED_FACT_UNKNOWN');
+        state.objects[body.worldRef][body.objectRef] = result;
+        state.footprints[body.worldRef][body.objectRef] = { positions,
+          footprintRevision: rev('footprint'), provenance: 'CANVAS_REGISTERED' };
+        state.history[body.objectRef] ??= [transaction.history];
+        state.registryRevisions[body.worldRef] = rev('registry');
+      } else if (!same(state.objects[body.worldRef]?.[body.objectRef], current)) throw fail('STALE_REVISION');
+      state.replay[replayKey] = { digest: admission.requestDigest, response };
+    });
+    return response;
+  }
+  async #nameObject(operation, body) {
+    const { replayKey, prior, admission } = await this.#bound(operation, body);
+    if (prior) return prior.response;
+    await this.#identity(body);
+    const name = contractsSdk.normalizeName(body.name);
+    const check = state => {
+      this.#currentFacts(state, body, body.worldRef);
+      const object = state.objects[body.worldRef]?.[body.objectRef];
+      if (!object) throw fail('OBJECT_NOT_FOUND', 'SCOPE_DENIED');
+      if (object.objectRevision !== body.expectedRevision ||
+          state.registryRevisions[body.worldRef] !== body.expectedRegistryRevision) throw fail('STALE_REVISION');
+      if (Object.values(state.objects[body.worldRef]).some(row => row.objectRef !== body.objectRef &&
+          row.displayName !== null && contractsSdk.normalizeName(row.displayName).comparisonKey === name.comparisonKey))
+        throw fail('OBJECT_NAME_CONFLICT', 'PAYLOAD_CHANGED');
+      return object;
+    };
+    check(this.store.snapshot);
+    const result = validateType('ObjectNameReceipt', { worldRef: body.worldRef, objectRef: body.objectRef,
+      ...name, nameRevision: rev('name'), objectRevision: rev('object'), registryRevision: rev('registry') });
+    const response = respond(operation, answer(body, result));
+    await this.store.commit(state => {
+      const object = check(state);
+      object.displayName = result.displayName;
+      object.nameRevision = result.nameRevision;
+      object.objectRevision = result.objectRevision;
+      state.registryRevisions[body.worldRef] = result.registryRevision;
+      state.replay[replayKey] = { digest: admission.requestDigest, response };
+    });
+    return response;
+  }
+  async #readPlacementSettings(body) {
+    await this.#bound('ReadPlacementSettings', body);
+    await this.#identity(body);
+    await this.store.busy;
+    const state = this.store.snapshot;
+    this.#currentFacts(state, body, body.worldRef);
+    const settings = state.placementSettings[body.worldRef];
+    if (!settings) throw fail('CAPABILITY_UNAVAILABLE', 'POLICY_UNAVAILABLE');
+    return respond('ReadPlacementSettings', answer(body, { sessionRef: body.sessionRef, worldRef: body.worldRef,
+      localContext: state.sessions[body.sessionRef].localContext, placementSettings: settings }));
+  }
+  #undoByRequest(body) {
+    const rows = Object.entries(this.store.snapshot.pending).concat(Object.entries(this.store.snapshot.transactions));
+    const undoReplay = this.store.snapshot.replay[`${body.sessionRef}\0Undo\0${body.originalUndoRequestId}`];
+    const matches = rows.filter(([, row]) => row.body?.requestId === body.originalUndoRequestId &&
+      (row.direction === 'UNDO' || !row.direction && undoReplay?.digest === requestDigest(WIRE, 'Undo', row.body)) &&
+      row.body.sessionRef === body.sessionRef && row.body.worldRef === body.worldRef);
+    if (matches.length !== 1) throw fail('UNDO_CONFLICT', 'REVISION_CHANGED');
+    return { transactionId: matches[0][0], row: matches[0][1] };
+  }
+  #undoRecoveryResult(body, row) {
+    const resolution = row.recoveryResolution;
+    const receipt = resolution?.receipt ?? row.queriedReceipt ?? row.receipt ?? null;
+    const status = ['VERIFIED', 'ROLLED_BACK'].includes(resolution?.status) ? resolution.status :
+      ['VERIFIED', 'ROLLED_BACK'].includes(receipt?.status) && !this.store.snapshot.pending[receipt.transactionId] ? receipt.status :
+      ['RECOVERY_PENDING', 'RESTORE_FAILED'].includes(row.receiptStatus) ? 'RECOVERY_PENDING' : 'UNKNOWN';
+    return { sessionRef: body.sessionRef, worldRef: body.worldRef,
+      originalUndoRequestId: body.originalUndoRequestId, status, receipt };
+  }
+  async #pendingUndo(operation, body) {
+    const { prior, replayKey, admission } = await this.#bound(operation, body);
+    if (operation === 'RecoverPendingUndo' && prior) return prior.response;
+    await this.#identity(body);
+    await this.store.busy;
+    this.#currentFacts(this.store.snapshot, body, body.worldRef);
+    const original = this.#undoByRequest(body);
+    if (this.activeHistoryTransactions.has(original.transactionId)) throw fail('TRANSACTION_CONFLICT', 'REVISION_CHANGED');
+    if (operation === 'ReadPendingUndoResult') {
+      const refused = original.row.recoveryResolution?.response;
+      if (refused?.error) return respond(operation, { ...answer(body, null, refused.error), guardRefusal: refused.guardRefusal ?? null });
+      return respond(operation, answer(body, this.#undoRecoveryResult(body, original.row)));
+    }
+    if (!this.store.snapshot.pending[original.transactionId] && original.row.receipt &&
+        ['VERIFIED', 'ROLLED_BACK'].includes(original.row.receipt.status)) {
+      const response = respond(operation, answer(body, this.#undoRecoveryResult(body, original.row)));
+      return this.#remember(replayKey, admission.requestDigest, response);
+    }
+    const resolution = await this.resolvePendingHistory({ sessionRef: body.sessionRef, transactionId: original.transactionId });
+    if (resolution.response?.error) {
+      // Abort/query proof preserves the original refusal; no public status is invented.
+      return respond(operation, { ...answer(body, null, resolution.response.error),
+        guardRefusal: resolution.response.guardRefusal ?? null });
+    }
+    const row = this.store.snapshot.pending[original.transactionId] ?? this.store.snapshot.transactions[original.transactionId];
+    const response = respond(operation, answer(body, this.#undoRecoveryResult(body, row)));
+    if (this.store.snapshot.pending[original.transactionId]) return response;
+    await this.store.commit(state => {
+      this.#currentFacts(state, body, body.worldRef);
+      state.replay[replayKey] = { digest: admission.requestDigest, response };
+    });
+    return response;
+  }
   async #analyze(body) {
     const { replayKey, prior, admission, connection } = await this.#bound('AnalyzeAffectedObjects', body);
     if (prior) return prior.response;
@@ -557,10 +770,21 @@ export class CanvasV5 {
           (state.registryRevisions[body.worldRef] ?? 'registry-0') !== analysis.registryRevision ||
           state.sessions[body.sessionRef]?.selectionRevision !== analysis.selectionRevision)
         throw fail('STALE_REVISION');
+      if (state.analysisBindings?.[body.transactionId]?.sessionRef &&
+          state.analysisBindings[body.transactionId].sessionRef !== body.sessionRef)
+        throw fail('TRANSACTION_CONFLICT', 'SCOPE_DENIED');
+      const unchanged = same(state.analyses[body.transactionId] ?? null, analysis) &&
+        same(state.analysisBindings?.[body.transactionId]?.localContext ?? null, body.localContext);
       state.analyses[body.transactionId] = analysis;
+      state.analysisBindings ??= {};
+      state.analysisBindings[body.transactionId] = { sessionRef: body.sessionRef, localContext: body.localContext, positions };
+      if (!unchanged) { delete state.affectedDecisions?.[body.transactionId]; delete state.decisionBindings?.[body.transactionId]; }
       if (decision) {
         state.affectedDecisions ??= {};
         state.affectedDecisions[body.transactionId] = decision;
+        state.decisionBindings ??= {};
+        state.decisionBindings[body.transactionId] = { sessionRef: body.sessionRef, localContext: body.localContext,
+          analysisRevision: hash('affected-analysis', analysis) };
       }
       state.replay[replayKey] = { digest: admission.requestDigest, response };
     });
@@ -587,15 +811,7 @@ export class CanvasV5 {
     this.adapterCompatible();
     const positions = cellPositions(body.operations, connection.capabilities.worldGeometry);
     requireGuards(connection.capabilities.engineGuards, 'ApplyRecoverableCommit');
-    const analysis = this.store.snapshot.analyses[body.transactionId];
-    if (!analysis || analysis.affectedObjectRefs.length ||
-        analysis.worldRef !== body.worldRef || analysis.operationDigest !== body.operationDigest ||
-        hash('affected-analysis', analysis) !== body.analysisDigest ||
-        analysis.worldRevision !== body.expectedWorldRevision || body.decisionRevision !== null ||
-        body.guarantee !== 'RECOVERABLE_VERIFIED' ||
-        this.store.snapshot.worldRevisions[body.worldRef] !== body.expectedWorldRevision ||
-        hash('operations', body.operations) !== body.operationDigest)
-      throw fail('OTHER_OBJECTS_AFFECTED', 'SCOPE_DENIED');
+    this.#applyDecision(body);
     if (body.regionInspectionBinding) {
       const build = body.regionInspectionBinding.build;
       const recorded = this.store.snapshot.placementInspections[
@@ -644,8 +860,9 @@ export class CanvasV5 {
       objects: [], cells: validateType('ScopedCells', facts.cells),
       localContext: body.localContext };
     const scopeDigest = hash('scoped-world', scope);
-    // Reserve before any Adapter mutation. A repeated request never issues another write.
+    // Reserve before any Adapter mutation. Recheck the complete grant and generations atomically.
     await this.store.commit(state => {
+      this.#applyDecision(body, state);
       if (state.pending[body.transactionId] || state.transactions[body.transactionId])
         throw fail('TRANSACTION_CONFLICT', 'REVISION_CHANGED');
       state.pending[body.transactionId] = { body, positions,
@@ -711,6 +928,7 @@ export class CanvasV5 {
       const response = respond('ApplyRecoverableCommit', answer(body, receipt));
       await this.store.commit(state => {
         state.transactions[body.transactionId] = { receipt, history, before, after: actual,
+          originRequest: body, operations: body.operations,
           displayMetadata: { committedAt: new Date().toISOString(), mode: 'CELL',
             affectedCells: positions.length },
           objectRef, operationDigest: body.operationDigest, worldRef: body.worldRef,
@@ -967,7 +1185,7 @@ export class CanvasV5 {
       validateCommitReadback(receipt, withDerivedReadback(target, actual), actual, history);
       const response = respond(operation, answer(body, receipt));
       await this.store.commit(next => {
-        next.transactions[body.transactionId] = { receipt, history, direction,
+        next.transactions[body.transactionId] = { receipt, history, direction, body,
           displayMetadata: { committedAt: new Date().toISOString(), mode: 'CELL',
             affectedCells: positions.length },
           before: current, after: actual, originTransactionId: body.historyTransactionId,
@@ -1533,6 +1751,11 @@ export class CanvasV5 {
       if (operation === 'ReleaseWorldRetirement') return await this.#releaseWorld(body);
       if (operation === 'SwitchWorldConnection') return await this.#switch(body);
       if (operation === 'AnalyzeAffectedObjects') return await this.#analyze(body);
+      if (operation === 'CreateObject') return await this.#createObject(body);
+      if (operation === 'NameObject' || operation === 'RenameObject') return await this.#nameObject(operation, body);
+      if (operation === 'DecideAffectedObjectNotification') return await this.#decide(body);
+      if (operation === 'ReadPlacementSettings') return await this.#readPlacementSettings(body);
+      if (operation === 'RecoverPendingUndo' || operation === 'ReadPendingUndoResult') return await this.#pendingUndo(operation, body);
       if (operation === 'ApplyRecoverableCommit') return await this.#apply(body);
       if (operation === 'Undo' || operation === 'Redo') return await this.#history(operation, body);
       if (operation === 'ListWorldConnections' || operation === 'ReadWorldSelectionContext')

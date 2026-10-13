@@ -461,7 +461,7 @@ function observation(ctx, config) {
       // Successful event cases retain their real Session only for replay.
       // Dispose that retained scope via the normal Canvas cleanup route too.
       const releases = await Promise.allSettled([...completedOkSessions.keys()]
-        .filter(id => id.startsWith('event/')).map(cancelCase));
+        .filter(id => id.startsWith('event/') || id.startsWith('scenario/')).map(cancelCase));
       pending.clear(); completedOkSessions.clear();
       const failures = [...results.filter(row => row.status === 'rejected' && row.reason?.observationCleanupFailed),
         ...releases.filter(row => row.status === 'rejected')].map(row => row.reason);

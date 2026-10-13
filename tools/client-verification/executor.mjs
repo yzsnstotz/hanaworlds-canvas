@@ -2,7 +2,6 @@ import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { decodeSnapshot } from '../../src/region-v1.mjs';
-import { cellPositions, affectedObjectRefs, VOXEL_GRID } from '../../src/voxel-grid.mjs';
 import { validateType, validateBoundResponse, digestValue } from '../../src/protocol/local/index.mjs';
 import { binding, pointer, applyBinding, sha, matchFixedShape } from './bindings.mjs';
 import { SupplyFailure, failSupply, publicFailure, getService, callPublic,
@@ -16,6 +15,7 @@ const callItems=new Map(examples.cases.map(x=>[x.id,x]));
 const localItems=new Map(examples.local.map(x=>[x.id,x]));
 const eventItems=new Map(examples.events.map(x=>[x.id,x]));
 const businessItems=new Map(examples.business.map(x=>[x.id,x]));
+const scenarioItems=new Map(examples.scenarios.map(x=>[x.id,x]));
 export const operationRoutes=Object.freeze(Object.fromEntries(examples.cases.map(x=>[x.id,{key:x.wire==='canvas/v7'?CANVAS:REGION,method:'call',operation:x.id}])));
 const localRoutes=Object.freeze({
   readToolSummary:[CANVAS,'readToolSummary',r=>[r]],
@@ -97,7 +97,7 @@ function requestResolver(spec,f,item) {
   if(path.startsWith('operations/') || path.startsWith('expectedOperations/')) {
     if(key==='worldRef') return scope.worldRef;
     // Normal product builds are read from the actual durable origin; no synthetic build provenance.
-    const operations=f.origin?.operations ?? f.origin?.body?.operations ?? f.origin?.originRequest?.operations;
+    const operations=f.operationsSource ?? f.origin?.operations ?? f.origin?.body?.operations ?? f.origin?.originRequest?.operations;
     if(operations) return pointer(operations,'/'+parts.slice(1).join('/'));
     return undefined;
   }
@@ -121,6 +121,10 @@ function requestResolver(spec,f,item) {
   if(key==='expectedSelectionRevision') return f.current?.selectionRevision;
   if(key==='expectedRegistryRevision') return f.state.registryRevisions[scope.worldRef] ?? f.registry?.registryRevision;
   if(key==='expectedWorldRevision') return f.state.worldRevisions[scope.worldRef];
+  if(key==='expectedDecisionRevision') return f.state.affectedDecisions?.[f.transactionId]?.decisionRevision;
+  if(key==='analysisRevision' && f.analysis) return D('affected-analysis',f.analysis);
+  if(key==='analysisDigest' && f.analysis) return D('affected-analysis',f.analysis);
+  if(key==='decisionRevision') return f.state.affectedDecisions?.[f.transactionId]?.decisionRevision;
   if(key==='expectedInventoryRevision') return f.worldInventory?.inventoryRevision;
   if(key==='reservationRef') return f.worldInventory?.retirementReservationRef;
   if(key==='expectedHistoryRevision') return requireValue(f.head?.historyRevision,'linked current history head');
@@ -183,6 +187,19 @@ async function prepareRequest(observer,item,template,scope,mode,group) {
     const result=await callPublic(observer,CANVAS,'ListWorldSelections',{contractVersion:'canvas/v7',requestId:newRef('inventory'),worldRef:scope.worldRef});
     if(!result.error) f.worldInventory=result.result;
   }
+  if(template.operations) {
+    const source=item.request?.operations ?? template.operations;
+    const permitted=item.bindings.map(x=>({...x,path:x.path.replace('/request/operations','/request')}));
+    const candidates=Object.values(f.state.transactions ?? {}).filter(row=>
+      (row.receipt?.status ?? row.result?.status)==='VERIFIED' && (row.worldRef ?? row.originRequest?.worldRef)===scope.worldRef);
+    const row=candidates.find(row=> {
+      const operations=row.operations ?? row.body?.operations ?? row.originRequest?.operations;
+      return operations && matchFixedShape(source,operations,permitted);
+    });
+    if(!row) failSupply('CURRENT_CASE_INPUT_UNAVAILABLE','setup',{operation:item.id,
+      missing:'actual compiled origin operations matching document geometry/materials/quantities'});
+    f.operationsSource=clone(row.operations ?? row.body?.operations ?? row.originRequest.operations);
+  }
   const pair=bindRequests(template,item,f);
   if(pair.request.operations && item.bindings.some(x=>x.path==='/request/operationDigest'))
     setDerived(pair.request,item,pair.bindings,'/request/operationDigest',D(pair.request.operations.contractVersion==='region-operations/v2'?'region-operations':'operations',pair.request.operations));
@@ -192,12 +209,14 @@ async function prepareRequest(observer,item,template,scope,mode,group) {
       item.bindings.map(x=>({...x,path:x.path.replace('/request/expectedOperations','/request')}))))
       failSupply('CURRENT_CASE_INPUT_UNAVAILABLE','setup',{missing:'verified origin with document exact expectedOperations'});
   }
-  if(['Undo','Redo'].includes(item.id) && group!=='business' && mode!=='reject') {
+  if(['Undo','Redo'].includes(item.id)) {
     requireValue(f.origin?.history,'durable VERIFIED linked origin');
     const intent={surface:'app/canvas-objects-history',action:item.id.toLowerCase(),sessionRef:scope.sessionRef,
       objectRef:pair.request.objectRef,historyTransactionId:pair.request.historyTransactionId};
-    setDerived(pair.request,item,pair.bindings,'/request/intentDigest',sha(intent));
-    setDerived(pair.request,item,pair.bindings,'/request/surfaceActionDigest',sha({...intent,transactionId:pair.request.transactionId}));
+    for(const [key,value] of [['intentDigest',sha(intent)],['surfaceActionDigest',sha({...intent,transactionId:pair.request.transactionId})]]) {
+      const spec=item.bindings.find(x=>x.path==='/request/'+key);
+      if(spec && pair.request[key]===spec.example) setDerived(pair.request,item,pair.bindings,spec.path,value);
+    }
   }
   if(['UndoRegionCommit','UndoScopedRegionCommit'].includes(item.id) && mode==='ok') {
     if(f.origin?.kind!=='REGION' || f.origin.result?.status!=='VERIFIED' || !f.origin.originRequest)
@@ -215,10 +234,10 @@ async function readSourceFacts(observer,scope) {
 }
 async function afterProof(observer,item,request,scope,group) {
   const disk=await observer.readDurable();
-  const state=disk.state;
+  const state=disk.state ?? await durable(observer);
   const provider=observer.provider(item.wire==='canvas-region/v3'?REGION:CANVAS);
   const replay=Object.values(state.replay ?? {}).filter(x=>x.response?.requestId===request.requestId);
-  if(replay.length===1 && !(group==='events' && item.id.startsWith('AffectedObjectNotificationRequired'))) return {value:replay[0].response,surface:'CanvasStore.readDurable',provider,
+  if(replay.length===1) return {value:replay[0].response,surface:'CanvasStore.readDurable',provider,
     request:{path:disk.path,requestId:request.requestId},response:clone(replay[0])};
   if(group==='local') {
     if(item.id==='display.actions') {
@@ -296,38 +315,81 @@ function outputBindings(item,requestRows,request,response,events,proof) {
   }
   return rows;
 }
+function requireBoundRequest(item,pair,{deferAnalysis=false}={}) {
+  for(const spec of item.bindings.filter(x=>x.path.startsWith('/request/') && x.kind!=='RefKey')) {
+    if(/\/(materialRef|geometryProfile)$/.test(spec.path) || pointer({request:pair.request},spec.path)!==spec.example) continue;
+    if(pair.bindings.some(x=>x.path===spec.path)) continue;
+    if(deferAnalysis && /^\/request\/(analysis(?:\/|Digest$|Revision$)|decisionRevision$)/.test(spec.path)) continue;
+    failSupply('CURRENT_CASE_INPUT_UNAVAILABLE','setup',{operation:item.id,missing:spec.path});
+  }
+}
+function bindActualRequest(item,template,actual) {
+  const root={request:clone(template)},rows=[];
+  for(const spec of item.bindings.filter(x=>x.path.startsWith('/request/') && x.kind!=='RefKey')) {
+    if(/\/materialRef$/.test(spec.path)) continue;
+    const value=pointer({request:actual},spec.path);
+    if(value===undefined || pointer(root,spec.path)!==spec.example) continue;
+    applyBinding(root,spec,value); rows.push(binding(spec,value,true));
+  }
+  for(const spec of item.bindings.filter(x=>x.path.startsWith('/request/') && x.kind==='RefKey')) {
+    const parent=spec.path.slice(0,spec.path.lastIndexOf('/'));
+    const keys=Object.keys(pointer({request:actual},parent) ?? {});
+    if(keys.length!==1 || !applyBinding(root,spec,keys[0]))
+      failSupply('CURRENT_REQUEST_DICTIONARY_BINDING_UNAVAILABLE','setup',{path:spec.path});
+    rows.push(binding(spec,keys[0],true));
+  }
+  if(!equal(root.request,actual)) failSupply('CURRENT_CASE_DOCUMENT_SHAPE_UNAVAILABLE','setup',{operation:item.id,
+    missing:'actual request matching the complete document after opaque scalar binding'});
+  return {request:root.request,bindings:rows};
+}
 async function prepareAnalysis(observer,pair,item) {
-  const request=pair.request;
   if(!['ApplyRecoverableCommit','DecideAffectedObjectNotification'].includes(item.id)) return;
-  // A positive Apply/notification is preceded by the actual public analysis. Fixed structure
-  // cannot be changed to force an offered decision into a different document policy.
-  const source=request.operations ? request : callItems.get('AnalyzeAffectedObjects').request;
   const analysisItem=callItems.get('AnalyzeAffectedObjects');
-  const prepared=await prepareRequest(observer,analysisItem,source.operations ? {...analysisItem.request,
-    operations:source.operations,transactionId:request.transactionId} : analysisItem.request,pair.f.scope,'ok','setup');
-  prepared.request.transactionId=request.transactionId;
-  if(request.operations) prepared.request.operations=clone(request.operations);
-  prepared.request.operationDigest=D('operations',prepared.request.operations);
-  const response=await callPublic(observer,CANVAS,'AnalyzeAffectedObjects',prepared.request);
+  const prepared=await prepareRequest(observer,analysisItem,analysisItem.request,pair.f.scope,'ok','setup');
+  const actual={...prepared.request,transactionId:pair.request.transactionId};
+  if(pair.request.operations) actual.operations=clone(pair.request.operations);
+  actual.operationDigest=D('operations',actual.operations);
+  const bound=bindActualRequest(analysisItem,analysisItem.request,actual);
+  requireBoundRequest(analysisItem,bound);
+  await requireMaterials(observer,bound.request,pair.f.scope);
+  const response=await callPublic(observer,CANVAS,'AnalyzeAffectedObjects',bound.request);
+  validateBoundResponse('canvas/v7','AnalyzeAffectedObjects',bound.request,response);
   if(response.error) failSupply('CURRENT_ANALYSIS_UNAVAILABLE','setup',{response});
-  const state=await durable(observer),analysis=state.analyses[request.transactionId];
+  const state=await durable(observer),analysis=state.analyses?.[pair.request.transactionId];
   if(!analysis || !equal(analysis,response.result)) failSupply('CURRENT_ANALYSIS_READBACK_UNAVAILABLE','setup');
-  pair.f.analysis=analysis;
-  if(request.analysis) {
-    for(const spec of item.bindings.filter(x=>x.path.startsWith('/request/analysis/'))) {
-      const value=pointer(analysis,spec.path.slice('/request/analysis'.length));
-      if(value!==undefined) setDerived(request,item,pair.bindings,spec.path,value);
+  pair.f.analysis=clone(analysis); pair.f.state=state;
+  for(const spec of item.bindings.filter(x=>x.path.startsWith('/request/analysis/'))) {
+    const value=pointer(analysis,spec.path.slice('/request/analysis'.length));
+    if(value!==undefined && pointer({request:pair.request},spec.path)===spec.example)
+      setDerived(pair.request,item,pair.bindings,spec.path,value);
+  }
+  if(pair.request.analysis && !equal(pair.request.analysis,analysis))
+    failSupply('CURRENT_CASE_DOCUMENT_SHAPE_UNAVAILABLE','setup',{operation:item.id,missing:'actual analysis with document exact collections'});
+  for(const field of ['analysisDigest','analysisRevision']) {
+    const spec=item.bindings.find(x=>x.path==='/request/'+field);
+    if(spec && pair.request[field]===spec.example) setDerived(pair.request,item,pair.bindings,spec.path,D('affected-analysis',analysis));
+  }
+  if(pair.request.decisionRevision!==undefined && pair.request.decisionRevision!==null) {
+    const decision=state.affectedDecisions?.[pair.request.transactionId];
+    if(decision) setDerived(pair.request,item,pair.bindings,'/request/decisionRevision',decision.decisionRevision);
+  }
+  const expected=item.bindings.find(x=>x.path==='/request/expectedDecisionRevision');
+  if(expected && pair.request.expectedDecisionRevision===expected.example) {
+    let decision=state.affectedDecisions?.[pair.request.transactionId];
+    if(!decision && pair.request.decision==='NO_NOTIFICATION') {
+      // A documented non-null CAS needs an actual predecessor. Persist it through the
+      // normal public Decision API; this setup is completed before the case baseline.
+      const initial={...clone(pair.request),requestId:newRef('initial-decision'),expectedDecisionRevision:null};
+      delete initial.unexpectedRequired;
+      const first=await callPublic(observer,CANVAS,'DecideAffectedObjectNotification',initial);
+      validateBoundResponse('canvas/v7','DecideAffectedObjectNotification',initial,first);
+      if(first.error) failSupply('CURRENT_INITIAL_DECISION_UNAVAILABLE','setup',{request:initial,response:first});
+      decision=(await durable(observer)).affectedDecisions?.[pair.request.transactionId];
+      if(!decision || !equal(decision,first.result)) failSupply('CURRENT_INITIAL_DECISION_READBACK_UNAVAILABLE','readback');
     }
+    if(decision) setDerived(pair.request,item,pair.bindings,expected.path,decision.decisionRevision);
   }
-  setDerived(request,item,pair.bindings,'/request/analysisDigest',D('affected-analysis',analysis));
-  const decision=state.affectedDecisions?.[request.transactionId];
-  if(request.decisionRevision!==undefined && decision)
-    setDerived(request,item,pair.bindings,'/request/decisionRevision',decision.decisionRevision);
-  if(request.analysisRevision!==undefined) {
-    // No guessed revision: the published implementation must supply this specific token.
-    requireValue(decision?.analysisRevision,'public analysis revision for DecideAffectedObjectNotification');
-    setDerived(request,item,pair.bindings,'/request/analysisRevision',decision.analysisRevision);
-  }
+  return {request:clone(bound.request),response:clone(response)};
 }
 async function ensureHistory(observer,scope,mode='CELL') {
   const canvas=getService(observer,CANVAS);
@@ -366,16 +428,14 @@ async function requireMaterials(observer,request,scope) {
   const response=await callPublic(observer,FACTS,'ReadCatalogue',body);
   validateBoundResponse('world-facts/v1','ReadCatalogue',body,response);
   if(response.error) failSupply('CURRENT_MATERIAL_CATALOGUE_UNAVAILABLE','setup',{response});
-  const registered=new Set();
-  const scan=value=> { if(typeof value==='string') registered.add(value); else if(value && typeof value==='object') {
-    for(const [key,child] of Object.entries(value)) { registered.add(key); scan(child); }
-  }}; scan(response.result.catalogue);
+  const catalogue=validateType('Catalogue',response.result.catalogue);
+  const registered=new Set(Object.keys(catalogue.materials));
   const missing=[...materials].filter(x=>!registered.has(x));
   if(missing.length) failSupply('DOCUMENT_MATERIAL_UNAVAILABLE','setup',{worldRef:scope.worldRef,materials:missing,
     surface:'world-facts/v1.ReadCatalogue',request:body,response});
 }
 export function createExecutor(ctx,observer) {
-  if(!observer || !['service','provider','readDurable','begin','finish','inspect'].every(x=>typeof observer[x]==='function'))
+  if(!observer || !['service','provider','readDurable','begin','checkpoint','finish','inspect'].every(x=>typeof observer[x]==='function'))
     failSupply('OFFICIAL_OBSERVER_UNAVAILABLE','setup');
   const pending=new Map(),replays=new Map(),caseScopes=new Map();
   const scopeFor=(caseId,positions)=>{
@@ -387,7 +447,7 @@ export function createExecutor(ctx,observer) {
     if(Object.keys(phase).some(x=>!['phase','sessionRef','mode'].includes(x)) || typeof phase.sessionRef!=='string' || !phase.sessionRef || !['ok','reject','replay'].includes(phase.mode))
       failSupply('CASE_SESSION_INPUT_NOT_ALLOWED','setup',{caseId});
     if (phase.mode === 'replay') {
-      const prior = replays.get(caseId.replace(/^event\//, ''));
+      const prior = replays.get(caseId);
       if (!prior || prior.f.scope.sessionRef !== phase.sessionRef) failSupply('CURRENT_REPLAY_SESSION_UNAVAILABLE','setup',{caseId});
       const liveIdentity = await callPublic(observer,'hanaworldsWorkshopV3','ReadSessionIdentity', {contractVersion:'session/v5',requestId:newRef('replay-identity'),sessionRef:phase.sessionRef});
       if (liveIdentity.error) failSupply('CURRENT_REPLAY_SESSION_IDENTITY_UNAVAILABLE','setup',{response:liveIdentity});
@@ -419,7 +479,7 @@ export function createExecutor(ctx,observer) {
       failSupply('CURRENT_CASE_CONNECTION_CHANGED','setup',{request:connectionRequest,response:connection});
     let localContext;
     const unboundRetirement=['ReserveWorldRetirement','ReleaseWorldRetirement'].includes(caseId);
-    const testedSelect=unboundRetirement || caseId==='SelectWorldConnection' || caseId==='event/WorldConnectionSelectionChanged-SelectWorldConnection' || caseId==='business/SelectWorldConnection';
+    const testedSelect=unboundRetirement || caseId==='SelectWorldConnection' || caseId==='event/WorldConnectionSelectionChanged-SelectWorldConnection';
     if(!testedSelect) {
       const selectRequest={contractVersion:'canvas/v7',sessionRef:phase.sessionRef,requestId:newRef('case-select'),worldRef:target.worldRef,connectionRef:target.connectionRef,
         expectedRevision:identityResponse.result.sessionRevision,expectedContext:null,connectionIncarnationRef:target.connectionIncarnationRef};
@@ -454,101 +514,166 @@ export function createExecutor(ctx,observer) {
     const rows=dynamicLocal ? pair.bindings : outputBindings(item,pair.bindings,pair.request,response,capture.events,proof);
     return {caseId:item.id,mode,execution:'INSTALLED_CLIENT_TO_REGISTERED_PROVIDER',provider:providerFor(item),
       request:clone(pair.request),response:clone(response),events:clone(capture.events),before,after,
-      adapterCalls:clone(capture.adapterCalls),worldWrites:clone(capture.worldWrites),bindings:rows,...extra};
+      adapterCalls:clone(capture.adapterCalls),worldWrites:clone(capture.worldWrites),publicCalls:clone(capture.publicCalls),bindings:rows,...extra};
   }
-  async function wireCase(item,mode,group='cases',eventId=null) {
-    if(!['ok','reject','replay'].includes(mode) || mode==='replay' && group!=='events')
-      failSupply('CASE_MODE_NOT_ALLOWED','setup',{caseId:item.id,mode});
-    const event=eventId && eventItems.get(eventId);
-    const template=event ? event[mode==='ok'?'success':mode==='reject'?'refusal':'replay'].request :
+  async function publicPrepareChain(pair,item,token) {
+    const documentSteps=item.prepareChain?.steps;
+    if(!documentSteps?.length) failSupply('DOCUMENT_PREPARE_CHAIN_UNAVAILABLE','setup',{operation:item.id});
+    const steps=[];
+    for(const [index,sample] of documentSteps.entries()) {
+      const stepItem={...callItems.get(sample.operation),bindings:sample.bindings};
+      let actual;
+      if(sample.mode==='replay') {
+        const previous=steps.at(-1);
+        if(!previous || previous.operation!==sample.operation) failSupply('DOCUMENT_PREPARE_CHAIN_INVALID','setup');
+        actual=clone(previous.request);
+      } else {
+        const facts={...pair.f,state:await durable(observer),requestId:newRef('prepare-'+index),transactionId:pair.request.transactionId};
+        const prepared=bindRequests(sample.request,stepItem,facts);
+        actual=prepared.request;
+        if(sample.operation==='AnalyzeAffectedObjects') {
+          actual.operations=clone(pair.request.operations);
+          actual.operationDigest=pair.request.operationDigest;
+        }
+      }
+      const bound=bindActualRequest(stepItem,sample.request,actual);
+      requireBoundRequest(stepItem,bound);
+      const start=await observer.checkpoint(token);
+      const response=await callPublic(observer,CANVAS,sample.operation,bound.request);
+      const end=await observer.checkpoint(token);
+      validateBoundResponse('canvas/v7',sample.operation,bound.request,response);
+      if(response.error) failSupply('CURRENT_PREPARE_CHAIN_FAILED','call',{operation:sample.operation,request:bound.request,response});
+      const proof=await afterProof(observer,stepItem,bound.request,pair.f.scope,'prepare');
+      if(!proof || !equal(proof.value,response)) failSupply('CURRENT_PREPARE_CHAIN_READBACK_UNAVAILABLE','readback',{operation:sample.operation});
+      const step={operation:sample.operation,mode:sample.mode,request:clone(bound.request),response:clone(response),
+        requestBindings:bound.bindings,proof,start,end};
+      if(sample.operation==='AnalyzeAffectedObjects') {
+        pair.f.analysis=clone(response.result);
+        if(response.result.affectedObjectRefs.length || response.result.orderedSelectedRefs.length)
+          failSupply('CURRENT_NO_NOTIFICATION_SCENARIO_UNAVAILABLE','setup',{request:bound.request,response});
+        setDerived(pair.request,item,pair.bindings,'/request/analysisDigest',D('affected-analysis',response.result));
+        if(pair.request.expectedWorldRevision!==response.result.worldRevision)
+          failSupply('CURRENT_ANALYSIS_WORLD_REVISION_MISMATCH','readback');
+      } else if(sample.operation==='DecideAffectedObjectNotification') {
+        if(response.result.decisionKind!=='NO_NOTIFICATION' || response.result.affectedObjectRefs.length || response.result.orderedSelectedRefs.length)
+          failSupply('CURRENT_NO_NOTIFICATION_SCENARIO_UNAVAILABLE','readback',{response});
+        if(sample.mode==='replay') {
+          if(!equal(steps.at(-1).request,bound.request) || !equal(steps.at(-1).response,response))
+            failSupply('CURRENT_DECISION_REPLAY_MISMATCH','readback');
+          setDerived(pair.request,item,pair.bindings,'/request/decisionRevision',response.result.decisionRevision);
+        }
+      }
+      steps.push(step);
+    }
+    if(pair.request.decisionRevision!==null && !steps.some(x=>x.operation==='DecideAffectedObjectNotification' && x.mode==='replay'))
+      failSupply('CURRENT_DECISION_REPLAY_UNAVAILABLE','setup');
+    return steps;
+  }
+  function chainResult(steps,document,capture) {
+    const slice=(key,start,end)=>{
+      if(!Number.isSafeInteger(start[key]) || !Number.isSafeInteger(end[key]) || start[key]<0 || end[key]<start[key] || end[key]>capture[key].length)
+        failSupply('CURRENT_CAPTURE_BOUNDARY_INVALID','readback',{key});
+      return clone(capture[key].slice(start[key],end[key]));
+    };
+    return {steps:steps.map((step,index)=>{
+      const events=slice('events',step.start,step.end),worldWrites=slice('worldWrites',step.start,step.end);
+      const item={id:step.operation,bindings:document.steps[index].bindings};
+      return {operation:step.operation,mode:step.mode,request:step.request,response:step.response,events,worldWrites,
+        adapterCalls:slice('adapterCalls',step.start,step.end),publicCalls:slice('publicCalls',step.start,step.end),
+        actualBindings:outputBindings(item,step.requestBindings,step.request,step.response,events,step.proof)};
+    })};
+  }
+  async function wireCase(original,mode,group='cases',descriptorId=null) {
+    if(!['ok','reject','replay'].includes(mode) || mode==='replay' && !['events','scenarios'].includes(group))
+      failSupply('CASE_MODE_NOT_ALLOWED','setup',{caseId:original.id,mode});
+    const metadata=group==='events'?eventItems.get(descriptorId):group==='scenarios'?scenarioItems.get(descriptorId):null;
+    const operation=group==='events' && metadata.name==='TransactionVerified'?'ApplyRecoverableCommit':
+      group==='scenarios'?metadata.operation:original.id;
+    const item=metadata?{...original,id:operation,bindings:metadata.bindings,prepareChain:metadata.prepareChain}:
+      group==='business'?{...original,prepareChain:callItems.get(operation)?.prepareChain}:original;
+    const caseId=group==='events'?'event/'+descriptorId:group==='scenarios'?'scenario/'+descriptorId:group==='business'?'business/'+item.id:item.id;
+    const template=metadata?metadata[mode==='ok'?'success':mode==='reject'?'refusal':'replay'].request:
       group==='business'?item.request:mode==='reject'?item.invalidRequest:item.request;
-    let operation=item.id;
-    if(event?.name==='TransactionVerified') operation='ApplyRecoverableCommit';
-    const positions=casePositions(template);
-    const scope=scopeFor(group==='events'?'event/'+eventId:group==='business'?'business/'+item.id:item.id,positions);
-    let pair;
+    const scope=scopeFor(caseId,casePositions(template));
+    let pair,previous;
     if(mode==='replay') {
-      const previous=replays.get(eventId);
-      if(!previous) failSupply('CURRENT_REPLAY_ORIGIN_UNAVAILABLE','setup',{caseId:eventId});
+      previous=replays.get(caseId);
+      if(!previous) failSupply('CURRENT_REPLAY_ORIGIN_UNAVAILABLE','setup',{caseId});
       pair=clone(previous); pair.f.scope=scope;
     } else {
-      pair=await prepareRequest(observer,event ? {...item,bindings:event.bindings}:item,template,scope,mode,group);
+      pair=await prepareRequest(observer,item,template,scope,mode,group);
+      if(operation==='DecideAffectedObjectNotification') await prepareAnalysis(observer,pair,item);
       if(mode==='ok') {
         await requireMaterials(observer,pair.request,scope);
-        if(operation==='ApplyRecoverableCommit') await prepareAnalysis(observer,pair,{...item,id:operation});
         if(['Undo','Redo','UndoRegionCommit','UndoScopedRegionCommit'].includes(operation) && !pair.f.origin)
           failSupply('CURRENT_CASE_INPUT_UNAVAILABLE','setup',{missing:'independent verified movable history'});
       }
-    }
-    let notificationTrigger=null;
-    if(event?.name==='AffectedObjectNotificationRequired' && mode!=='reject') {
-      if(mode==='replay') notificationTrigger=clone(pair.actualTrigger?.request);
-      else {
-        const analysisItem=callItems.get('AnalyzeAffectedObjects');
-        const triggerPair=await prepareRequest(observer,analysisItem,analysisItem.request,scope,'ok','events');
-        triggerPair.request.requestId=pair.request.requestId;
-        triggerPair.request.transactionId=pair.request.transactionId;
-        notificationTrigger=triggerPair.request;
-        const refs=triggerPair.f.registry.objects.map(x=>x.objectRef).sort();
-        const footprintRequest={sessionRef:scope.sessionRef,worldRef:scope.worldRef,localContext:clone(scope.localContext)};
-        const footprints=await getService(observer,'hanaworldsCanvasFootprintRegistry','readFootprints').readFootprints(scope.worldRef,refs,footprintRequest);
-        const actualGeometry=triggerPair.f.state.connections[scope.sessionRef]?.capabilities.worldGeometry;
-        const positions=cellPositions(notificationTrigger.operations,actualGeometry);
-        const map=Object.fromEntries(footprints.objects.map(x=>[x.objectRef,x]));
-        const predicted={contractVersion:'canvas/v7',worldRef:scope.worldRef,
-          worldRevision:triggerPair.f.state.worldRevisions[scope.worldRef],registryRevision:triggerPair.f.registry.registryRevision,
-          selectionRevision:triggerPair.f.current.selectionRevision,operationDigest:notificationTrigger.operationDigest,
-          orderedSelectedRefs:clone(triggerPair.f.current.orderedSelectedObjectRefs),affectedObjectRefs:affectedObjectRefs(map,positions,VOXEL_GRID)};
-        for(const spec of event.bindings.filter(x=>x.path.startsWith('/request/analysis/'))) {
-          const value=pointer(predicted,spec.path.slice('/request/analysis'.length));
-          if(value!==undefined) setDerived(pair.request,{...item,bindings:event.bindings},pair.bindings,spec.path,value);
+      // Decode-refusal inputs remain unchanged; their non-error references must still be actual.
+      // Apply's document chain derives analysis/decision scalars inside the capture on success.
+      requireBoundRequest(item,pair,{deferAnalysis:operation==='ApplyRecoverableCommit'});
+      if(operation==='ApplyRecoverableCommit' && mode==='reject') {
+        await prepareAnalysis(observer,pair,item);
+        if(pair.request.decisionRevision!==null && !pair.bindings.some(x=>x.path==='/request/decisionRevision')) {
+          // Run the same approved public preparation before the refusal baseline. No predicted decision.
+          const setupToken=await observer.begin({...scope,caseId:caseId+'/preparation'});
+          try { await publicPrepareChain(pair,item,setupToken); }
+          finally { await observer.finish(setupToken); }
         }
-        setDerived(pair.request,{...item,bindings:event.bindings},pair.bindings,'/request/analysisDigest',D('affected-analysis',predicted));
+        requireBoundRequest(item,pair);
       }
-      requireValue(notificationTrigger,'actual notification public trigger request');
     }
-    const before=await snapshot(scope), token=await observer.begin({...scope,requestId:pair.request.requestId,
+    const before=await snapshot(scope),token=await observer.begin({...scope,caseId,requestId:pair.request.requestId,
       transactionId:pair.request.transactionId ?? pair.request.undoTransactionId});
-    let response,actualTrigger;
+    let response,prepared=[];
     try {
-      if(event?.name==='AffectedObjectNotificationRequired' && mode!=='reject') {
-        const actualResponse=await callPublic(observer,CANVAS,'AnalyzeAffectedObjects',notificationTrigger);
-        actualTrigger={operation:'AnalyzeAffectedObjects',request:clone(notificationTrigger),response:actualResponse};
-        const state=await durable(observer);
-        if(!actualResponse.error && !equal(actualResponse.result,pair.request.analysis))
-          failSupply('CURRENT_NOTIFICATION_ANALYSIS_BINDING_MISMATCH','readback',{request:pair.request,actualTrigger});
-        const decision=state.affectedDecisions?.[notificationTrigger.transactionId];
-        if(!decision) failSupply('CURRENT_AFFECTED_OBJECT_NOTIFICATION_UNAVAILABLE','call',{
-          missing:'actual unselected object intersecting document operation positions',actualTrigger});
-        response=actualResponse; // The actual emitted complete receipt is selected below after capture closes.
-      } else {
-        response=await callPublic(observer,item.wire==='canvas-region/v3'?REGION:CANVAS,operation,pair.request);
-        actualTrigger={operation,request:clone(pair.request),response:clone(response)};
-      }
+      if(operation==='ApplyRecoverableCommit' && mode==='ok') prepared=await publicPrepareChain(pair,item,token);
+      requireBoundRequest(item,pair);
+      response=await callPublic(observer,item.wire==='canvas-region/v3'?REGION:CANVAS,operation,pair.request);
     } catch(error) { await observer.finish(token); throw error; }
-    const captured=await observer.finish(token);
-    if(event?.name==='AffectedObjectNotificationRequired' && mode!=='reject') {
-      const receipts=captured.events.filter(x=>x.event===event.name && x.receipt?.requestId===pair.request.requestId);
+    const captured=await observer.finish(token),extra={};
+    if(metadata) extra.actualTrigger={operation,request:clone(pair.request),response:clone(response)};
+    if(prepared.length) extra.prepareChain=chainResult(prepared,item.prepareChain,captured);
+    if(metadata?.name==='AffectedObjectNotificationRequired' && mode!=='reject') {
+      const disk=await observer.readDurable(),state=disk.state ?? await durable(observer);
+      const decision=requireValue(state.affectedDecisions?.[pair.request.transactionId],'actual durable Analyzer notification decision','readback');
+      let receipt;
       if(mode==='ok') {
-        if(receipts.length!==1) failSupply('CURRENT_AFFECTED_OBJECT_NOTIFICATION_UNAVAILABLE','call',{events:captured.events});
-        response=clone(receipts[0].receipt);
+        const events=captured.events.filter(x=>x.event===metadata.name && x.receipt?.requestId===pair.request.requestId);
+        if(events.length!==1) failSupply('CURRENT_AFFECTED_OBJECT_NOTIFICATION_UNAVAILABLE','readback',{events:captured.events});
+        receipt=clone(events[0].receipt);
       } else {
-        // Replay records this invocation's real public Analyzer response and the independently
-        // read durable decision. It cannot claim a cached old event receipt was returned now.
-        response=clone(actualTrigger.response);
+        receipt=requireValue(previous.internalDecision?.response,'prior actual event receipt','readback');
+        extra.internalDecisionSource='PRIOR_DURABLE_RECEIPT_NOT_ANALYZER_RETURN';
       }
-    }
-    if(mode==='ok' && eventId) replays.set(eventId,{...clone(pair),actualTrigger});
-    const extra=event ? {actualTrigger}:{};
-    if(event?.name==='AffectedObjectNotificationRequired') {
-      const data=await durable(observer);
-      extra.decisionReadback={surface:'CanvasStore.readDurable.affectedDecisions',transactionId:pair.request.transactionId,
-        decision:clone(data.affectedDecisions?.[pair.request.transactionId] ?? null),provider:observer.provider(CANVAS)};
+      if(!equal(receipt.result,decision)) failSupply('CURRENT_NOTIFICATION_DURABLE_RECEIPT_MISMATCH','readback');
+      extra.internalDecision={operation:'DecideAffectedObjectNotification',response:clone(receipt)};
+      const proof={resolve:path=>path==='/requestId'?pair.request.requestId:pointer(decision,path.replace(/^\/result/,'')),
+        surface:'CanvasStore.readDurable.affectedDecisions',provider:observer.provider(CANVAS),
+        request:{path:disk.path,transactionId:pair.request.transactionId},response:clone(decision)};
+      const internalItem={id:operation,bindings:metadata.internalDecisionBindings};
+      extra.internalDecisionBindings=outputBindings(internalItem,pair.bindings,pair.request,receipt,[],proof)
+        .filter(x=>metadata.internalDecisionBindings.some(s=>s.path===x.path));
+      // Event decision fields use the independently durable decision, while Analyzer fields
+      // use its independently persisted public replay. Never compare two different receipts.
+      const analyzerProof=await afterProof(observer,item,pair.request,scope,group);
+      extra.notificationProof={analyzerProof,decisionProof:proof};
     }
     if(['UndoRegionCommit','UndoScopedRegionCommit'].includes(operation) && mode==='ok') {
       extra.origin=clone(pair.f.origin); extra.originReadBeforeCall=true;
     }
-    const value=await finishExchange(event ? {...item,id:eventId,bindings:event.bindings}:item,mode,pair,before,token,group,response,extra,captured);
+    if(extra.notificationProof) {
+      const {analyzerProof,decisionProof}=extra.notificationProof; delete extra.notificationProof;
+      const after=await snapshot(scope);
+      const normal=outputBindings({...item,bindings:item.bindings.filter(x=>!x.path.startsWith('/events/'))},pair.bindings,pair.request,response,[],analyzerProof);
+      const eventRows=outputBindings({...item,bindings:item.bindings.filter(x=>x.path.startsWith('/events/'))},pair.bindings,pair.request,response,captured.events,decisionProof)
+        .filter(x=>x.path.startsWith('/events/'));
+      if(mode==='ok') replays.set(caseId,{...clone(pair),internalDecision:clone(extra.internalDecision)});
+      return {caseId:descriptorId,mode,execution:'INSTALLED_CLIENT_TO_REGISTERED_PROVIDER',provider:providerFor(item),
+        request:clone(pair.request),response:clone(response),events:clone(captured.events),before,after,
+        adapterCalls:clone(captured.adapterCalls),worldWrites:clone(captured.worldWrites),publicCalls:clone(captured.publicCalls),bindings:[...normal,...eventRows],...extra};
+    }
+    const value=await finishExchange(metadata?{...item,id:descriptorId}:item,mode,pair,before,token,group,response,extra,captured);
+    if(mode==='ok' && metadata) replays.set(caseId,clone(pair));
     return value;
   }
   async function localCase(item,mode) {
@@ -934,7 +1059,7 @@ export function createExecutor(ctx,observer) {
     const terminal=['ok','reject','replay'].includes(mode) || ['finish','local-finish','cancel'].includes(phase);
     try {
       const value=await execute(caseId,mode);
-      if(terminal && !(caseId.startsWith('event/') && mode==='ok')) await releaseCaseScope(caseId,value);
+      if(terminal && !((caseId.startsWith('event/') || caseId.startsWith('scenario/')) && mode==='ok')) await releaseCaseScope(caseId,value);
       return value;
     } catch(error) {
       const state=pending.get(caseId); pending.delete(caseId);
@@ -959,7 +1084,7 @@ export function createExecutor(ctx,observer) {
       return {caseId,observationReleased:true};
     }
     if(phase?.phase==='case-prepare') {
-      if(!callItems.has(caseId) && !(caseId.startsWith('ui/') && uiIds.has(caseId.slice(3))) && !(caseId.startsWith('local/') && localItems.has(caseId.slice(6))) && !(caseId.startsWith('event/') && eventItems.has(caseId.slice(6))) && !(caseId.startsWith('business/') && businessItems.has(caseId.slice(9))))
+      if(!callItems.has(caseId) && !(caseId.startsWith('ui/') && uiIds.has(caseId.slice(3))) && !(caseId.startsWith('local/') && localItems.has(caseId.slice(6))) && !(caseId.startsWith('event/') && eventItems.has(caseId.slice(6))) && !(caseId.startsWith('business/') && businessItems.has(caseId.slice(9))) && !(caseId.startsWith('scenario/') && scenarioItems.has(caseId.slice(9))))
         failSupply('CASE_NOT_ALLOWED','setup',{caseId});
       return casePrepare(caseId,phase);
     }
@@ -1000,6 +1125,11 @@ export function createExecutor(ctx,observer) {
       if(!event) failSupply('CASE_NOT_ALLOWED','setup',{caseId});
       const operation=event.name==='TransactionVerified'?'ApplyRecoverableCommit':event.trigger;
       return wireCase(callItems.get(operation),mode,'events',id);
+    }
+    if(caseId.startsWith('scenario/')) {
+      const id=caseId.slice(9),scenario=scenarioItems.get(id);
+      if(!scenario) failSupply('CASE_NOT_ALLOWED','setup',{caseId});
+      return wireCase(callItems.get(scenario.operation),mode,'scenarios',id);
     }
     if(caseId.startsWith('business/')) {
       const item=businessItems.get(caseId.slice(9));

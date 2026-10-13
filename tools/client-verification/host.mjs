@@ -24,7 +24,8 @@ const original = value => value?.[symbols.original] ?? value;
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 const json = value => value === undefined ? null : JSON.parse(JSON.stringify(value));
 const errorRecord = error => ({ name: error?.name ?? 'Error', code: error?.code ?? null,
-  message: error?.message ?? String(error), data: json(error?.data ?? error?.publicError ?? null) });
+  message: error?.message ?? String(error), data: json(error?.publicError ?? error?.data ??
+    (error?.phase && error?.code ? error : null)) });
 const writeOperations = new Set(['ApplyCompiledTransaction', 'ApplyHistoryTransaction',
   'RestoreTransaction', 'WriteRegion']);
 
@@ -193,6 +194,7 @@ export function createObserver(ctx, config) {
         eventOwners.set(payload, { ...owner, token: capture });
         return;
       }
+      loaderRecord(owner.impl.fiber);
       const row = { service: message.service, operation: message.operation, phase: message.phase,
         request: json(message.request), response: json(message.response),
         error: message.error ? errorRecord(message.error) : null,
@@ -223,6 +225,18 @@ export function createObserver(ctx, config) {
     return { scope: token.scope, events: json(events.slice(token.eventStart)),
       adapterCalls: json(adapterCalls.slice(token.adapterStart)),
       worldWrites: json(worldWrites.slice(token.writeStart)), publicCalls: json(publicCalls.slice(token.publicStart)), remoteErrors: json(remoteErrors.slice(token.remoteErrorStart)) };
+  }
+  function checkpoint(token) {
+    if (!capture || token !== capture)
+      throw new SupplyError('OBSERVATION_TOKEN_INVALID', 'No matching invocation capture is active.');
+    if (token.failure) throw token.failure;
+    // Offsets refer only to the original active capture. They let the executor
+    // slice actual step evidence without fabricating empty arrays or dropping
+    // events/writes by request-id filtering.
+    return { events: events.length - token.eventStart,
+      adapterCalls: adapterCalls.length - token.adapterStart,
+      worldWrites: worldWrites.length - token.writeStart,
+      publicCalls: publicCalls.length - token.publicStart };
   }
 
   async function readDurable() {
@@ -415,7 +429,7 @@ export function createObserver(ctx, config) {
   }
 
   return { ctx, config: settings, service, getService: service, provider, registration,
-    inspect, readDurable, begin, finish, observeCall, events, adapterCalls, worldWrites,
+    inspect, readDurable, begin, finish, checkpoint, observeCall, events, adapterCalls, worldWrites,
     confirmedPlacements, original };
 }
 

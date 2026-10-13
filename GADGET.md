@@ -230,3 +230,57 @@ complete canonical source body. Canvas never infers these fields from objects,
 transport budgets, fixed geometry or engine files. Provider replacement, invalid
 scope, missing facts or invalid payload refuses with the documented public JSON
 error and mutationState NONE. Reads do not commit observations or history.
+
+## 同源官方 Web 的安装、启动与停止示例
+
+在本工作树使用 Node24.13.1，执行无需工程参数的实际产品观察入口：
+
+```sh
+node tools/client-verification/run.mjs
+```
+
+它在本卡新 run 目录调用公开 `prepareOfficialHostSupply({root})`，读取当次真实
+`official-host-supply.json`、`HOST-USAGE.md` 和完整 env-i 命令。供方须提供该 run 内的
+批准同源 CLI 安装、正常 `web` profile 及依赖；外部 checkout 或跨根链接具名拒绝。
+批准来源为 `dsh-v0.2.1-alpha.2`，commit
+`d743267388641bc76f17c45ce8b4c231aed1d32c`；实际 tag archive 和原 lock bytes 独立核验。
+同版本 npm release 不能自行替代该批准归档。用户不填写安装根、profile、token 或调试端口。
+
+正常 `npm pack` 生成本次 Canvas 生产 tgz，由同源官方公开 manager 在正常 Web profile
+安装；原固定 peers、bundle patch、manager 策略保持。普通 Loader 本地工具 entry 只负责观察，
+不发布测试包、不在生产 Canvas client 增加验证页。工具对照实际已装制品的 build-source 输入和 bytes。
+
+实际启动使用生成说明的正常公开命令形式：
+
+```sh
+dsh --profile web --no-open --host 127.0.0.1 --port 0
+```
+
+runner 直接执行收据中的实际可执行文件、参数和完整隔离环境，使用官方 web-app、
+FrontendStatic、ClientModules、frontend 和 `__DSH_BOOT__`。原打印的本地 token URL
+在本次无头 Chromium 中完成原 cookie 交换；随后使用干净同源根地址。
+Chromium 带 `--enable-automation`、本次实际 user-data-dir 和独立 CDP listener；
+token/cookie 只在内存中处理，输出流脱敏保存。禁止个人 profile、凭据或 3080。
+
+实际 inspection 须证明同 root、官方 Loader 来源及真正 ACTIVE 的 Canvas、region、
+Workshop、Adapter/WorldFacts 等提供方。仅 Skills 供应不证明这些对端、真实世界、配对、材料、
+历史或 pending 场景已经存在；缺项具名失败，不制造数据或把文档样例当实际返回。
+随后 runner 内部提供仅含实际路径/地址/source 文件的资源定位记录，运行全部锁定客户端候选：
+
+```sh
+node --test test/client-verification/*.test.mjs
+```
+
+finally 关闭 CDP，对本次自有 CLI/浏览器进程组发送 SIGTERM、等实际退出并验证端口释放；
+超过具名停止预算时仅终止自有组，保留主错与清理错。保留本次数据和历史资源，不重试或清理其他 PID。
+实际供应、隔离、安装、鉴权、对端及功能测试分别记录；未到达的产品阶段为 `NOT_RUN`。
+Web 不替代上述 Desktop 原示例、九插件、完整 App、订阅、段级或 owner 验收。
+
+默认准备预算 `HANAWORLDS_HOST_PREPARE_TIMEOUT_MS=120000`、停止预算
+`HANAWORLDS_HOST_PREPARE_STOP_TIMEOUT_MS=10000`、观察预算
+`CANVAS_CLIENT_VERIFY_WAIT_MS=30000`，均须为正整数；可选正常端口
+`CANVAS_CLIENT_VERIFY_PORT=0`，0 由 OS 分配，拒绝 3080。
+公开 manager 返回的输出预算 `CANVAS_CLIENT_VERIFY_MANAGER_OUTPUT_BYTES=4194304` 可改，
+完整日志另留；归档和实际脚本证据没有额外隐藏输出字节上限。
+供方入口与实际 Chromium 的自动默认位置及全部可选设置见
+`tools/client-verification/README.md`。本次完整证据保存在 `evidence/d91/web-run-*/runner-result.json`。
