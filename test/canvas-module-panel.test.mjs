@@ -1,7 +1,7 @@
-import test, { before } from 'node:test';
+import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, writeFile, realpath } from 'node:fs/promises';
-import { join } from 'node:path';
+import { mkdir, mkdtemp, readFile, writeFile, realpath, readdir, cp, rm, lstat } from 'node:fs/promises';
+import { join, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -33,10 +33,37 @@ async function command(file, args, cwd, name) {
   assert.equal(exit, 0, `SETUP, not business RED: ${file} ${args.join(' ')}; see ${directory}/${name}.log\n${output.slice(-2000)}`);
   return output;
 }
+after(async () => {
+  if (!directory) return;
+    // Keep independent receipts/observations, never a complete old profile or
+    // consumer/node_modules tree. Register before any installation/setup work.
+    const archive = fileURLToPath(new URL(`../../evidence/maintenance/module-audits/${basename(directory)}/`, import.meta.url));
+    await mkdir(archive, { recursive: true });
+    const evidenceNames = new Set(['installation.json', 'browser-artifact.json', 'actual-observation.json',
+      'actual-visible-error.json', 'actual-chrome-launch.json', 'cleanup.json', 'production-pack.log', 'normal-install.log']);
+    async function retain(relative = '') {
+      for (const entry of await readdir(join(directory, relative), { withFileTypes: true })) {
+        if (entry.isSymbolicLink()) continue; // Never visit shared/source link targets.
+        const next = join(relative, entry.name);
+        if (entry.isDirectory()) {
+          if (!['consumer', 'boundary', 'npm-cache', 'tmp', 'store', 'browser-user-data'].includes(entry.name)) await retain(next);
+        } else if (entry.isFile() && (evidenceNames.has(entry.name) || relative.endsWith('process-evidence') && entry.name.endsWith('.log'))) {
+          const destination = join(archive, next);
+          await mkdir(join(destination, '..'), { recursive: true }); await cp(join(directory, next), destination);
+        }
+      }
+    }
+    await retain(); // A failed archive keeps the original evidence and reports an error.
+    assert.ok(!(await lstat(directory)).isSymbolicLink(), 'This exact created root must not turn into a shared link');
+    await rm(directory, { recursive: true, force: true });
+    await assert.rejects(lstat(directory), { code: 'ENOENT' });
+    await writeFile(join(archive, 'temporary-root-cleanup.json'), JSON.stringify({ directory, removed: true }));
+  });
 before(async () => {
   assert.ok(Number.isSafeInteger(budget) && budget > 0, 'Named DOM budget must be positive');
   assert.ok(Number.isSafeInteger(stopBudget) && stopBudget > 0, 'Named stop budget must be positive');
   await mkdir(evidenceRoot, { recursive: true }); directory = await mkdtemp(join(evidenceRoot, 'module-'));
+
   for (const name of ['tmp', 'npm-cache', 'consumer']) await mkdir(join(directory, name));
   const output = await command('npm', ['pack', '--json', '--pack-destination', directory], sourceRoot, 'production-pack');
   const packed = JSON.parse(output.slice(output.indexOf('[\n'), output.lastIndexOf('\n]') + 2))[0];

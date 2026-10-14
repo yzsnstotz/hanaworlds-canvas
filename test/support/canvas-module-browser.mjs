@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, lstat, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
@@ -148,6 +148,7 @@ window.moduleCarrierReady=true;
   const browserRoot = join(directory, 'browser'); await mkdir(browserRoot);
   let owned;
   try { owned = await launchOwned({ file: chromium, args: ['--headless=new', '--enable-automation', '--incognito',
+    '--use-mock-keychain', '--password-store=basic',
     '--no-first-run', '--no-default-browser-check', '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0',
     `--user-data-dir=${browserRoot}`, 'about:blank'], cwd: directory,
     env: { PATH: process.env.PATH, HOME: directory, TMPDIR: directory }, root: directory,
@@ -161,12 +162,20 @@ window.moduleCarrierReady=true;
     try { await host.fiber.dispose(); } finally { await stopOwned(owned, stopBudget); }
     const released = await verifyPortReleased(webUrl);
     await writeFile(join(directory, 'cleanup.json'), json({ released, streams: streams.size, process: owned.receipt() }));
+    await rm(browserRoot, { recursive: true, force: true });
+    await assert.rejects(lstat(browserRoot), { code: 'ENOENT' },
+      'The stopped browser must remove its exact owned temporary user-data directory');
   };
   try {
     const endpoint = await owned.ready(budget), origin = 'http://' + new URL(endpoint).host;
     const pages = await (await fetch(origin + '/json/list')).json();
     assert.equal(pages.filter(page => page.type === 'page').length, 1);
     cdp = connect(pages.find(page => page.type === 'page').webSocketDebuggerUrl, budget); await cdp.opened;
+    const actualLaunch = await cdp.send('Browser.getBrowserCommandLine');
+    for (const flag of ['--use-mock-keychain', '--password-store=basic'])
+      assert.ok(actualLaunch.arguments.includes(flag), `Actual Chromium must use ${flag} without asking for system authorization`);
+    await writeFile(join(directory, 'actual-chrome-launch.json'), json({ pid: owned.receipt().pid,
+      arguments: actualLaunch.arguments, classification: 'ACTUAL_CHROME_LAUNCH; NOT_PROFILE_DIRECTORY_COUNT' }));
     await cdp.send('Page.enable'); await cdp.send('Page.navigate', { url: webUrl });
     const evaluate = async expression => (await cdp.send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true })).result.value;
     const wait = async expression => evaluate(`new Promise((resolve,reject)=>{
@@ -192,5 +201,9 @@ window.moduleCarrierReady=true;
       click: async (label, navigation = false) => evaluate(`(()=>{const candidates=[...document.querySelectorAll(${literal(navigation ? '#navigation button' : '.hw-canvas-display button')})].filter(node=>node.textContent.trim()===${literal(label)}&&!node.disabled);if(candidates.length!==1)throw new Error('MODULE_CONTROL_COUNT '+candidates.length);candidates[0].click();return true;})()`),
       dispose: () => evaluate('window.moduleFixture.dispose()'),
     };
-  } catch (error) { await close(); throw error; }
+  } catch (error) {
+    try { await close(); }
+    catch (cleanupError) { error.cleanupFailure = { name: cleanupError.name, message: cleanupError.message }; }
+    throw error;
+  }
 }

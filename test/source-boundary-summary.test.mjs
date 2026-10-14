@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdtemp, mkdir, readdir, readFile, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readdir, readFile, writeFile, rm, lstat } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
-import { join } from 'node:path';
+import { join, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import canonicalize from 'canonicalize';
 import { Context, Service } from '@deepseek-ai/cordis';
@@ -19,6 +19,7 @@ const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const scope = Object.fromEntries(['worldRef', 'connectionRef', 'connectionIncarnationRef']
   .map(key => [key, undoConnection[key]]));
 const seal = body => ({ ...body, sourceRevision:sha(canonicalize(body)) });
+const createdProfiles = new Set(); // This process's exact ownership, not a directory-name guess.
 function sourceFacts(variant = 0) {
   const declaration = field => ({ kind:'LOADED_WORLD_DECLARATION', factRef:`decl:${variant}:${field}`,
     revision:sha(`loaded declaration bytes ${variant}`) });
@@ -55,6 +56,34 @@ async function fileDigests(directory) {
 async function boot(t, { body = sourceFacts(), read, absent = false,
   pairedPartition = undoConnection.capabilities.worldGeometry.partition.edge } = {}) {
   const directory = await mkdtemp(fileURLToPath(new URL('../../q142-summary-profile-', import.meta.url)));
+  createdProfiles.add(directory);
+  let ctx, env, before, setupError;
+  // Register immediately: even a mkdir/fixture/plugin setup failure must not
+  // retain a whole temporary profile. Audits outlive it in the run evidence.
+  t.after(async () => {
+    const auditRoot = fileURLToPath(new URL('../../evidence/maintenance/summary-audits/', import.meta.url));
+    try {
+      await mkdir(auditRoot, { recursive: true });
+      if (before) {
+        const after = {snapshot:canonicalize(env.canvas.store.snapshot),files:await fileDigests(directory)};
+        await writeFile(join(auditRoot, basename(directory) + '.json'), JSON.stringify({directory,before,after,effects:env.effects},null,2));
+        assert.deepEqual(env.effects,{storeCommits:0,worldMutations:0,sessionMutations:0,legacyReads:0}, 'Summary read has zero durable/session/world effects');
+        assert.equal(after.snapshot,before.snapshot,'History/projections/observations/binding remain unchanged');
+        assert.deepEqual(after.files,before.files,'All durable world and Canvas files remain byte-identical');
+      } else {
+        await writeFile(join(auditRoot, basename(directory) + '.json'), JSON.stringify({directory,stage:'SETUP',
+          error:setupError ? {name:setupError.name,message:setupError.message,code:setupError.code ?? null} : null},null,2));
+      }
+    } finally {
+      try { await ctx?.fiber.dispose(); }
+      finally {
+        await rm(directory,{recursive:true,force:true});
+        createdProfiles.delete(directory);
+        await assert.rejects(lstat(directory),{code:'ENOENT'},'This exact owned temporary profile was removed');
+      }
+    }
+  });
+  try {
   const storeDirectory = join(directory, 'data', STORE_ROOT);
   await mkdir(storeDirectory, {recursive:true});
   const world = await openUndoFixtureWorld(undoWorldFile(storeDirectory), {create:true});
@@ -70,8 +99,8 @@ async function boot(t, { body = sourceFacts(), read, absent = false,
     return value;
   } };
   await createUndoExample(storeDirectory, {world});
-  const ctx = new Context();
-  const env = {ctx, directory, body:structuredClone(body), effects, calls:[], receivers:[], owner:null, canvas:null};
+  ctx = new Context();
+  env = {ctx, directory, body:structuredClone(body), effects, calls:[], receivers:[], owner:null, canvas:null};
   ctx.provide('dshHomePath', (...parts) => join(directory,...parts));
   ctx.provide('hanaworldsWorldAdapterV6', { ...world.adapter, async call(operation, request) {
     if (!/^(Read|Discover|List|Inspect)/.test(operation)) effects.worldMutations++;
@@ -109,23 +138,34 @@ async function boot(t, { body = sourceFacts(), read, absent = false,
   env.display = await env.canvas.readObjectsHistory(undoSessionRef);
   const commit = env.canvas.store.commit.bind(env.canvas.store);
   env.canvas.store.commit = (...args) => { effects.storeCommits++; return commit(...args); };
-  const before = {snapshot:canonicalize(env.canvas.store.snapshot),files:await fileDigests(directory)};
-  t.after(async () => {
-    try {
-      const after = {snapshot:canonicalize(env.canvas.store.snapshot),files:await fileDigests(directory)};
-      // Preserve every prepared profile and its before/after audit, including behavior RED.
-      // Audit output is written only after the read phase and file comparison snapshot.
-      await writeFile(join(directory,'read-audit.json'),JSON.stringify({before,after,effects},null,2));
-      assert.deepEqual(effects,{storeCommits:0,worldMutations:0,sessionMutations:0,legacyReads:0}, 'Summary read has zero durable/session/world effects');
-      assert.equal(after.snapshot,before.snapshot,'History/projections/observations/binding remain unchanged');
-      assert.deepEqual(after.files,before.files,'All durable world and Canvas files remain byte-identical');
-    } finally { await ctx.fiber.dispose(); }
-  });
+  before = {snapshot:canonicalize(env.canvas.store.snapshot),files:await fileDigests(directory)};
   return env;
+  } catch (error) { setupError = error; throw error; }
 }
 const request = extras => ({sessionRef:undoSessionRef,...extras});
 const refusal = code => error => error.publicError?.code === code &&
   error.publicError.mutationState === 'NONE' && error.publicError.transactionRef === null;
+
+test('summary setup failure already owns a cleanup hook, retains its error audit and removes its exact profile', async t => {
+  const prior = new Set(createdProfiles), hooks = [];
+  const harness = { after: hook => hooks.push(hook) };
+  // Exercise the real existing setup path with invalid peer partition data.
+  // This is resource-lifecycle verification, not Canvas business RED.
+  let original;
+  try { await boot(harness,{pairedPartition:null}); }
+  catch (error) { original = error; }
+  t.after(async () => { for (const hook of hooks) if (createdProfiles.size > prior.size) await hook(); });
+  assert.ok(original instanceof Error, 'The actual setup exception is preserved');
+  assert.match(original.message,/EXAMPLE_TRANSACTION_FAILED/, 'Failure reaches the actual public fixture preparation');
+  assert.equal(hooks.length,1,'Cleanup is registered before fixture/plugin preparation');
+  const owned = [...createdProfiles].filter(path => !prior.has(path)); assert.equal(owned.length,1);
+  await hooks[0]();
+  await assert.rejects(lstat(owned[0]),{code:'ENOENT'});
+  const auditRoot = fileURLToPath(new URL('../../evidence/maintenance/summary-audits/',import.meta.url));
+  const audit = JSON.parse(await readFile(join(auditRoot,basename(owned[0])+'.json'),'utf8'));
+  assert.equal(audit.stage,'SETUP'); assert.equal(audit.error.message,original.message);
+  assert.equal(audit.error.name,original.name);
+});
 
 for (const variant of [0,1]) test(`public Canvas tool summary preserves every real-source field and own objects/history: ${variant}`, async t => {
   const body = sourceFacts(variant);
