@@ -3,7 +3,8 @@
  * Cross-provider errors use public JSON envelopes. */
 import type { ContractHandshake, OperationMap, ProtocolHandshake, RegionSnapshotContent,
   RegionSnapshotRef, RegionSummary, MaterialSourceConnection, GridUnit, Frame, Partition,
-  RegionSize, Ref, Digest } from './protocol/index.js';
+  RegionSize, Ref, Digest, CatalogueFacts, ReadWriteProfileRequest, ReadWriteProfileResponse } from './protocol/index.js';
+import type { Context } from '@deepseek-ai/cordis';
 import type { NativeFactsPort, WorldFactsPort } from './native-facts.js';
 import type Schema from '@deepseek-ai/schemastery';
 export type { NativeFactsPort, NativeFactsScopedState, WorldFactsPort } from './native-facts.js';
@@ -83,6 +84,10 @@ export class CanvasV5 implements CanvasV5ProtocolSource {
   readObjectsHistory(sessionRef: string | null): Promise<ObjectsHistoryDisplay>;
   /** Read the current registered world's complete public facts and Canvas history without writes. */
   readToolSummary(request: CanvasToolSummaryRequest): Promise<CanvasToolSummary>;
+  /** Complete current provider-bearing Catalogue; rejects drift and performs no writes. */
+  readCatalogue(request: CanvasCatalogueRequest): Promise<CatalogueHostFacts>;
+  /** Runtime handoff from the current registered Bridge; detach ends this handoff. */
+  attachConfigSource(bridgeContext: Context, reader: CanvasConfigSourceReader): () => void;
   /** Data-free notice after each durable commit that changes this Session's panel; ends on abort. */
   watchObjectsHistory(sessionRef: string, signal?: AbortSignal):
     AsyncGenerator<{ worldRef: string | null; registryRevision: string | null }, void, undefined>;
@@ -223,6 +228,18 @@ export interface ObjectsHistoryDisplay {
 
 /** C-world-facts@2 source identity comes from the actual registered provider instance. */
 export interface FactsProviderIdentity { readonly providerRef: Ref; readonly providerRevision: Ref }
+export interface CanvasCatalogueRequest {
+  readonly sessionRef: Ref;
+  readonly expectedConnection?: MaterialSourceConnection;
+  readonly expectedProvider?: FactsProviderIdentity;
+  readonly expectedCatalogueDigest?: Digest;
+}
+export interface CatalogueHostFacts {
+  readonly provider: FactsProviderIdentity;
+  readonly facts: CatalogueFacts;
+}
+export type CanvasConfigSourceReader = (this: Context, scope: MaterialSourceConnection,
+  request: ReadWriteProfileRequest) => Promise<ReadWriteProfileResponse>;
 export interface FactSource {
   readonly kind: 'LOADED_WORLD_DECLARATION' | 'NATIVE_OBSERVATION';
   readonly factRef: Ref;

@@ -27,6 +27,8 @@ import packageJson from '../package.json' with { type: 'json' };
 import { worldFactsReader } from './world-facts-reader.mjs';
 import { observePortCall, observeEvent } from './port-observation.mjs';
 import { summaryRequest, summarySource, summaryError, scopeKeys } from './tool-summary.mjs';
+import { catalogueRead } from './catalogue.mjs';
+import { bindConfigHandoff, attachConfigSource as attachHostConfigSource } from './config-handoff.mjs';
 
 export { CanvasStore, CanvasRegionV1, CanvasConfigSupply };
 export { Config };
@@ -286,6 +288,18 @@ export class CanvasV5 {
     // Old entries retain their durable order after timestamped rows; no invented time.
     return structuredClone({ state: registered.length ? 'READY' : 'EMPTY',
       worldRef, objects, history });
+  }
+  /** Current complete provider-bearing Catalogue, read only in this registered Host. */
+  async readCatalogue(request) {
+    const host = HOST_FACTS.get(this);
+    if (!host) throw summaryError('CAPABILITY_UNAVAILABLE');
+    return catalogueRead(this, request, host, (sessionRef, scope) => this.#adapter('ReadLocalConnection', {
+      contractVersion: ADAPTER, sessionRef, requestId: `canvas-catalogue:${randomUUID()}`,
+      connectionRef: scope.connectionRef }));
+  }
+  /** Bind the actual Bridge runtime reader without granting a JSON source-reading role. */
+  attachConfigSource(bridgeContext, reader) {
+    return attachHostConfigSource(this, bridgeContext, reader, arguments.length);
   }
   /** C-canvas additive local Host summary; no transaction or observation is persisted. */
   async readToolSummary(raw) {
@@ -1863,6 +1877,7 @@ export function apply(ctx, config) {
   facts = worldFactsReader(ctx, service, () => hostRuntime,
     () => fail('CAPABILITY_UNAVAILABLE','REQUIRED_FACT_UNKNOWN'));
   HOST_FACTS.set(service,facts);
+  bindConfigHandoff(service, ctx, () => hostRuntime, facts);
   // Host service names are Canvas's choice; the wire shapes are Contracts canvas-/world-adapter-region/v3.
   ctx.provide?.('hanaworldsCanvasRegionV1', new CanvasRegionV1(service, {
     get protocolHandshake() {
