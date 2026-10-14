@@ -5,7 +5,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { ContractError, checkContractHandshake, checkProtocolCompatibility, contractHandshake,
   digestValue, protocolRequirement, schemaBundle, validateBoundResponse, validateCatalogueFacts,
   validateRequest, validateType, validateWriteProfile } from './protocol/local/index.mjs';
-import { isHostCanvas, hostFactsPresent, captureConfigSource, assertConfigReadNotReentrant }
+import { isHostCanvas, hostFactsPresent, captureConfigSource, assertConfigReadNotReentrant, assertConfigHostLive }
   from './config-handoff.mjs';
 
 /*
@@ -70,6 +70,61 @@ export function boundDomain(snapshot, worldRef) {
     rows.set(key, row);
   }
   return [...rows.values()];
+}
+
+function sourceRefusal(raw, response) {
+  return Object.assign(new Error(response.error.code, { cause: raw }),
+    { publicError: structuredClone(response.error) });
+}
+
+// Both Host entry points use the same complete response admission and source/currentness
+// checks. Only the compiler projects the result; the compatibility port keeps the envelope.
+async function hostProfileResponse(canvas, catalogue, scope, sessionRef, request) {
+  const source = captureConfigSource(canvas);
+  const read = async () => {
+    source.live();
+    const raw = await source.read(structuredClone(scope), structuredClone(request));
+    source.live();
+    const response = validateBoundResponse(FACTS_WIRE, 'ReadWriteProfile', request, raw);
+    if (!response.error) validateWriteProfile(response.result, catalogue.value, scope);
+    return { raw, response };
+  };
+  const first = await read(); source.live();
+  if (!first.response.error) {
+    const second = await read(); source.live();
+    if (second.response.error) throw sourceRefusal(second.raw, second.response);
+    if (!same(first.response.result, second.response.result))
+      throw supplyError('CURRENT_WORLD_MISMATCH', 'REVISION_CHANGED');
+  }
+  const current = await canvas.readCatalogue({ sessionRef, expectedConnection: scope,
+    expectedProvider: catalogue.hostFacts.provider });
+  source.live();
+  if (!same(current, catalogue.hostFacts))
+    throw supplyError('CURRENT_WORLD_MISMATCH', 'REVISION_CHANGED');
+  return { ...first, live: source.live };
+}
+
+/** Original WorldFactsPort call shape in a Host: trusted Bridge, no stored observation. */
+export async function readHostWriteProfile(canvas, rawRequest) {
+  assertConfigReadNotReentrant(canvas);
+  const request = validateRequest(FACTS_WIRE, 'ReadWriteProfile', rawRequest);
+  await canvas.ready;
+  if (!canvas.store || canvas.store.unavailable)
+    throw supplyError('CAPABILITY_UNAVAILABLE', 'REQUIRED_FACT_UNKNOWN');
+  await canvas.store.busy;
+  const before = boundDomain(canvas.store.snapshot, request.worldRef);
+  if (!before.length) throw supplyError('WORLD_NOT_BOUND', 'SCOPE_DENIED');
+  if (before.length !== 1) throw supplyError('CURRENT_WORLD_MISMATCH', 'SCOPE_DENIED');
+  const { domain, sessionRefs: [sessionRef] } = before[0];
+  const scope = { worldRef: domain.worldRef, connectionRef: domain.connectionRef,
+    connectionIncarnationRef: domain.connectionIncarnationRef };
+  const hostFacts = await canvas.readCatalogue({ sessionRef, expectedConnection: scope });
+  const catalogue = { value: hostFacts.facts.catalogue, hostFacts };
+  const { response, live } = await hostProfileResponse(canvas, catalogue, scope, sessionRef, request);
+  if (!same(before, boundDomain(canvas.store.snapshot, request.worldRef)))
+    throw supplyError('CURRENT_WORLD_MISMATCH', 'REVISION_CHANGED');
+  live();
+  return structuredClone(response);
 }
 
 /** Resolve one field of one profile; never returns a value without a named source. */
@@ -154,10 +209,9 @@ export class CanvasConfigSupply {
     else checkContractHandshake(port.contractHandshake, { wires: [FACTS_WIRE], factProfiles: [] });
     const request = validateRequest(FACTS_WIRE, operation,
       { contractVersion: FACTS_WIRE, requestId: randomUUID(), worldRef });
-    const response = validateBoundResponse(FACTS_WIRE, operation, request,
-      await port.call(operation, request));
-    if (response.error) throw supplyError(response.error.code, response.error.reason,
-      { cause: response.error.code });
+    const raw = await port.call(operation, request);
+    const response = validateBoundResponse(FACTS_WIRE, operation, request, raw);
+    if (response.error) throw sourceRefusal(raw, response);
     return response.result;
   }
   #unavailable(error) {
@@ -197,39 +251,29 @@ export class CanvasConfigSupply {
     const { worldRef, connectionRef, connectionIncarnationRef } = domain;
     try {
       const scope = { worldRef, connectionRef, connectionIncarnationRef };
-      const value = isHostCanvas(this.canvas) ? await this.#hostProfile(catalogue, scope, sessionRef) :
-        validateWriteProfile(await this.#call('ReadWriteProfile', worldRef), catalogue.value, scope);
+      const profile = isHostCanvas(this.canvas) ? await this.#hostProfile(catalogue, scope, sessionRef) :
+        { value: validateWriteProfile(await this.#call('ReadWriteProfile', worldRef), catalogue.value, scope) };
+      const { value, live } = profile;
       // WriteProfile has no source revision of its own; Canvas's own digest of the exact value.
-      return { status: 'READ', value, revision: `write-profile-${observationDigest(value).slice(0, 32)}` };
+      return { status: 'READ', value, live, revision: `write-profile-${observationDigest(value).slice(0, 32)}` };
     } catch (error) { return this.#unavailable(error); }
   }
   async #hostProfile(catalogue, scope, sessionRef) {
-    const source = captureConfigSource(this.canvas);
-    const read = async () => {
-      source.live();
-      const request = validateRequest(FACTS_WIRE, 'ReadWriteProfile', {
-        contractVersion: FACTS_WIRE, requestId: randomUUID(), worldRef: scope.worldRef });
-      const raw = await source.read(structuredClone(scope), request);
-      source.live();
-      const response = validateBoundResponse(FACTS_WIRE, 'ReadWriteProfile', request, raw);
-      if (response.error) throw Object.assign(new Error(response.error.code, { cause: raw }),
-        { publicError: structuredClone(response.error) });
-      return validateWriteProfile(response.result, catalogue.value, scope);
-    };
-    const first = await read(); source.live();
-    const second = await read(); source.live();
-    const current = await this.canvas.readCatalogue({ sessionRef, expectedConnection: scope,
-      expectedProvider: catalogue.hostFacts.provider });
-    source.live();
-    if (!same(first, second) || !same(current, catalogue.hostFacts))
-      throw supplyError('CURRENT_WORLD_MISMATCH', 'REVISION_CHANGED');
-    return first;
+    const request = validateRequest(FACTS_WIRE, 'ReadWriteProfile', {
+      contractVersion: FACTS_WIRE, requestId: randomUUID(), worldRef: scope.worldRef });
+    const { raw, response, live } = await hostProfileResponse(this.canvas, catalogue, scope, sessionRef, request);
+    if (response.error) throw sourceRefusal(raw, response);
+    return { value: response.result, live };
   }
   /** Observe the current supply for one World; records any change durably in Canvas's store. */
   async read(worldRef) {
-    const { report, originalFailure } = await this.#observe(worldRef);
+    const { report, originalFailure, currentness } = await this.#observe(worldRef);
+    currentness();
     const frame = compilerReads.getStore();
-    if (frame?.supply === this) frame.originalFailure = originalFailure;
+    if (frame?.supply === this) {
+      frame.originalFailure = originalFailure;
+      frame.currentness = currentness;
+    }
     return report;
   }
   async #observe(worldRef) {
@@ -238,8 +282,10 @@ export class CanvasConfigSupply {
     await this.canvas.ready;
     const store = this.canvas.store;
     if (!store || store.unavailable) throw supplyError('CAPABILITY_UNAVAILABLE', 'REQUIRED_FACT_UNKNOWN');
+    const ownLive = isHostCanvas(this.canvas) ? () => assertConfigHostLive(this.canvas) : () => {};
+    ownLive();
     const before = this.#domain(worldRef);
-    let observation, originalFailure;
+    let observation, originalFailure, sourceLive;
     if (!before) {
       observation = { contracts: CONTRACTS_REF, domain: null,
         sessionRefs: [], sources: null,
@@ -249,6 +295,7 @@ export class CanvasConfigSupply {
     } else {
       const catalogue = await this.#catalogue(before.domain, before.sessionRefs[0]);
       const writeProfile = await this.#writeProfile(catalogue, before.domain, before.sessionRefs[0]);
+      sourceLive = writeProfile.live;
       originalFailure = writeProfile.error ?? catalogue.error;
       const after = this.#domain(worldRef);
       // The bound connection must not change while its facts are read.
@@ -269,7 +316,28 @@ export class CanvasConfigSupply {
           { status: catalogue.status, cause: catalogue.cause } } };
     }
     const digest = observationDigest(observation);
+    // The queued writer owns the authoritative candidate state. The liveness closure
+    // remains private across durability and both public return paths; it is never stored.
+    const assertDomain = state => {
+      if (!same(before ? [before] : [], boundDomain(state, worldRef)))
+        throw supplyError('STALE_REVISION', 'REVISION_CHANGED');
+    };
+    const currentness = (state = store.snapshot) => {
+      assertDomain(state);
+      try { ownLive(); sourceLive?.(); }
+      catch (error) {
+        const writeProfile = this.#unavailable(error);
+        const { type } = PROFILES.compilationConfig;
+        const fields = Object.fromEntries(definitions[type].required
+          .map(field => [field, resolveField(type, field, { writeProfile })]));
+        const unavailable = assembleProfile('compilationConfig', fields, before?.domain ?? null);
+        throw supplyError(writeProfile.stale ? 'STALE_REVISION' : 'CAPABILITY_UNAVAILABLE',
+          writeProfile.stale ? 'REVISION_CHANGED' : 'REQUIRED_FACT_UNKNOWN',
+          { missingSources: unavailable.missing, observationDigest: digest, cause: error });
+      }
+    };
     const record = await store.commit(state => {
+      currentness(state);
       state.configSupply ??= {};
       const row = state.configSupply[worldRef] ??= { sequence: 0, current: null, history: [] };
       if (row.current?.observationDigest === digest) return structuredClone(row);
@@ -281,8 +349,9 @@ export class CanvasConfigSupply {
         observedAt: now };
       return structuredClone(row);
     });
+    currentness();
     return { report: { profileVersion: SUPPLY_PROFILE, authority: AUTHORITY, worldRef,
-      current: record.current, history: record.history }, originalFailure };
+      current: record.current, history: record.history }, originalFailure, currentness };
   }
   #require(report, name, originalFailure) {
     const profile = report.current.profiles[name];
@@ -299,9 +368,10 @@ export class CanvasConfigSupply {
   }
   /** Consumer port hanaworldsCompilerConfig.read(worldRef): {compilationConfig, compilerRevision}. */
   async readCompilerConfig(worldRef) {
-    const frame = { supply: this, originalFailure: undefined };
+    const frame = { supply: this, originalFailure: undefined, currentness: undefined };
     return compilerReads.run(frame, async () => {
       const report = await this.read(worldRef);
+      frame.currentness?.();
       const profile = this.#require(report, 'compilationConfig', frame.originalFailure);
       return { compilationConfig: structuredClone(profile.value), compilerRevision: profile.revision };
     });

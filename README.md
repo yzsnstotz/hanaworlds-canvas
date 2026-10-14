@@ -163,3 +163,17 @@ checks the actual selection and source identities before and after awaiting,
 keeps physical-unit nulls and opaque provenance unchanged, and performs no writes.
 Missing facts or stale providers are named refusals. These component fixtures are
 not native world-source evidence or real UI/owner acceptance.
+
+`await canvas.readCatalogue({sessionRef})` forwards the current world's complete
+`{provider, facts}` Catalogue through Canvas's registered Host entry. Optional
+`expectedConnection`, `expectedProvider` and `expectedCatalogueDigest` reject stale
+consumer assumptions. Catalogue reads do not persist observations or change selection.
+
+Canvas keeps the original compiler and configuration observation service keys. The actual
+Bridge registers its runtime reader with `canvas.attachConfigSource(bridgeContext, reader)`;
+Canvas invokes it with that Bridge context and the full `ReadWriteProfile` request, then
+validates its complete response against current Catalogue and connection facts. Missing
+or stale attachments refuse by name. See [GADGET.md](GADGET.md) for the lifecycle and
+compatibility paths. `node scripts/catalogue-package-boundary-test.mjs` runs the original
+strict production boundary and the new Catalogue/configuration handoff business and type
+checks against the installed tgz. Fixture results do not close real Host/world/UI gates.

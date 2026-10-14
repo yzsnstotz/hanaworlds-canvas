@@ -15,7 +15,7 @@ import { checkProtocolCompatibility, contractProtocols, protocolRequirement,
 import * as contractsSdk from './protocol/local/index.mjs';
 import { CanvasRegionV1, ADAPTER_CELL_REQUIREMENT, ENGINE_GUARD_REQUIREMENTS, requireGuards,
   unmetGuards, failureDetail, restoreFailure } from './region-v1.mjs';
-import { CanvasConfigSupply } from './config-supply.mjs';
+import { CanvasConfigSupply, readHostWriteProfile } from './config-supply.mjs';
 import { expectedWrittenRecord, withDerivedReadback } from './state-profile.mjs';
 import { resolveHistoryOutcome } from './history-recovery.mjs';
 import { Config } from './placement-config.mjs';
@@ -1862,16 +1862,18 @@ export function apply(ctx, config) {
       });
     } },
     // C-world-facts (world-facts/v1) of the bound World's source, under the Host key the world
-    // source publishes (the same neutral key the desktop bridge reads). Read on every call; no
-    // engine-named service is consulted. Absent → the supply names WORLD_FACTS_PORT_ABSENT.
+    // source publishes (the same neutral key the desktop bridge reads). ReadWriteProfile
+    // adapts the original call shape to the trusted Bridge reader in this actual Host.
     worldFacts: {
       get protocolHandshake() { return ctx.get?.('hanaworldsWorldFacts')?.protocolHandshake; },
       get contractHandshake() { return ctx.get?.('hanaworldsWorldFacts')?.contractHandshake; },
       get call() {
-        const current = ctx.get?.('hanaworldsWorldFacts');
-        return typeof current?.call === 'function' ? (operation, request) =>
-          observePortCall(service, 'hanaworldsWorldFacts', operation, request,
-            () => current.call(operation, request)) : undefined;
+        return (operation, request) => observePortCall(service, 'hanaworldsWorldFacts', operation, request, () => {
+          if (operation === 'ReadWriteProfile') return readHostWriteProfile(service, request);
+          const current = ctx.get?.('hanaworldsWorldFacts');
+          if (typeof current?.call !== 'function') throw fail('CAPABILITY_UNAVAILABLE', 'REQUIRED_FACT_UNKNOWN');
+          return current.call(operation, request);
+        });
       } } });
   ctx.provide?.('hanaworldsCanvasV5', service);
   facts = worldFactsReader(ctx, service, () => hostRuntime,

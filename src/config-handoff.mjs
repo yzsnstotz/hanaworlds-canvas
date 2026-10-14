@@ -11,6 +11,15 @@ export function bindConfigHandoff(canvas, ctx, runtime, facts) {
   hosts.set(canvas, { ctx, runtime, facts, current: null });
 }
 export const isHostCanvas = canvas => hosts.has(canvas);
+export function assertConfigHostLive(canvas) {
+  const host = hosts.get(canvas);
+  if (!host) throw unavailable();
+  // Offline apply harnesses have no official registration. They can report missing
+  // sources, but captureConfigSource/readCatalogue still refuse all source authority.
+  const api = host.runtime();
+  if (!api || !(host.ctx instanceof api.Context)) return;
+  host.facts.liveOwn();
+}
 export function hostFactsPresent(canvas) {
   return !!hosts.get(canvas)?.ctx.get?.('hanaworldsWorldFacts');
 }

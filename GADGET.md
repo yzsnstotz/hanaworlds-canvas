@@ -15,8 +15,9 @@ It consumes `world-adapter/v8` and `world-adapter-region/v3` at minimum minor 0
 with their published write-path capability tokens. Service keys remain
 `hanaworldsCanvasV5`, `hanaworldsCanvasRegionV1`, `hanaworldsWorldAdapterV6`,
 `hanaworldsWorldAdapterRegionV1`, and the `hanaworldsWorkshopV3` session port.
-Configuration facts come from the world source's C-world-facts port `hanaworldsWorldFacts`
-(`world-facts/v1` ReadCatalogue + ReadWriteProfile, the same key the desktop bridge reads);
+Canvas reads Catalogue through `hanaworldsWorldFacts.readCatalogue(scope)` in its actual
+Host context. Configuration facts come from the same neutral source's `ReadWriteProfile`,
+called by the actual Bridge context and handed to Canvas with `attachConfigSource`;
 `hanaworldsWorldFacts.readScopedState(connectionRef, positions)` supplies the documented
 read-only scoped state through Canvas's active official Cordis context. Missing, malformed,
 inactive or replaced peers refuse with named errors; digests remain opaque.
@@ -61,6 +62,27 @@ the world source's `ReadWriteProfile.compilationConfig` (opaque `writeBackend
 {profileId, revision}` included), checked against the current connection and the
 `ReadCatalogue` digest; an undeclared backend, absent port, peer error, corrupt or stale
 facts refuse by name without defaults. No engine, mod or package name is read.
+
+Canvas alone registers `hanaworldsCompilerConfig.read(worldRef)` and
+`hanaworldsCanvasConfigSupply.read(worldRef)`. The registered Bridge attaches a runtime
+reader with `canvas.attachConfigSource(bridgeContext, async function (scope, request) {
+return this.get('hanaworldsWorldFacts').call('ReadWriteProfile', request); })` and owns
+the returned disposer. Both installation orders work after Canvas is ready. Missing,
+disposed or replaced Bridge/facts/Adapter registrations refuse; a new explicit attachment
+restores availability. A previous disposer cannot revoke a later attachment. Callback
+reentry into its own compiler supply is refused with `CONFIG_SOURCE_REENTRANT`.
+The original Host `WorldFactsPort.call('ReadWriteProfile', request)` compatibility path
+uses that same trusted reader; it grants no direct Canvas access to Bridge-only source reads.
+
+`canvas.readCatalogue({sessionRef, expectedConnection?, expectedProvider?,
+expectedCatalogueDigest?})` forwards complete `{provider, facts}` for the selected world.
+Each optional expectation, when present, must be complete. Values, nulls, source revisions,
+presentation and opaque extensions are preserved. Full source/provider/connection rechecks
+reject world changes, reopenings and source drift; the read performs no commits or writes.
+Source exceptions retain their original identity and cause. Compiler errors preserve the
+full source error through `Error.cause`, while durable observations retain only their
+compatible JSON diagnostics. These are C-canvas@2 / C-world-facts@2 Host capabilities;
+constructor fixtures remain component evidence, not source authorization.
 
 The App panel reads the selected session's objects/history and performs the published
 latest-entry Undo and the corresponding Redo. It follows `hanaworldsCanvasDisplay/changes`, a Typert stream that yields

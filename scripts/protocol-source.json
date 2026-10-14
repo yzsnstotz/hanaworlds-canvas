@@ -51,23 +51,27 @@
     "test/fixtures/protocol/skill-site-rules.json": "dda8f9dd1da5da8fd97ab261bc5ea2a26adf687c573a1cb4b63aaeb0586f91d2",
     "test/fixtures/protocol/world-error.json": "345030923341638e99061097e263b41ee3d648c1140a2354142f2531971566b9",
     "test/fixtures/protocol/world-source-facts.json": "2b02602d7d225c5d6dc3b1b59ec697011b578925d40514021cea60528b8f259b",
-    "types/index.d.ts": "824acafb1e0dfe28df30b615f28d2d8c34fd5a8d59fcb8fc4dd02197afcef23c",
+    "types/index.d.ts": "67c6e9bb4dda80a9bfc52b361e47491fa6f6f88a2d3e284d880e60f13bd90428",
     "types/native-facts-consumer.d.ts": "20fa35517b278ceab59882e2a2da29bbce6cef2681b2e315724dcd35a3fcf99a",
-    "types/native-facts.d.ts": "fcf37800fc6365486f829f18566356a43ac0b384c39985d20f57ad63e72c583c",
+    "types/native-facts.d.ts": "bd4897e7c966c55e32108be506f45365c82eff04040eadea0968019977934bae",
     "types/protocol/contracts.d.ts": "21d3538479e86e46b93e47ffe5846513c7af0879a17a3ca8030dc3df2a078c5a",
     "types/protocol/index.d.ts": "bacb68c84cf3dde0162c1203312b9b23ca2f8ce867f165c681e2e97dc0df36cf"
   },
   "publicAdditions": {
-    "C-world-facts@2": "readScopedState and Error.source from provider 418bffc root public declarations; consumer owns exact shapes",
-    "C-canvas@2": "Error.source preserves world-source provenance; readToolSummary request/result and full CanvasSourceFacts declarations follow the card-owned additive C-canvas document and formal C-world-facts@2"
+    "C-world-facts@2": "readScopedState and Error.source from provider 418bffc root public declarations; consumer owns exact shapes; provider-bearing readCatalogue full CatalogueHostFacts from formal version 2, Canvas role only; Bridge remains actual ReadWriteProfile source reader",
+    "C-canvas@2": "Error.source preserves world-source provenance; readToolSummary request/result and full CanvasSourceFacts declarations follow the card-owned additive C-canvas document and formal C-world-facts@2; readCatalogue provider-bearing full Catalogue transfer and attachConfigSource trusted Bridge runtime handoff retain original CompilerConfig/ConfigSupply/WorldFactsPort signatures under D-179"
   },
   "documentReadback": {
-    "C-canvas": "7e20635e1acc7b785942a7b54c7d8d41f01be64009f5a608f5e13dc023babc69",
+    "C-canvas": "c6b03a48ec03b5843e10e95016005f6be4fefc1ce29fb4399792358d094083da",
     "C-world-adapter": "e033230f0192751360b6e9d3fb32b74442438ac667bb1d6069981b45dad5c3d5",
-    "C-world-facts": "07c2bc7000d4179c59b0c8d65204868822986ac5d2e05e7fb35c75020160b01e"
+    "C-world-facts": "c1a296c8a422e1ca8ff6a30111db465465c047cdedd03f43e9a59dbf6620e4b9"
   },
   "cardOwnedAddition": {
     "document": "C-canvas readToolSummary additive contract",
     "sha256": "e52881027bfd6273f253de74f7bc114d79e35eafd2842782f50193b98f5a228a"
+  },
+  "documentedAdditions": {
+    "C-canvas version 6": "readCatalogue and trusted Bridge attachConfigSource, complete values/errors/currentness, original config observation and compiler compatibility; D-178/D-179",
+    "C-world-facts version 2": "Current Catalogue Host shape and complete world-facts/v1 CatalogueFacts/WriteProfile closure; Q-285/Q-288"
   }
 }
