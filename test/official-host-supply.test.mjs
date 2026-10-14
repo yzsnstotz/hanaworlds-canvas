@@ -30,6 +30,13 @@ async function compose() {
   // Complete published official DSH dependency composition, rather than the
   // smaller Canvas development graph. The manager installs Canvas separately.
   const dependencies = { '@deepseek-ai/dsh': '0.2.1-alpha.2',
+    // This root's install-canvas.mjs directly imports the public operations
+    // export. Declare the exact official DSH dependency; npm need not hoist
+    // DSH's nested manager for another consumer's bare import.
+    '@deepseek-ai/dsh-plugin-manager': '0.2.1-alpha.2',
+    // Close the manager's public peer graph with the official Loader version
+    // matching the unchanged Cordis alpha.1 peer, rather than a newer alpha.2.
+    '@deepseek-ai/cordis-plugin-loader': '1.0.6-alpha.1',
     '@deepseek-ai/cordis': '4.0.5-alpha.1', '@deepseek-ai/dsh-typert-protocol': '0.2.1-alpha.2',
     '@deepseek-ai/dsh-typert-registry': '0.2.1-alpha.2', '@deepseek-ai/dsh-api-gateway': '0.2.1-alpha.2',
     zod: '4.4.3', react: '18.3.1' };
@@ -37,10 +44,27 @@ async function compose() {
     private: true, type: 'module', dependencies }, null, 2));
   const bootstrap = await command('npm', ['install', '--no-audit', '--no-fund'], installation, 'official-install.log');
   assert.equal(bootstrap.code, 0, `Official supply SETUP failure (not behavior RED): ${directory}\n${bootstrap.output.slice(-3000)}`);
+  const dshManifest = JSON.parse(await readFile(join(installation, 'node_modules/@deepseek-ai/dsh/package.json'), 'utf8'));
+  const managerManifest = JSON.parse(await readFile(join(installation, 'node_modules/@deepseek-ai/dsh-plugin-manager/package.json'), 'utf8'));
+  const loaderManifest = JSON.parse(await readFile(join(installation, 'node_modules/@deepseek-ai/cordis-plugin-loader/package.json'), 'utf8'));
+  assert.equal(dshManifest.dependencies['@deepseek-ai/dsh-plugin-manager'], dependencies['@deepseek-ai/dsh-plugin-manager'],
+    'The declared direct manager version must equal the actual fixed official DSH manifest');
+  assert.equal(managerManifest.version, dependencies['@deepseek-ai/dsh-plugin-manager']);
+  assert.ok(managerManifest.exports['./operations'], 'The installed manager exposes the public operations entry');
+  assert.equal(dshManifest.dependencies['@deepseek-ai/cordis-plugin-loader'], `~${dependencies['@deepseek-ai/cordis-plugin-loader']}`);
+  assert.equal(managerManifest.peerDependencies['@deepseek-ai/cordis-plugin-loader'], `~${dependencies['@deepseek-ai/cordis-plugin-loader']}`);
+  assert.equal(loaderManifest.version, dependencies['@deepseek-ai/cordis-plugin-loader']);
+  assert.equal(loaderManifest.peerDependencies['@deepseek-ai/cordis'], `~${dependencies['@deepseek-ai/cordis']}`,
+    'Normal Loader peer requirements must retain the fixed Cordis version');
+  await writeFile(join(directory, 'installation-declarations.json'), JSON.stringify({ dependencies,
+    officialDshVersion: dshManifest.version, officialManagerDependency: dshManifest.dependencies['@deepseek-ai/dsh-plugin-manager'],
+    directManagerVersion: managerManifest.version, publicOperationsExport: managerManifest.exports['./operations'],
+    loaderVersion: loaderManifest.version, loaderCordisPeer: loaderManifest.peerDependencies['@deepseek-ai/cordis'] }, null, 2));
   // DSH belongs to the installation anchor, not to its plugin profile. The
   // profile explicitly supplies Canvas's public peers and Gateway test faces;
   // re-installing the application here would test its native build approvals.
-  const profileDependencies = Object.fromEntries(Object.entries(dependencies).filter(([name]) => name !== '@deepseek-ai/dsh'));
+  const profileDependencies = Object.fromEntries(Object.entries(dependencies)
+    .filter(([name]) => !['@deepseek-ai/dsh', '@deepseek-ai/dsh-plugin-manager', '@deepseek-ai/cordis-plugin-loader'].includes(name)));
   await writeFile(join(profile, 'package.json'), JSON.stringify({ name: 'canvas-official-profile-test',
     private: true, type: 'module', dependencies: profileDependencies, dsh: { profile: { bundles: [] } } }, null, 2));
   const pack = await command('npm', ['pack', '--json', '--pack-destination', directory], root, 'canvas-pack.log',
