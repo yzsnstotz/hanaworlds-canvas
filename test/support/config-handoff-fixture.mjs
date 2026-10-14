@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Context, Service } from '@deepseek-ai/cordis';
 import canvasPlugin from '../../src/index.mjs';
-import { validateType, validateRequest } from '../../src/protocol/local/index.mjs';
+import { validateType, validateRequest, canonicalJSON } from '../../src/protocol/local/index.mjs';
 import { supplyFixturePeers, supplySessionRef, supplyWorldRef } from '../../scripts/config-supply-fixture.mjs';
 
 // Peer facts are documented fixtures. Registration/tracking and Canvas entry are real.
@@ -98,12 +98,18 @@ export async function configHandoffFixture(t, { order = 'canvas-first', bridge =
   };
   env.auditBaseline = structuredClone(env.canvas.store.snapshot);
   audit = () => {
-    const { configSupply: oldObservation, ...before } = env.auditBaseline;
-    const { configSupply: newObservation, ...after } = env.canvas.store.snapshot;
-    assert.deepEqual(after, before, 'Configuration observations cannot change history, Session or bindings');
+    assertConfigAuditUnchanged(env.auditBaseline, env.canvas.store.snapshot);
     assert.deepEqual(mutations, [], 'No extra Session action');
   };
   return env;
+}
+export function assertConfigAuditUnchanged(baseline, snapshot) {
+  const { configSupply: oldObservation, ...before } = baseline;
+  const { configSupply: newObservation, ...after } = snapshot;
+  // Normalize both sides, including a baseline explicitly reset by connection tests.
+  // Only the previously allowed configSupply observation is excluded.
+  assert.equal(canonicalJSON(after), canonicalJSON(before),
+    'Configuration observations cannot change history, Session or bindings');
 }
 export function attachConfigFixture(env, { context = env.bridgeContext, reader = env.reader,
   receiver = env.canvas } = {}) {

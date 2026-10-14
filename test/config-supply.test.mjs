@@ -11,8 +11,87 @@ const { CanvasV5, CanvasStore, CanvasConfigSupply, assembleProfile, STORE_ROOT,
 import { g3CellHandshake } from './support/g3-adapter-handshake.mjs';
 import { fixtureSessions } from '../scripts/fixture-sessions.mjs';
 import { guardSlot } from '../scripts/fixture-engine-guards.mjs';
-import { configHandoffFixture, attachConfigFixture } from './support/config-handoff-fixture.mjs';
-import { Context } from '@deepseek-ai/cordis';
+import { configHandoffFixture, attachConfigFixture, assertConfigAuditUnchanged } from './support/config-handoff-fixture.mjs';
+import { Context, symbols } from '@deepseek-ai/cordis';
+
+function observeLookups(ctx) {
+  // Cordis 4.0.5-alpha.1 mixes ctx.get from this root's reflection service.
+  // Wrap its actual callable, not the nonexistent Context.prototype.get.
+  const target = ctx.reflect[symbols.original] ?? ctx.reflect;
+  const descriptor = Object.getOwnPropertyDescriptor(target, 'get');
+  const originalGet = target.get;
+  assert.equal(typeof originalGet, 'function');
+  const asked = new Set();
+  Object.defineProperty(target, 'get', { configurable: true, writable: true,
+    value: function (name, ...args) {
+      asked.add(name);
+      return Reflect.apply(originalGet, this, [name, ...args]);
+    } });
+  return { asked, restore() {
+    if (descriptor) Object.defineProperty(target, 'get', descriptor);
+    else delete target.get;
+  } };
+}
+
+test('Q291 configuration audit accepts idle boot and rejects business state changes', async t => {
+  const env = await configHandoffFixture(t);
+  const snapshot = env.canvas.store.snapshot;
+  assertConfigAuditUnchanged(env.auditBaseline, snapshot);
+  assertConfigAuditUnchanged(structuredClone(snapshot), snapshot);
+  const changed = structuredClone(snapshot);
+  assert.equal(typeof changed.sessions[env.sessionRef].selectionRevision, 'string');
+  changed.sessions[env.sessionRef].selectionRevision = 'session-audit-change';
+  assert.throws(() => assertConfigAuditUnchanged(env.auditBaseline, changed), { code: 'ERR_ASSERTION' });
+  const removed = structuredClone(snapshot);
+  const key = Object.keys(removed).find(key => key !== 'configSupply');
+  assert.ok(key); delete removed[key];
+  assert.throws(() => assertConfigAuditUnchanged(env.auditBaseline, removed), { code: 'ERR_ASSERTION' });
+  const added = structuredClone(snapshot);
+  added.auditUnexpectedKey = null;
+  assert.throws(() => assertConfigAuditUnchanged(env.auditBaseline, added), { code: 'ERR_ASSERTION' });
+  added.auditUnexpectedKey = undefined;
+  assert.throws(() => assertConfigAuditUnchanged(env.auditBaseline, added));
+});
+
+test('Q291 passive spy sees real Context lookups without Canvas and restores descriptors', async t => {
+  const ctx = new Context(); const other = new Context();
+  t.after(async () => { await ctx.fiber.dispose(); await other.fiber.dispose(); });
+  const target = ctx.reflect[symbols.original];
+  const before = Object.getOwnPropertyDescriptor(target, 'get');
+  const prototypeBefore = Object.getOwnPropertyDescriptor(Context.prototype, 'get');
+  ctx.provide('auditLookupProbe', 42);
+  other.provide('auditOtherRootProbe', 99);
+  const lookupFailure = new Error('original lookup failure');
+  ctx.provide('auditThrowProbe', Object.defineProperty({}, symbols.tracker,
+    { get() { throw lookupFailure; } }));
+  assert.equal(ctx.get('hanaworldsCanvasV5'), undefined);
+  assert.equal(ctx.get('auditLookupProbe'), 42);
+  assert.throws(() => ctx.get('auditThrowProbe'), error => error === lookupFailure);
+  const spy = observeLookups(ctx); t.after(() => spy.restore());
+  assert.equal(ctx.get('auditLookupProbe'), 42);
+  assert.equal(ctx.get('auditMissingProbe'), undefined);
+  assert.throws(() => ctx.get('auditThrowProbe'), error => error === lookupFailure);
+  const isolated = ctx.isolate('auditLookupProbe');
+  isolated.provide('auditLookupProbe', 43);
+  assert.equal(isolated.get('auditLookupProbe'), 43, 'Actual lookup retains the consuming context');
+  assert.equal(ctx.get('auditLookupProbe'), 42);
+  assert.equal(other.get('auditOtherRootProbe'), 99);
+  assert.deepEqual([...spy.asked].sort(), ['auditLookupProbe', 'auditMissingProbe', 'auditThrowProbe']);
+  spy.restore();
+  assert.deepEqual(Object.getOwnPropertyDescriptor(target, 'get'), before);
+  assert.deepEqual(Object.getOwnPropertyDescriptor(Context.prototype, 'get'), prototypeBefore);
+  assert.equal(ctx.get('auditLookupProbe'), 42);
+  // An existing own descriptor is also restored in full, including its flags.
+  Object.defineProperty(target, 'get', { value: target.get,
+    configurable: true, enumerable: true, writable: false });
+  const ownBefore = Object.getOwnPropertyDescriptor(target, 'get');
+  const ownSpy = observeLookups(ctx);
+  try { assert.equal(ctx.get('auditLookupProbe'), 42); }
+  finally { ownSpy.restore(); }
+  assert.deepEqual(Object.getOwnPropertyDescriptor(target, 'get'), ownBefore);
+  delete target.get;
+  assert.deepEqual(Object.getOwnPropertyDescriptor(target, 'get'), before);
+});
 
 // FIXTURE peer inputs only (contracts-shaped Adapter, a C-world-facts world-facts/v1 source and a
 // Session port). Canvas's assembly, provenance, revision and invalidation are what is under test.
@@ -495,17 +574,11 @@ test('config fact read changing the selected connection is rejected before recor
 
 test('host apply() uses neutral Catalogue and trusted Bridge configuration facts, never an engine-named service', async t => {
   // Q-288: the former fake-context Host test wrongly authorized Canvas's direct
-  // ReadWriteProfile. This card has no test lock; retain its successful field,
+  // ReadWriteProfile. Q-291 unlocks this test; retain its successful field,
   // missing-source and legacy-name assertions through the real compatible handoff.
   const env = await configHandoffFixture(t);
-  const asked = new Set();
-  const originalGet = Context.prototype.get;
-  t.after(() => { Context.prototype.get = originalGet; });
-  // Observe actual Context lookups without changing their receiver or result.
-  Context.prototype.get = function (name, ...args) {
-    if (this.root === env.ctx.root) asked.add(name);
-    return Reflect.apply(originalGet, this, [name, ...args]);
-  };
+  const { asked, restore } = observeLookups(env.ctx);
+  t.after(restore);
   env.ctx.provide('hanaworldsLuantiNativeFacts', {
     readCatalogue: () => assert.fail('engine-named Catalogue read'),
     readConfigEngineFacts: () => assert.fail('engine-named config read') });
@@ -513,6 +586,7 @@ test('host apply() uses neutral Catalogue and trusted Bridge configuration facts
   const row = (await env.supply.read(env.worldRef)).current.profiles.compilationConfig.fields.writeBackend;
   assert.equal(row.status, 'SUPPLIED');
   assert.deepEqual(row.value, knownProfile.writeBackend.writeBackend);
+  assert.ok(asked.has('hanaworldsWorldFacts'), 'Spy must observe actual neutral source lookup');
   assert.equal(asked.has('hanaworldsLuantiNativeFacts'), false);
   assert.ok(env.reads.every(request => request.worldRef === env.worldRef));
   await env.sourceFiber.dispose();

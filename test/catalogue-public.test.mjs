@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { Context, Service } from '@deepseek-ai/cordis';
 import canvasPlugin, { STORE_ROOT } from '../src/index.mjs';
-import { validateCatalogueFacts, validateType, digestValue } from '../src/protocol/local/index.mjs';
+import { validateCatalogueFacts, validateType, digestValue, canonicalJSON } from '../src/protocol/local/index.mjs';
 import { supplyFixturePeers, supplySessionRef as sessionRef, supplyWorldRef as worldRef }
   from '../scripts/config-supply-fixture.mjs';
 
@@ -105,13 +105,14 @@ async function boot(t, { absent = false, unbound = false } = {}) {
     assert.equal(selected.error, null, JSON.stringify(selected.error));
   }
   env.adapterReads.length = 0;
-  const before = { snapshot: structuredClone(env.canvas.store.snapshot), files: await files(directory) };
+  // Compare immutable, complete JSON values: structuredClone changes null prototypes.
+  const before = { snapshot: canonicalJSON(env.canvas.store.snapshot), files: await files(directory) };
   let commits = 0;
   const commit = env.canvas.store.commit.bind(env.canvas.store);
   env.canvas.store.commit = (...args) => { commits++; return commit(...args); };
   verify = async () => {
     assert.equal(commits, 0, 'Catalogue read cannot persist observations, history, binding or Session');
-    assert.deepEqual(env.canvas.store.snapshot, before.snapshot);
+    assert.equal(canonicalJSON(env.canvas.store.snapshot), before.snapshot);
     assert.deepEqual(await files(directory), before.files, 'All Canvas durable files remain byte-identical');
     assert.ok(env.adapterReads.every(op => op === 'ReadLocalConnection'), 'No world write, prepare or connection action');
   };
@@ -127,6 +128,28 @@ function revise(env) {
   env.body.catalogueDigest = digestValue('catalogue', env.body.catalogue).sha256;
   env.body.presentation['fixture:stone'].displayName = 'Changed source display';
 }
+
+test('Q291 Catalogue audit accepts idle boot and detects value and key changes', async t => {
+  const env = await boot(t); // The normal after hook runs with no Catalogue call.
+  const snapshot = env.canvas.store.snapshot;
+  const baseline = canonicalJSON(snapshot);
+  assert.equal(canonicalJSON(structuredClone(snapshot)), baseline);
+  const changed = structuredClone(snapshot);
+  assert.equal(typeof changed.sessions[sessionRef].selectionRevision, 'string');
+  changed.sessions[sessionRef].selectionRevision = 'session-audit-change';
+  assert.throws(() => assert.equal(canonicalJSON(changed), baseline), { code: 'ERR_ASSERTION' });
+  const removed = structuredClone(snapshot);
+  const key = Object.keys(removed)[0];
+  assert.ok(key);
+  delete removed[key];
+  assert.throws(() => assert.equal(canonicalJSON(removed), baseline), { code: 'ERR_ASSERTION' });
+  const added = structuredClone(snapshot);
+  added.auditUnexpectedKey = null;
+  assert.throws(() => assert.equal(canonicalJSON(added), baseline), { code: 'ERR_ASSERTION' });
+  // Strict admission must not silently drop an existing undefined-valued key.
+  added.auditUnexpectedKey = undefined;
+  assert.throws(() => canonicalJSON(added));
+});
 
 test('Q282 current Catalogue is complete, source-bound, copied and forwarded through Canvas', async t => {
   const env = await boot(t);
