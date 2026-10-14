@@ -1,29 +1,53 @@
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, writeFile, cp } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, cp } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
+import { createOfficialHostLifecycle } from './support/official-host-lifecycle.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const runRoot = fileURLToPath(new URL('../../', import.meta.url));
-let directory, installation, profile;
+let directory, installation, profile, lifecycle;
+const failures = [];
+function rememberError(stage, error) {
+  failures.push({ stage, error });
+  lifecycle?.recordError(stage, error);
+}
+const observed = (stage, body) => async () => {
+  try { await body(); } catch (error) { rememberError(stage, error); throw error; }
+};
+// File-suite hook: compose is shared by the installed types and runtime tests.
+// Register before creating any resources; a per-test hook deletes too early.
+after(async () => {
+  if (setup) await setup.catch(() => {}); // Original setup failure remains in the tests/audit.
+  if (!lifecycle) return;
+  const audit = await lifecycle.finalize({ diagnostics: ['official-install.log', 'canvas-pack.log',
+    'manager-install.log', 'public-types.log', 'runtime.log', 'installation-declarations.json',
+    'installation/manager-result.json', 'installation/package.json', 'installation/package-lock.json',
+    'profile/package.json', 'profile/pnpm-lock.yaml'] });
+  assert.equal(audit.removed, true, 'The complete installation/profile root must disappear after this suite');
+  assert.equal(audit.protectedUnchanged, true, 'Source/input/shared/link targets must survive');
+  console.log(`OFFICIAL_HOST_SUPPLY_ARCHIVE ${audit.archive}`);
+});
 async function command(binary, args, cwd, log, extra = {}) {
   const cache = join(runRoot, 'npm-cache');
-  const child = spawn(binary, args, { cwd, env: { PATH: process.env.PATH, HOME: directory,
+  return lifecycle.command(binary, args, cwd, log, { PATH: process.env.PATH, HOME: directory,
     TMPDIR: join(directory, 'temp'), CI: 'true', XDG_CONFIG_HOME: join(directory, 'config'),
-    npm_config_cache: cache, NPM_CONFIG_CACHE: cache, ...extra }, stdio: ['ignore', 'pipe', 'pipe'] });
-  let output = '';
-  child.stdout.on('data', bytes => { output += bytes; });
-  child.stderr.on('data', bytes => { output += bytes; });
-  const code = await new Promise((resolve, reject) => { child.on('error', reject); child.on('close', resolve); });
-  await writeFile(join(directory, log), output);
-  return { code, output };
+    npm_config_cache: cache, NPM_CONFIG_CACHE: cache, ...extra });
 }
 
 let setup;
 async function compose() {
-  directory = await mkdtemp(join(runRoot, 'official-host-supply-'));
+  await mkdir(join(runRoot, 'npm-cache'), { recursive: true });
+  lifecycle = await createOfficialHostLifecycle({ runRoot,
+    archiveRoot: join(runRoot, 'evidence/q271/official-host-audits'),
+    protectedPaths: ['src', 'types', 'fixtures', 'examples', 'scripts', 'package.json', 'package-lock.json',
+      'cordis.patch.yml', 'test/official-host-types.mts', 'test/support/official-host-install.mjs',
+      'test/support/official-host-runtime.mjs'].map(path => join(root, path)),
+    sharedPaths: [root, join(runRoot, 'npm-cache')] });
+  directory = lifecycle.directory;
+  for (const { stage, error } of failures) lifecycle.recordError(stage, error);
   installation = join(directory, 'installation'); profile = join(directory, 'profile');
   for (const name of ['installation', 'profile', 'temp', 'config', 'npm-cache', 'boundary'])
     await mkdir(join(directory, name));
@@ -77,9 +101,9 @@ async function compose() {
   assert.equal(installed.code, 0, `Official manager install failed: ${directory}\n${installed.output.slice(-3000)}`);
   console.log(`OFFICIAL_HOST_SUPPLY_EVIDENCE ${directory}`);
 }
-const ready = () => setup ??= compose();
+const ready = () => setup ??= compose().catch(error => { rememberError('setup', error); throw error; });
 
-test('Canvas display public types compose with the official Host APIs without implicit any', async () => {
+test('Canvas display public types compose with the official Host APIs without implicit any', observed('source-types', async () => {
   const child = spawn(process.execPath, [join(root, 'node_modules/typescript/bin/tsc'), '--noEmit', '--strict',
     '--lib', 'ES2022,DOM,ESNext.Disposable', '--target', 'ES2022', '--module', 'NodeNext',
     '--moduleResolution', 'NodeNext', 'test/official-host-types.mts'], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -87,22 +111,22 @@ test('Canvas display public types compose with the official Host APIs without im
   child.stdout.on('data', bytes => { output += bytes; }); child.stderr.on('data', bytes => { output += bytes; });
   const code = await new Promise((resolve, reject) => { child.on('error', reject); child.on('close', resolve); });
   assert.equal(code, 0, `Public declaration failure:\n${output}`);
-});
+}));
 
-test('Canvas installed through the full official installation manager compiles with official Host/Zod peers', async () => {
+test('Canvas installed through the full official installation manager compiles with official Host/Zod peers', observed('installed-types', async () => {
   await ready();
   await cp(new URL('./official-host-types.mts', import.meta.url), join(profile, 'public-types.mts'));
   const result = await command(process.execPath, [join(root, 'node_modules/typescript/bin/tsc'), '--noEmit', '--strict',
     '--lib', 'ES2022,DOM,ESNext.Disposable', '--target', 'ES2022', '--module', 'NodeNext',
     '--moduleResolution', 'NodeNext', 'public-types.mts'], profile, 'public-types.log');
   assert.equal(result.code, 0, `Public Canvas declaration failure: ${directory}\n${result.output}`);
-});
+}));
 
-test('manager-selected production Canvas keeps its official pins and runnable public panel ports', async () => {
+test('manager-selected production Canvas keeps its official pins and runnable public panel ports', observed('runtime', async () => {
   await ready();
   await cp(new URL('./support/official-host-runtime.mjs', import.meta.url), join(profile, 'runtime.mjs'));
   const result = await command(process.execPath, ['runtime.mjs'], profile, 'runtime.log');
   assert.equal(result.code, 0, `Installed Canvas runtime failure: ${directory}\n${result.output}`);
   const manifest = JSON.parse(await readFile(join(profile, 'package.json'), 'utf8'));
   assert.ok(manifest.dsh.profile.bundles.includes('hanaworlds-canvas'), 'Manager must select the bundle');
-});
+}));
