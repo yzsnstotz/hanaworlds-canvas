@@ -1,4 +1,4 @@
-import { access, mkdir, realpath } from 'node:fs/promises';
+import { access, mkdir, realpath, writeFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -79,6 +79,7 @@ export async function startAuthenticatedBrowser({ root, env, owned, redact, logi
   const browserUserData = join(root, 'browser-user-data'); await mkdir(browserUserData);
   const binary = await chromiumExecutable(executable);
   const browser = await launchOwned({ file: binary, args: ['--headless=new', '--enable-automation', '--incognito',
+    '--use-mock-keychain', '--password-store=basic',
     '--no-first-run', '--no-default-browser-check', '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0',
     `--user-data-dir=${browserUserData}`, 'about:blank'], cwd: root, env, root, label: 'chromium', redact,
     readyMatch: line => {
@@ -105,10 +106,16 @@ export async function startAuthenticatedBrowser({ root, env, owned, redact, logi
     // Authentication occurs through the original Web token-to-cookie redirect in Chromium.
     await cdp.send('Page.navigate', { url: loginURL }); await loaded;
     const commandLine = await cdp.send('Browser.getBrowserCommandLine');
+    const verifiedFlags = ['--use-mock-keychain', '--password-store=basic'];
+    for (const flag of verifiedFlags) if (!commandLine.arguments.includes(flag))
+      throw new RunnerFailure('CANVAS_VERIFY_BROWSER_PERMISSION_POLICY_INVALID',
+        'The actual isolated browser command line is missing its approved permission policy.', { missingFlag: flag });
     const actualFlag = commandLine.arguments.find(argument => argument.startsWith('--user-data-dir='));
     if (!actualFlag || await realpath(actualFlag.slice('--user-data-dir='.length)) !== await realpath(browserUserData))
       throw new RunnerFailure('CANVAS_VERIFY_BROWSER_ISOLATION_INVALID', 'The actual browser command line has a different user-data root.');
     await confined(root, actualFlag.slice('--user-data-dir='.length), 'actual browser user-data');
+    await writeFile(join(root, 'browser-command-line.json'), JSON.stringify({
+      arguments: commandLine.arguments, browserUserData, verifiedFlags }, null, 2));
     const { cookies } = await cdp.send('Network.getCookies', { urls: [webUrl.href] });
     const cookieName = 'dsh-auth-' + createHash('sha256').update(webUrl.host).digest('base64url');
     const cookie = cookies.find(value => value.name === cookieName);

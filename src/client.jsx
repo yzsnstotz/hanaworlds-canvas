@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { ObjectsHistoryView, undoFailureLabel, redoFailureLabel, readFailureLabel } from './display-view.mjs';
+import { ObjectsHistoryView, undoFailureLabel, redoFailureLabel, readFailureLabel, remoteFailureLabel } from './display-view.mjs';
 import { displayClientContribution } from './display-remote.mjs';
 
 const PANEL_ID = 'hanaworlds-canvas-objects-history';
 const css = `
 .hw-canvas-display{box-sizing:border-box;height:100%;overflow:auto;padding:calc(var(--dsh-frame-top-clearance,48px) + 24px) 32px 32px;padding-left:max(32px,var(--dsh-frame-leading-clearance,0px));color:var(--text-primary,#24352e);background:var(--bg-primary,#f4f7f3);font-family:inherit}
 .hw-canvas-header{display:flex;gap:24px;justify-content:space-between;align-items:flex-start;max-width:1180px;margin:0 auto 24px}.hw-canvas-eyebrow{font-size:11px;font-weight:700;letter-spacing:.15em;color:#518467}.hw-canvas-header h1{font-size:30px;letter-spacing:-.04em;line-height:1.2;margin:10px 0}.hw-canvas-header p{font-size:14px;color:var(--text-secondary,#6a776f);margin:0;line-height:1.7}.hw-canvas-actions{display:flex;gap:8px;flex-wrap:wrap;padding-top:24px}.hw-canvas-display button{border:1px solid #c2cec6;background:var(--bg-secondary,#fff);color:inherit;cursor:pointer;font:inherit;font-size:13px;border-radius:8px;padding:9px 12px}.hw-canvas-display button:hover{border-color:#518467}.hw-canvas-display button:focus-visible{outline:2px solid #357952;outline-offset:3px}.hw-canvas-display button:disabled{opacity:.5;cursor:default}.hw-canvas-display button.active{background:#e8ae38;color:#302109;border-color:#ae780b}
-.hw-canvas-source{max-width:1180px;margin:0 auto 16px;font-size:12px;color:#518467}.hw-canvas-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:24px;max-width:1180px;margin:auto}.hw-canvas-card{min-width:0;background:var(--bg-secondary,#fff);border:1px solid #dce5de;border-radius:14px;padding:24px}.hw-canvas-sectionhead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px}.hw-canvas-sectionhead h2{font-size:18px;margin:0}.hw-canvas-sectionhead span{font-size:12px;color:var(--text-secondary,#748278);white-space:nowrap}.hw-canvas-display h3{font-size:15px;font-weight:600;margin:0 0 12px}.hw-canvas-objects,.hw-canvas-timeline{list-style:none;padding:0;margin:0}.hw-canvas-objects li{padding:20px 0;border-top:1px solid #e5ebe6}.hw-canvas-objects li:first-child{padding-top:0;border-top:0}.hw-canvas-display dl{display:grid;grid-template-columns:80px 1fr;gap:10px;font-size:13px;margin:0}.hw-canvas-display dt{color:var(--text-secondary,#748278)}.hw-canvas-display dd{margin:0;font-variant-numeric:tabular-nums}.hw-canvas-timeline li{position:relative;padding:0 0 24px 24px;border-left:1px solid #d8e2db}.hw-canvas-timeline li:last-child{padding-bottom:0}.hw-canvas-timeline li:before{content:'';position:absolute;width:8px;height:8px;top:4px;left:-4.5px;background:#518467;border-radius:50%}.hw-canvas-historyhead{display:flex;gap:12px;justify-content:space-between;align-items:flex-start}.hw-canvas-status{background:#e7f1e9;color:#3f7652;padding:3px 8px;border-radius:5px;font-size:11px;white-space:nowrap}.hw-canvas-status.undone{background:#eceeed;color:#64726a}.hw-canvas-display time{font-size:12px;color:var(--text-secondary,#748278);font-variant-numeric:tabular-nums}.hw-canvas-timeline p{font-size:13px;margin:8px 0}.hw-canvas-muted{color:var(--text-secondary,#748278);font-size:13px;line-height:1.7}.hw-canvas-display footer{max-width:1180px;margin:22px auto 0;font-size:12px;color:var(--text-secondary,#748278)}.hw-canvas-empty{max-width:1180px;margin:0 auto 24px;padding:20px;border:1px dashed #becfc2;border-radius:12px;font-size:14px;line-height:1.7}.hw-canvas-empty p{margin:6px 0 0;color:var(--text-secondary,#748278)}.hw-canvas-error{color:#a94732;margin:0 auto 20px;max-width:1180px;font-size:14px}.hw-canvas-done{color:#3f7652;margin:0 auto 20px;max-width:1180px;font-size:14px}.hw-canvas-undo{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px;font-size:13px}.hw-canvas-display button.hw-canvas-danger{background:#a94732;border-color:#a94732;color:#fff}
+.hw-canvas-source{max-width:1180px;margin:0 auto 16px;font-size:12px;color:#518467}.hw-canvas-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:24px;max-width:1180px;margin:auto}.hw-canvas-card{min-width:0;background:var(--bg-secondary,#fff);border:1px solid #dce5de;border-radius:14px;padding:24px}.hw-canvas-sectionhead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px}.hw-canvas-sectionhead h2{font-size:18px;margin:0}.hw-canvas-sectionhead span{font-size:12px;color:var(--text-secondary,#748278);white-space:nowrap}.hw-canvas-display h3{font-size:15px;font-weight:600;margin:0 0 12px}.hw-canvas-objects,.hw-canvas-timeline{list-style:none;padding:0;margin:0}.hw-canvas-objects li{padding:20px 0;border-top:1px solid #e5ebe6}.hw-canvas-objects li:first-child{padding-top:0;border-top:0}.hw-canvas-display dl{display:grid;grid-template-columns:80px 1fr;gap:10px;font-size:13px;margin:0}.hw-canvas-display dt{color:var(--text-secondary,#748278)}.hw-canvas-display dd{margin:0;font-variant-numeric:tabular-nums}.hw-canvas-timeline li{position:relative;padding:0 0 24px 24px;border-left:1px solid #d8e2db}.hw-canvas-timeline li:last-child{padding-bottom:0}.hw-canvas-timeline li:before{content:'';position:absolute;width:8px;height:8px;top:4px;left:-4.5px;background:#518467;border-radius:50%}.hw-canvas-historyhead{display:flex;gap:12px;justify-content:space-between;align-items:flex-start}.hw-canvas-status{background:#e7f1e9;color:#3f7652;padding:3px 8px;border-radius:5px;font-size:11px;white-space:nowrap}.hw-canvas-status.undone{background:#eceeed;color:#64726a}.hw-canvas-display time{font-size:12px;color:var(--text-secondary,#748278);font-variant-numeric:tabular-nums}.hw-canvas-timeline p{font-size:13px;margin:8px 0}.hw-canvas-muted{color:var(--text-secondary,#748278);font-size:13px;line-height:1.7}.hw-canvas-display footer{max-width:1180px;margin:22px auto 0;font-size:12px;color:var(--text-secondary,#748278)}.hw-canvas-empty{max-width:1180px;margin:0 auto 24px;padding:20px;border:1px dashed #becfc2;border-radius:12px;font-size:14px;line-height:1.7}.hw-canvas-empty p{margin:6px 0 0;color:var(--text-secondary,#748278)}.hw-canvas-error{white-space:pre-wrap;overflow-wrap:anywhere;color:#a94732;margin:0 auto 20px;max-width:1180px;font-size:14px}.hw-canvas-done{color:#3f7652;margin:0 auto 20px;max-width:1180px;font-size:14px}.hw-canvas-undo{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px;font-size:13px}.hw-canvas-display button.hw-canvas-danger{background:#a94732;border-color:#a94732;color:#fff}
 @media(max-width:760px){.hw-canvas-display{padding-right:20px;padding-left:max(20px,var(--dsh-frame-leading-clearance,0px))}.hw-canvas-header{flex-direction:column;gap:8px}.hw-canvas-actions{padding-top:0}.hw-canvas-grid{grid-template-columns:1fr}.hw-canvas-card{padding:20px}}
 `;
 
@@ -43,7 +43,7 @@ export function ObjectsHistoryPanel({ sessionRef, read, readActions, undo, redo,
     (async () => {
       for await (const _change of handle) if (active) setRevision(value => value + 1);
       if (active) setLiveError('CHANGES_ENDED');
-    })().catch(failure => { if (active) setLiveError(failureCode(failure)); });
+    })().catch(failure => { if (active) setLiveError(remoteFailureLabel(failure)); });
     return () => { active = false; handle.dispose(); };
   }, [sessionRef, changes]);
   const historyControls = (action, perform, label) => perform && {
@@ -58,7 +58,8 @@ export function ObjectsHistoryPanel({ sessionRef, read, readActions, undo, redo,
         setView(result.view);
         setOutcome({ action, message: `已${label}「${entry.objectName ?? '未命名对象'}」这笔改动；Canvas 已校验并读回世界。`, error: null });
       }, failure => setOutcome({ action, message: null,
-        error: (action === 'redo' ? redoFailureLabel : undoFailureLabel)(failureCode(failure), failure?.details?.worldRef ?? null) }))
+        error: remoteFailureLabel(failure,
+          (action === 'redo' ? redoFailureLabel : undoFailureLabel)(failureCode(failure), failure?.details?.worldRef ?? null)) }))
         .finally(() => { setBusy(false); setConfirming(null); setRevision(value => value + 1); });
     },
   };
@@ -92,9 +93,9 @@ function registerFailure(ctx, stage, error, cleanupErrors, panelId) {
         <dl><dt>模块</dt><dd>hanaworlds-canvas</dd>
           <dt>阶段</dt><dd>{stage}</dd>
           <dt>故障</dt><dd>{failureCode(error)}</dd>
-          <dt>详情</dt><dd>{error?.message ?? String(error)}</dd>
+          <dt>详情</dt><dd>{remoteFailureLabel(error)}</dd>
           {cleanupErrors.length > 0 && <><dt>清理故障</dt><dd>{cleanupErrors.map(failure =>
-            `${failureCode(failure)}: ${failure?.message ?? String(failure)}`).join('; ')}</dd></>}
+            remoteFailureLabel(failure)).join('; ')}</dd></>}
         </dl>
       </section>
     </main>;

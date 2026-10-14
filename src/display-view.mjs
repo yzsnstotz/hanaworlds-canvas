@@ -43,10 +43,19 @@ export const redoFailureLabel = (code, worldRef = null) => {
   const label = redoReasons[code] ?? `未重做（${code}）`;
   return worldRef ? `${label} 需要的世界：${worldRef}` : label;
 };
+// A reason label explains the action, but must not replace the original
+// RemoteError fields needed to identify and recover the failed transaction.
+export const remoteFailureLabel = (failure, explanation = null) => {
+  const fields = [explanation];
+  if (failure?.code !== undefined) fields.push(`错误代码：${failure.code}`);
+  if (failure?.message !== undefined) fields.push(failure.message);
+  if (failure?.details !== undefined) fields.push(`详情：${JSON.stringify(failure.details)}`);
+  return fields.filter(value => value !== null && value !== undefined).join('\n') || String(failure);
+};
 export const readFailureLabel = failure => {
   const cause = failure?.details?.storageFailure;
-  return cause ? `Canvas 存储初始化失败（${cause.code}）：${cause.message}` :
-    failure?.details?.reason ?? failure?.code ?? failure?.message ?? String(failure);
+  return remoteFailureLabel(failure, cause ? `Canvas 存储初始化失败（${cause.code}）：${cause.message}` :
+    failure?.details?.reason ?? null);
 };
 function timeLabel(value) {
   if (value === null) return '未记录时间';
