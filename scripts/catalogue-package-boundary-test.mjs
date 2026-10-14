@@ -24,8 +24,10 @@ await cp(join(root, 'test/fixtures/protocol/world-source-facts.json'), join(proj
 await writeFile(join(project, 'test/catalogue-public-types.mts'),
   (await readFile(join(root, 'test/catalogue-public-types.mts'), 'utf8'))
     .replace('../types/protocol/index.js', '../node_modules/hanaworlds-canvas/types/protocol/index.js'));
-const bundle = await build({ entryPoints: [join(root, 'test/catalogue-public.test.mjs')],
-  outfile: join(project, 'test/catalogue-suite.mjs'), bundle: true, format: 'esm',
+for (const [source, target] of [['catalogue-public.test.mjs', 'catalogue-suite.mjs'],
+  ['config-supply-q284.test.mjs', 'config-q284-suite.mjs']]) {
+const bundle = await build({ entryPoints: [join(root, 'test', source)],
+  outfile: join(project, 'test', target), bundle: true, format: 'esm',
   platform: 'node', target: 'node24', metafile: true,
   external: ['canonicalize', 'icu', 'hanaworlds-canvas', 'hanaworlds-canvas/*', '@deepseek-ai/*'],
   plugins: [{ name: 'installed-canvas-only', setup(builder) {
@@ -33,7 +35,8 @@ const bundle = await build({ entryPoints: [join(root, 'test/catalogue-public.tes
   } }] });
 assert.ok(!Object.keys(bundle.metafile.inputs).some(path => /src\/(local-v5|store-v5|world-facts-reader)\.mjs$/.test(path)),
   'The test harness cannot contain the Canvas implementation');
-const result = spawnSync(process.execPath, ['--test', 'test/catalogue-suite.mjs'], { cwd: project, encoding: 'utf8',
+}
+const result = spawnSync(process.execPath, ['--test', 'test/catalogue-suite.mjs', 'test/config-q284-suite.mjs'], { cwd: project, encoding: 'utf8',
   env: { ...env, CANVAS_CATALOGUE_TEST_ROOT: join(summary.directory, 'catalogue-profiles'),
     CANVAS_CATALOGUE_TSC: join(root, 'node_modules/typescript/bin/tsc') } });
 await writeFile(join(evidence, 'catalogue-installed.log'), (result.stdout ?? '') + (result.stderr ?? ''));
