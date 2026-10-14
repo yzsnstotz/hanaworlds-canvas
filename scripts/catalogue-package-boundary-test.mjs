@@ -21,11 +21,12 @@ const installed = await realpath(join(project, 'node_modules/hanaworlds-canvas')
 assert.ok(!installed.startsWith(resolve(root) + '/'));
 await mkdir(join(project, 'test', 'fixtures', 'protocol'), { recursive: true });
 await cp(join(root, 'test/fixtures/protocol/world-source-facts.json'), join(project, 'test/fixtures/protocol/world-source-facts.json'));
-await writeFile(join(project, 'test/catalogue-public-types.mts'),
-  (await readFile(join(root, 'test/catalogue-public-types.mts'), 'utf8'))
+for (const file of ['catalogue-public-types.mts', 'config-handoff-types.mts']) {
+  await writeFile(join(project, 'test', file), (await readFile(join(root, 'test', file), 'utf8'))
     .replace('../types/protocol/index.js', '../node_modules/hanaworlds-canvas/types/protocol/index.js'));
+}
 for (const [source, target] of [['catalogue-public.test.mjs', 'catalogue-suite.mjs'],
-  ['config-supply-q284.test.mjs', 'config-q284-suite.mjs']]) {
+  ['config-supply-q284.test.mjs', 'config-q284-suite.mjs'], ['config-handoff.test.mjs', 'config-handoff-suite.mjs']]) {
 const bundle = await build({ entryPoints: [join(root, 'test', source)],
   outfile: join(project, 'test', target), bundle: true, format: 'esm',
   platform: 'node', target: 'node24', metafile: true,
@@ -36,7 +37,7 @@ const bundle = await build({ entryPoints: [join(root, 'test', source)],
 assert.ok(!Object.keys(bundle.metafile.inputs).some(path => /src\/(local-v5|store-v5|world-facts-reader)\.mjs$/.test(path)),
   'The test harness cannot contain the Canvas implementation');
 }
-const result = spawnSync(process.execPath, ['--test', 'test/catalogue-suite.mjs', 'test/config-q284-suite.mjs'], { cwd: project, encoding: 'utf8',
+const result = spawnSync(process.execPath, ['--test', 'test/catalogue-suite.mjs', 'test/config-q284-suite.mjs', 'test/config-handoff-suite.mjs'], { cwd: project, encoding: 'utf8',
   env: { ...env, CANVAS_CATALOGUE_TEST_ROOT: join(summary.directory, 'catalogue-profiles'),
     CANVAS_CATALOGUE_TSC: join(root, 'node_modules/typescript/bin/tsc') } });
 await writeFile(join(evidence, 'catalogue-installed.log'), (result.stdout ?? '') + (result.stderr ?? ''));

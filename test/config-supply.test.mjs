@@ -11,6 +11,8 @@ const { CanvasV5, CanvasStore, CanvasConfigSupply, assembleProfile, STORE_ROOT,
 import { g3CellHandshake } from './support/g3-adapter-handshake.mjs';
 import { fixtureSessions } from '../scripts/fixture-sessions.mjs';
 import { guardSlot } from '../scripts/fixture-engine-guards.mjs';
+import { configHandoffFixture, attachConfigFixture } from './support/config-handoff-fixture.mjs';
+import { Context } from '@deepseek-ai/cordis';
 
 // FIXTURE peer inputs only (contracts-shaped Adapter, a C-world-facts world-facts/v1 source and a
 // Session port). Canvas's assembly, provenance, revision and invalidation are what is under test.
@@ -491,39 +493,32 @@ test('config fact read changing the selected connection is rejected before recor
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
-test('host apply() reads the world source C-world-facts port, never an engine-named service', async () => {
-  // Regression: apply() read Catalogue and backend from hanaworldsLuantiNativeFacts. The
-  // configuration now comes only from the source's world-facts/v1 ReadCatalogue/ReadWriteProfile.
-  const profile = await temp();
-  try {
-    const ports = new Map();
-    const world = fixtureWorld({ profile: knownProfile });
-    let factsPort = world.worldFacts;
-    const asked = new Set();
-    const legacy = { readCatalogue: () => assert.fail('engine-named Catalogue read'),
-      readConfigEngineFacts: () => assert.fail('engine-named config read') };
-    const ctx = { get: name => { asked.add(name);
-      return name === 'dshHomePath' ? (...parts) => join(profile, ...parts) :
-      name === 'hanaworldsWorldAdapterV6' ? world.adapter :
-      name === 'hanaworldsLuantiNativeFacts' ? legacy :
-      name === 'hanaworldsWorldFacts' ? factsPort :
-      name === 'hanaworldsWorkshopV3' ? fixtureSessions() : ports.get(name) ?? null; },
-    provide: (name, port) => ports.set(name, port) };
-    const canvas = applyCanvas(ctx);
-    await canvas.ready;
-    await select(canvas, world, 'session-1');
-    asked.clear();
-    const row = (await ports.get('hanaworldsCanvasConfigSupply').read('local-world'))
-      .current.profiles.compilationConfig.fields.writeBackend;
-    assert.equal(row.status, 'SUPPLIED');
-    assert.deepEqual(row.value, knownProfile.writeBackend.writeBackend);
-    assert.equal(asked.has('hanaworldsLuantiNativeFacts'), false);
-    // Without the source port on the Host the source is named absent, never defaulted.
-    factsPort = undefined;
-    const report = await ports.get('hanaworldsCanvasConfigSupply').read('local-world');
-    assert.equal(report.current.sources.catalogue.cause, 'WORLD_FACTS_PORT_ABSENT');
-    assert.equal(report.current.profiles.compilationConfig.fields.writeBackend.status, 'MISSING');
-  } finally { await rm(profile, { recursive: true, force: true }); }
+test('host apply() uses neutral Catalogue and trusted Bridge configuration facts, never an engine-named service', async t => {
+  // Q-288: the former fake-context Host test wrongly authorized Canvas's direct
+  // ReadWriteProfile. This card has no test lock; retain its successful field,
+  // missing-source and legacy-name assertions through the real compatible handoff.
+  const env = await configHandoffFixture(t);
+  const asked = new Set();
+  const originalGet = Context.prototype.get;
+  t.after(() => { Context.prototype.get = originalGet; });
+  // Observe actual Context lookups without changing their receiver or result.
+  Context.prototype.get = function (name, ...args) {
+    if (this.root === env.ctx.root) asked.add(name);
+    return Reflect.apply(originalGet, this, [name, ...args]);
+  };
+  env.ctx.provide('hanaworldsLuantiNativeFacts', {
+    readCatalogue: () => assert.fail('engine-named Catalogue read'),
+    readConfigEngineFacts: () => assert.fail('engine-named config read') });
+  attachConfigFixture(env);
+  const row = (await env.supply.read(env.worldRef)).current.profiles.compilationConfig.fields.writeBackend;
+  assert.equal(row.status, 'SUPPLIED');
+  assert.deepEqual(row.value, knownProfile.writeBackend.writeBackend);
+  assert.equal(asked.has('hanaworldsLuantiNativeFacts'), false);
+  assert.ok(env.reads.every(request => request.worldRef === env.worldRef));
+  await env.sourceFiber.dispose();
+  const report = await env.supply.read(env.worldRef);
+  assert.equal(report.current.sources.catalogue.cause, 'WORLD_FACTS_PORT_ABSENT');
+  assert.equal(report.current.profiles.compilationConfig.fields.writeBackend.status, 'MISSING');
 });
 
 test('foreign provider public errors keep their validated code without SDK constructor identity', async () => {
